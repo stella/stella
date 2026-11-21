@@ -254,6 +254,7 @@ export const PageOrganizerCleanScan = ({
   onOptionsChange,
 }: PageOrganizerCleanScanProps) => {
   const tCommon = useTranslations("common");
+  const tHistory = useTranslations("legalReader.annotations.history");
   const tScan = useTranslations("workspaces.pdf.pageEditor.cleanScan");
   const format = useFormatter();
   const outputId = useId();
@@ -359,6 +360,7 @@ export const PageOrganizerCleanScan = ({
         <Button
           className="sm:me-auto"
           disabled={review.past.length === 0}
+          disabledReason={tHistory("nothingToUndo")}
           onClick={() => onAction({ type: "undoCleanScanReview" })}
           size="sm"
           variant="ghost"
@@ -368,6 +370,7 @@ export const PageOrganizerCleanScan = ({
         </Button>
         <Button
           disabled={!hasPreview}
+          disabledReason={tScan("noPreviewToApply")}
           onClick={() => onAction({ type: "applyAllCleanScanPages" })}
           size="sm"
           variant="outline"
@@ -377,7 +380,12 @@ export const PageOrganizerCleanScan = ({
         <DialogClose render={<Button size="sm" variant="ghost" />}>
           {tCommon("cancel")}
         </DialogClose>
-        <Button disabled={appliedCount === 0} onClick={onCommit} size="sm">
+        <Button
+          disabled={appliedCount === 0}
+          disabledReason={tScan("applyPageFirst")}
+          onClick={onCommit}
+          size="sm"
+        >
           {tScan("use", { count: appliedCount })}
         </Button>
       </DialogFooter>

@@ -374,8 +374,10 @@ test.each([true, false])(
     expect(view.container.textContent).toContain("Draft B");
     expect(view.container.textContent).not.toContain("Draft C");
     expect(
-      view.getByRole("button", { name: "Cancel" }).hasAttribute("disabled"),
-    ).toBe(true);
+      view
+        .getByRole("button", { name: "Cancel" })
+        .getAttribute("aria-disabled"),
+    ).toBe("true");
     expect(view.container.querySelector(".md-readonly-toggle")).toBeNull();
     const editor = view.container.querySelector(".md-editor");
     if (!(editor instanceof HTMLElement)) {

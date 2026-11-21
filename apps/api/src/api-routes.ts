@@ -60,7 +60,7 @@ import {
   feedbackRoute,
 } from "@/api/handlers/feedback/routes";
 import { fieldsRoute } from "@/api/handlers/fields/routes";
-import { filesRoute } from "@/api/handlers/files/route-table";
+import { fileContentRoute, filesRoute } from "@/api/handlers/files/route-table";
 import { flowsRoute } from "@/api/handlers/flows/routes";
 import { flowRunsRoute } from "@/api/handlers/flows/run-route";
 import { folioCollabRoute } from "@/api/handlers/folio-collab/routes";
@@ -119,7 +119,10 @@ import { memberTimeTargetsRoute } from "@/api/handlers/time-entries/members/rout
 import { timeEntryReportRoute } from "@/api/handlers/time-entries/report/routes";
 import { timeEntriesRoute } from "@/api/handlers/time-entries/routes";
 import { timeTimersRoute } from "@/api/handlers/time-timers/routes";
-import { uploadsRoute } from "@/api/handlers/uploads/routes";
+import {
+  desktopDictationTranscriptAudioRoute,
+  uploadsRoute,
+} from "@/api/handlers/uploads/routes";
 import { usageRoute } from "@/api/handlers/usage/routes";
 import { userFilesRoute } from "@/api/handlers/user-files/routes";
 import { vatRateRoute } from "@/api/handlers/vat-rates/routes";
@@ -238,6 +241,7 @@ export const apiRoutes = mount([
       flowRunsRoute,
       documentTypesRoute,
       propertiesRoute,
+      fileContentRoute,
       filesRoute,
       folioCollabRoute,
       desktopEditSessionsRoute,
@@ -326,5 +330,6 @@ export const apiRoutes = mount([
   desktopFeatureAccessRoute,
   desktopTimeEntriesRoute,
   desktopDictationRoute,
+  desktopDictationTranscriptAudioRoute,
   desktopRunnerRoute,
 ]);

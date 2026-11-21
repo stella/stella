@@ -89,6 +89,7 @@ export const TimeSuggestionRow = ({
         aria-label={timeEntryActionLabel(tCommon("accept"), narrative)}
         className="flex min-w-0 flex-1"
         disabled={busy}
+        disabledReason={tCommon("saving")}
         onClick={() => onAccept(suggestion, narrative)}
         onKeyDown={(event) => {
           // A held key never dismisses more than one suggestion.
@@ -154,6 +155,7 @@ export const TimeSuggestionRow = ({
         aria-label={timeEntryActionLabel(tCommon("edit"), narrative)}
         className="size-11"
         disabled={busy}
+        disabledReason={tCommon("saving")}
         onClick={() => onEdit(suggestion, narrative)}
         size="icon"
         variant="ghost"
@@ -164,6 +166,7 @@ export const TimeSuggestionRow = ({
         aria-label={timeEntryActionLabel(tCommon("dismiss"), narrative)}
         className="size-11"
         disabled={busy}
+        disabledReason={tCommon("saving")}
         onClick={() => onDismiss(suggestion)}
         size="icon"
         variant="destructive-ghost"

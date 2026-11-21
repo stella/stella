@@ -1,29 +1,33 @@
-import type { ComponentProps, ReactNode } from "react";
-
-import { useQueryClient } from "@tanstack/react-query";
-import { panic } from "better-result";
-import { useTranslations } from "use-intl";
+import type { ReactNode } from "react";
 
 import type { ContactType } from "@stll/api-contract";
-import { SEARCH_QUERY_MAX_LENGTH } from "@stll/api-contract/limits";
-import { Button } from "@stll/ui/button";
-import { DownloadIcon, PlusIcon, UploadIcon } from "@stll/ui/icons";
-import { SearchField } from "@stll/ui/search-field";
+import { ButtonFace, InputFace } from "@stll/ui/control-face";
+import {
+  DownloadIcon,
+  EllipsisVerticalIcon,
+  PlusIcon,
+  UploadIcon,
+} from "@stll/ui/icons";
 import { Skeleton } from "@stll/ui/skeleton";
 import {
   Table,
   TableBody,
-  TableCell,
+  TableCellFace,
   TableHead,
   TableHeader,
   TableRow,
-} from "@stll/ui/table";
-
+} from "@stll/ui/table-shell";
+import { cn } from "@stll/ui/utils";
 import {
   ResponsiveActionToolbar,
   ResponsiveActionToolbarItem,
-} from "@/components/responsive-action-toolbar";
+} from "@stll/workspace-ui/responsive-action-toolbar";
+
+import { usePendingCache } from "@/components/pending-cache";
+import { PendingText } from "@/components/pending-text";
+import type { PendingTextKey } from "@/components/pending-text";
 import { cachedRoleGrants } from "@/lib/organization/cached-permissions.logic";
+import { framePendingView } from "@/routes/-pending-view.logic";
 
 export type ContactFilter = "all" | ContactType;
 
@@ -31,7 +35,7 @@ export type ContactColumnId =
   "select" | "icon" | "name" | "email" | "phone" | "matters" | "actions";
 
 /** How a column's cell looks while its rows load. */
-type ContactSkeletonShape = "box" | "count" | "bar" | "none";
+type ContactSkeletonShape = "box" | "count" | "bar" | "action";
 
 /**
  * One column of the contacts table, as data: its id, its heading and how its
@@ -57,7 +61,7 @@ const CONTACT_COLUMNS: readonly ContactColumn[] = [
   { id: "email", label: "common.email", skeleton: "bar" },
   { id: "phone", label: "contacts.columns.phone", skeleton: "bar" },
   { id: "matters", label: "common.matters", align: "end", skeleton: "count" },
-  { id: "actions", label: null, skeleton: "none" },
+  { id: "actions", label: null, skeleton: "action" },
 ];
 
 const CONTACT_COLUMNS_WITHOUT_SELECT = CONTACT_COLUMNS.filter(
@@ -101,107 +105,46 @@ export const ContactsToolbar = ({
   </ResponsiveActionToolbar>
 );
 
-const noop = () => undefined;
+/** The search field's width in the toolbar, as the page's field sets it. */
+const CONTACTS_SEARCH_CLASS = "sm:max-w-sm";
 
-/** The contacts search; inert until the page hands it a handler. */
-export const ContactsSearchField = ({
-  value,
-  onValueChange,
-}: {
-  value: string;
-  onValueChange?: (value: string) => void;
-}) => {
-  const t = useTranslations();
-  return (
-    <SearchField
-      aria-label={t("contacts.search")}
-      clearLabel={t("common.clearSearch")}
-      disabled={onValueChange === undefined}
-      groupClassName="sm:max-w-sm"
-      maxLength={SEARCH_QUERY_MAX_LENGTH}
-      onValueChange={onValueChange ?? noop}
-      placeholder={t("contacts.search")}
-      value={value}
-    />
-  );
-};
-
-const FilterButton = ({
-  label,
-  active,
-  onClick,
-}: {
-  label: string;
-  active: boolean;
-  onClick: (() => void) | undefined;
-}) => (
-  <Button
-    aria-pressed={active}
-    disabled={onClick === undefined}
-    onClick={onClick}
-    size="sm"
-    variant={active ? "default" : "outline"}
-  >
-    {label}
-  </Button>
-);
-
-/** The type filters; inert until the page hands them a handler. */
-export const ContactFilterButtons = ({
-  filter,
-  onFilterChange,
-}: {
+/** The type filters, in their order, with the words each one reads. */
+export const CONTACT_FILTERS = [
+  { filter: "all", labelKey: "common.all" },
+  { filter: "person", labelKey: "contacts.filterPersons" },
+  { filter: "organization", labelKey: "common.organizations" },
+] as const satisfies readonly {
   filter: ContactFilter;
-  onFilterChange?: (filter: ContactFilter) => void;
-}) => {
-  const t = useTranslations();
-  const select = (next: ContactFilter) =>
-    onFilterChange === undefined ? undefined : () => onFilterChange(next);
-  return (
-    <>
-      <FilterButton
-        active={filter === "all"}
-        label={t("common.all")}
-        onClick={select("all")}
-      />
-      <FilterButton
-        active={filter === "person"}
-        label={t("contacts.filterPersons")}
-        onClick={select("person")}
-      />
-      <FilterButton
-        active={filter === "organization"}
-        label={t("common.organizations")}
-        onClick={select("organization")}
-      />
-    </>
-  );
-};
+  labelKey: PendingTextKey;
+}[];
 
-/** A toolbar action: its icon, with the label beside it from `sm` up. */
-export const ContactsToolbarButton = ({
+/** A type filter's button: raised while it is the chosen filter. */
+export const contactFilterButton = (active: boolean) =>
+  ({ size: "sm", variant: active ? "default" : "outline" }) as const;
+
+/** A toolbar action's size, in both phases. */
+export const CONTACTS_TOOLBAR_BUTTON_SIZE = "sm";
+
+/** A toolbar action's content: its icon, with the label beside it from `sm`
+ *  up. */
+export const ContactsToolbarButtonContent = ({
   icon,
   label,
-  ...props
 }: {
   icon: ReactNode;
-  label: string;
-} & Omit<
-  ComponentProps<typeof Button>,
-  "aria-label" | "children" | "size" | "title"
->) => (
-  <Button {...props} aria-label={label} size="sm" title={label}>
+  label: ReactNode;
+}) => (
+  <>
     {icon}
     <span className="hidden sm:inline">{label}</span>
-  </Button>
+  </>
 );
 
 const ContactColumnLabel = ({ column }: { column: ContactColumn }) => {
-  const t = useTranslations();
   if (column.label === null) {
     return null;
   }
-  const label = t(column.label);
+  const label = <PendingText barClassName="w-14" id={column.label} />;
   return column.align === "end" ? (
     <div className="text-end">{label}</div>
   ) : (
@@ -231,21 +174,21 @@ export const ContactsTableFrame = ({
   </Table>
 );
 
-const ContactSkeletonCell = ({ shape }: { shape: ContactSkeletonShape }) => {
-  switch (shape) {
-    case "box":
-      return <Skeleton className="size-4 rounded-sm" />;
-    case "count":
-      return <Skeleton className="ms-auto h-4 w-6" />;
-    case "bar":
-      return <Skeleton className="h-4 w-3/5" />;
-    case "none":
-      return null;
-    default:
-      shape satisfies never;
-      return panic("Unhandled contact skeleton shape");
-  }
-};
+const CONTACT_SKELETON_CELLS = {
+  box: <Skeleton className="size-4 rounded-sm" />,
+  count: <Skeleton className="ms-auto h-4 w-6" />,
+  bar: <Skeleton className="h-4 w-3/5" />,
+  // The row's actions trigger, which the loaded row keeps hidden until the
+  // pointer is over it: its box sets the row's height, so it stays here,
+  // hidden the same way.
+  action: (
+    <span className="invisible flex justify-end">
+      <ButtonFace size="icon-xs" variant="ghost">
+        <EllipsisVerticalIcon />
+      </ButtonFace>
+    </span>
+  ),
+} as const satisfies Record<ContactSkeletonShape, ReactNode>;
 
 /** Loading rows, one placeholder cell per column, in the columns' order. */
 export const ContactsSkeletonRows = ({
@@ -254,63 +197,106 @@ export const ContactsSkeletonRows = ({
   columns: readonly ContactColumn[];
 }) =>
   Array.from({ length: SKELETON_ROW_COUNT }, (_, row) => (
-    <TableRow key={row}>
+    <TableRow aria-hidden="true" key={row}>
       {columns.map((column) => (
-        <TableCell key={column.id}>
-          <ContactSkeletonCell shape={column.skeleton} />
-        </TableCell>
+        <TableCellFace key={column.id}>
+          {CONTACT_SKELETON_CELLS[column.skeleton]}
+        </TableCellFace>
       ))}
     </TableRow>
   ));
+
+const ContactsToolbarActionFace = ({
+  icon,
+  labelKey,
+  variant,
+}: {
+  icon: ReactNode;
+  labelKey: PendingTextKey;
+  variant: "default" | "outline";
+}) => (
+  <ButtonFace size={CONTACTS_TOOLBAR_BUTTON_SIZE} variant={variant}>
+    <ContactsToolbarButtonContent
+      icon={icon}
+      label={<PendingText barClassName="w-16" id={labelKey} />}
+    />
+  </ButtonFace>
+);
+
+/**
+ * The toolbar before the page has loaded: the search field, the type filters
+ * with "All" chosen and the actions the cached role gets, in their boxes and
+ * order, unavailable.
+ */
+const ContactsToolbarFace = ({
+  canCreateContact,
+}: {
+  canCreateContact: boolean;
+}) => (
+  <ContactsToolbar
+    actions={
+      <>
+        {canCreateContact && (
+          <ContactsToolbarActionFace
+            icon={<UploadIcon />}
+            labelKey="common.import"
+            variant="outline"
+          />
+        )}
+        <ContactsToolbarActionFace
+          icon={<DownloadIcon />}
+          labelKey="workspaces.views.exportCsv"
+          variant="outline"
+        />
+        {canCreateContact && (
+          <ContactsToolbarActionFace
+            icon={<PlusIcon />}
+            labelKey="contacts.newContact"
+            variant="default"
+          />
+        )}
+      </>
+    }
+    filters={CONTACT_FILTERS.map(({ filter, labelKey }) => {
+      const button = contactFilterButton(filter === "all");
+      return (
+        <ButtonFace key={filter} size={button.size} variant={button.variant}>
+          <PendingText barClassName="w-12" id={labelKey} />
+        </ButtonFace>
+      );
+    })}
+    search={
+      <InputFace
+        // The box `SearchField` draws: a touch-sized row on a phone.
+        className={cn("min-h-11 sm:min-h-0", CONTACTS_SEARCH_CLASS)}
+        fieldClassName="max-sm:h-11"
+      >
+        <PendingText barClassName="w-32" id="contacts.search" />
+      </InputFace>
+    }
+  />
+);
 
 /**
  * The contacts page while its first page of contacts loads: the chrome the
  * cached role gets (selection for those who may delete, import and new
  * contact for those who may create), all inert until the page is there.
  */
-export const ContactsPending = () => {
-  const t = useTranslations();
-  const queryClient = useQueryClient();
-  const canCreateContact = cachedRoleGrants(queryClient, {
-    contact: ["create"],
-  });
+const ContactsPendingView = () => {
+  const cache = usePendingCache();
+  const canCreateContact =
+    cache !== null && cachedRoleGrants(cache, { contact: ["create"] });
   const columns = contactColumns(
-    cachedRoleGrants(queryClient, { contact: ["delete"] }),
+    cache !== null && cachedRoleGrants(cache, { contact: ["delete"] }),
   );
   return (
     <ContactsShell>
-      <ContactsToolbar
-        actions={
-          <>
-            {canCreateContact && (
-              <ContactsToolbarButton
-                disabled
-                icon={<UploadIcon />}
-                label={t("common.import")}
-                variant="outline"
-              />
-            )}
-            <ContactsToolbarButton
-              disabled
-              icon={<DownloadIcon />}
-              label={t("workspaces.views.exportCsv")}
-              variant="outline"
-            />
-            {canCreateContact && (
-              <ContactsToolbarButton
-                disabled
-                icon={<PlusIcon />}
-                label={t("contacts.newContact")}
-              />
-            )}
-          </>
-        }
-        filters={<ContactFilterButtons filter="all" />}
-        search={<ContactsSearchField value="" />}
-      />
+      <ContactsToolbarFace canCreateContact={canCreateContact} />
       <ContactsTableFrame columns={columns}>
         <ContactsSkeletonRows columns={columns} />
       </ContactsTableFrame>
     </ContactsShell>
   );
 };
+
+export const ContactsPending = framePendingView(ContactsPendingView);

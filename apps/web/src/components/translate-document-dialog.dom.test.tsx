@@ -335,7 +335,7 @@ const testAITranslationOutput = (output: AITranslationOutput["output"]) =>
       throw new Error("Translation start button was not rendered");
     }
     await waitFor(() =>
-      expect(startButton.hasAttribute("disabled")).toBe(false),
+      expect(startButton.getAttribute("aria-disabled")).not.toBe("true"),
     );
     fireEvent.click(startButton);
 

@@ -1,25 +1,6 @@
 {
   "placeholder": {},
   "icu": {},
-  "plural": {
-    "templates.usedTimes": {
-      "cs": {
-        "source": "Used {count, plural, one {# time} other {# times}}",
-        "target": "Použito {count}×"
-      },
-      "de": {
-        "source": "Used {count, plural, one {# time} other {# times}}",
-        "target": "{count}-mal verwendet"
-      },
-      "hu": {
-        "source": "Used {count, plural, one {# time} other {# times}}",
-        "target": "{count} alkalommal használva"
-      },
-      "sk": {
-        "source": "Used {count, plural, one {# time} other {# times}}",
-        "target": "Použité {count}×"
-      }
-    }
-  },
+  "plural": {},
   "terminology": {}
 }

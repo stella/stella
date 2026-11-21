@@ -261,6 +261,7 @@ const HourlyArrangementForm = ({
         size="sm"
         type="submit"
         disabled={save.isPending}
+        disabledReason={t("common.saving")}
       >
         {t("common.save")}
       </Button>

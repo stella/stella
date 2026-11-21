@@ -1,6 +1,9 @@
 import { afterEach, describe, expect, test } from "bun:test";
 
+import type { EmailDeliveryFailureReason } from "@stll/api-contract/email-delivery";
+
 import {
+  classifyBounceFailure,
   drainDeliverabilityEvents,
   MAX_RECIPIENTS_PER_EVENT,
   readDeliverabilityTransition,
@@ -19,6 +22,7 @@ import {
   setLogSinkForTesting,
 } from "@/api/lib/observability/logger";
 import { createFakeSqsQueue } from "@/api/tests/helpers/fake-sqs";
+import { STARTTLS_REFUSAL_BOUNCE } from "@/api/tests/helpers/ses-bounce-fixtures";
 
 const topicArn = "arn:aws:sns:eu-west-1:123456789012:ses-notifications";
 const queueUrl = "https://sqs.eu-west-1.amazonaws.com/123456789012/ses-events";
@@ -59,47 +63,82 @@ const snsBody = (message: unknown, arn = topicArn) =>
 
 describe("deliverability transitions", () => {
   test.each([
-    ["Permanent", "General", "hard_bounce"],
-    ["Permanent", "NoEmail", "hard_bounce"],
-    ["Permanent", "Suppressed", "suppressed"],
-    ["Permanent", "OnAccountSuppressionList", "suppressed"],
+    ["Permanent", "General", "hard_bounce", "other"],
+    ["Permanent", "NoEmail", "hard_bounce", "mailbox_missing"],
+    ["Permanent", "Suppressed", "suppressed", "suppressed"],
+    ["Permanent", "OnAccountSuppressionList", "suppressed", "suppressed"],
   ] as const)(
-    "a %s %s bounce makes the address undeliverable as %s",
-    (bounceType, subType, reason) => {
+    "a %s %s bounce makes the address undeliverable as %s and records %s",
+    (bounceType, subType, refusalReason, failureReason) => {
       const transition = readDeliverabilityTransition(
         bounce(bounceType, subType),
       );
+      const member = normalizeEmail("member@example.test");
       expect(transition.isOk() && transition.value).toEqual({
-        type: "undeliverable",
-        reason,
-        recipients: [normalizeEmail("member@example.test")],
+        refusal: {
+          type: "refused",
+          reason: refusalReason,
+          recipients: [member],
+        },
+        failures: [{ email: member, reason: failureReason }],
+        bouncedMessage: {
+          type: "message",
+          providerMessageId: "provider-message",
+        },
         at: new Date(timestamp),
       });
     },
   );
 
-  test.each(["Transient", "Undetermined"])(
-    "a %s bounce changes nothing",
-    (bounceType) => {
+  test.each([
+    ["Transient", "mailbox_unavailable"],
+    ["Undetermined", "other"],
+  ] as const)(
+    "a %s bounce leaves the account deliverable and records %s",
+    (bounceType, reason) => {
       const transition = readDeliverabilityTransition(
         bounce(bounceType, "General"),
       );
       expect(transition.isOk() && transition.value).toEqual({
-        type: "unchanged",
-        cause: "transient-bounce",
+        refusal: { type: "none" },
+        failures: [{ email: normalizeEmail("member@example.test"), reason }],
+        bouncedMessage: {
+          type: "message",
+          providerMessageId: "provider-message",
+        },
+        at: new Date(timestamp),
       });
     },
   );
 
-  test("a complaint marks the address, a suppression-list complaint as suppressed", () => {
+  test("a recipient server without STARTTLS is a transient failure that needs TLS, not a missing mailbox", () => {
+    const transition = readDeliverabilityTransition(STARTTLS_REFUSAL_BOUNCE);
+    expect(transition.isOk() && transition.value).toEqual({
+      refusal: { type: "none" },
+      failures: [
+        {
+          email: normalizeEmail("new.member@example.test"),
+          reason: "tls_required",
+        },
+      ],
+      bouncedMessage: {
+        type: "message",
+        providerMessageId: STARTTLS_REFUSAL_BOUNCE.mail.messageId,
+      },
+      at: new Date(STARTTLS_REFUSAL_BOUNCE.bounce.timestamp),
+    });
+  });
+
+  test("a complaint marks the address, a suppression-list complaint as suppressed, and records no failure", () => {
     for (const [subType, reason] of [
       [null, "complaint"],
       ["OnAccountSuppressionList", "suppressed"],
     ] as const) {
       const transition = readDeliverabilityTransition(complaint(subType));
       expect(transition.isOk() && transition.value).toMatchObject({
-        type: "undeliverable",
-        reason,
+        refusal: { type: "refused", reason },
+        failures: [],
+        bouncedMessage: { type: "none" },
       });
     }
   });
@@ -109,7 +148,8 @@ describe("deliverability transitions", () => {
       bounce("Permanent", "General", ["not an address", "a@example.test"]),
     );
     expect(transition.isOk() && transition.value).toMatchObject({
-      recipients: ["a@example.test"],
+      refusal: { recipients: ["a@example.test"] },
+      failures: [{ email: "a@example.test" }],
     });
     const delivery = readDeliverabilityTransition({
       eventType: "Delivery",
@@ -117,6 +157,83 @@ describe("deliverability transitions", () => {
     });
     expect(delivery.isErr() && delivery.error.reason).toBe("unsupported-event");
   });
+});
+
+describe("bounce failure classification", () => {
+  test.each([
+    // The recipient server refused a plaintext session: TLS decides even
+    // when the status claims a missing mailbox.
+    [
+      "Transient",
+      "General",
+      "5.1.1",
+      "smtp; 550 5.1.1 Remote MTA does not support STARTTLS. Message can be delivered only over a TLS connection.",
+      "tls_required",
+    ],
+    [
+      "Permanent",
+      "General",
+      "5.7.10",
+      "smtp; 530 TLS negotiation failed",
+      "tls_required",
+    ],
+    [
+      "Permanent",
+      "General",
+      "5.1.1",
+      "smtp; 550 5.1.1 User unknown",
+      "mailbox_missing",
+    ],
+    [
+      "Permanent",
+      "General",
+      null,
+      "smtp; 550 5.1.10 Recipient address rejected",
+      "mailbox_missing",
+    ],
+    ["Permanent", "NoEmail", null, null, "mailbox_missing"],
+    [
+      "Transient",
+      "MailboxFull",
+      "4.2.2",
+      "smtp; 452 4.2.2 Mailbox full",
+      "mailbox_unavailable",
+    ],
+    [
+      "Permanent",
+      "General",
+      "5.2.1",
+      "smtp; 550 5.2.1 Mailbox disabled",
+      "mailbox_unavailable",
+    ],
+    [
+      "Transient",
+      "General",
+      "4.4.7",
+      "smtp; 421 4.4.7 Delivery time expired",
+      "mailbox_unavailable",
+    ],
+    ["Permanent", "OnAccountSuppressionList", "5.1.1", null, "suppressed"],
+    [
+      "Transient",
+      "ContentRejected",
+      "5.7.1",
+      "smtp; 554 5.7.1 Message rejected",
+      "other",
+    ],
+    ["Undetermined", "Undetermined", null, null, "other"],
+  ] as const)(
+    "a %s %s bounce with status %s and diagnostic %s is %s",
+    (bounceType, bounceSubType, status, diagnosticCode, expected) => {
+      expect(
+        classifyBounceFailure({
+          bounceType,
+          bounceSubType,
+          recipient: { status, diagnosticCode },
+        }),
+      ).toBe(expected);
+    },
+  );
 });
 
 const records: LogRecord[] = [];
@@ -132,6 +249,8 @@ describe("deliverability event drain", () => {
     });
     const queue = createFakeSqsQueue();
     const marked: [NormalizedEmail, AccountEmailUndeliverableReason][] = [];
+    const failed: [NormalizedEmail, EmailDeliveryFailureReason][] = [];
+    const reported: [string, EmailDeliveryFailureReason][] = [];
     let failWrites = 1;
     const drain = async () =>
       await drainDeliverabilityEvents({
@@ -159,6 +278,23 @@ describe("deliverability event drain", () => {
           return emails.filter((email) => email !== "nobody@example.test")
             .length;
         },
+        recordFailures: async (failures) => {
+          failed.push(
+            ...failures.map(
+              ({
+                email,
+                reason,
+              }): [NormalizedEmail, EmailDeliveryFailureReason] => [
+                email,
+                reason,
+              ],
+            ),
+          );
+          return failures.length;
+        },
+        reportBouncedMessage: async (providerMessageId, reason) => {
+          reported.push([providerMessageId, reason]);
+        },
       });
 
     queue.enqueue(snsBody(bounce("Permanent", "OnAccountSuppressionList")));
@@ -177,7 +313,7 @@ describe("deliverability event drain", () => {
     expect(first.isOk() && first.value).toMatchObject({
       marked: 1,
       unknownAddress: 1,
-      unchanged: 1,
+      failuresRecorded: 3,
       retry: 1,
       poison: 1,
       stoppedBecause: "drained",
@@ -193,6 +329,7 @@ describe("deliverability event drain", () => {
     const second = await drain();
     expect(second.isOk() && second.value).toMatchObject({
       marked: 1,
+      failuresRecorded: 1,
       poison: 1,
     });
     expect(queue.remaining().map(({ id }) => id)).toEqual([poison]);
@@ -200,6 +337,24 @@ describe("deliverability event drain", () => {
       [normalizeEmail("member@example.test"), "suppressed"],
       [normalizeEmail("nobody@example.test"), "hard_bounce"],
       [normalizeEmail("retry@example.test"), "hard_bounce"],
+    ]);
+    // A transient bounce records its failure and marks no account; the
+    // retried event records again, converging on the same row.
+    expect(failed).toEqual([
+      [normalizeEmail("member@example.test"), "suppressed"],
+      [normalizeEmail("nobody@example.test"), "other"],
+      [normalizeEmail("member@example.test"), "mailbox_unavailable"],
+      [normalizeEmail("retry@example.test"), "other"],
+      [normalizeEmail("retry@example.test"), "other"],
+    ]);
+    // Each applied bounce names its message and first failure, so the
+    // sign-in attempt that sent it can learn why.
+    expect(reported).toEqual([
+      ["provider-message", "suppressed"],
+      ["provider-message", "other"],
+      ["provider-message", "mailbox_unavailable"],
+      ["provider-message", "other"],
+      ["provider-message", "other"],
     ]);
 
     // Logs carry delivery ids and reasons, never an address.
@@ -227,6 +382,8 @@ describe("deliverability event drain", () => {
           marked.push(...emails);
           return emails.length;
         },
+        recordFailures: async (failures) => failures.length,
+        reportBouncedMessage: async () => undefined,
       });
     return { drain, marked, writes };
   };
@@ -322,6 +479,7 @@ describe("deliverability event drain", () => {
     expect(drained.isOk() && drained.value).toMatchObject({
       marked: 1,
       unknownAddress: 0,
+      failuresRecorded: 1,
     });
     expect(marked).toEqual([normalizeEmail("twice@example.test")]);
   });

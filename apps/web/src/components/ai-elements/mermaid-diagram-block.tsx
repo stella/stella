@@ -90,6 +90,7 @@ export const DiagramBlockView = ({
         <Button
           aria-label={t("common.zoomOut")}
           disabled={zoom === MIN_ZOOM}
+          disabledReason={t("common.minZoomReached")}
           onClick={() => setZoom((value) => diagramZoom(value, "out"))}
           size="icon-xs"
           variant="ghost"
@@ -99,6 +100,7 @@ export const DiagramBlockView = ({
         <Button
           aria-label={t("common.zoomIn")}
           disabled={zoom === MAX_ZOOM}
+          disabledReason={t("common.maxZoomReached")}
           onClick={() => setZoom((value) => diagramZoom(value, "in"))}
           size="icon-xs"
           variant="ghost"

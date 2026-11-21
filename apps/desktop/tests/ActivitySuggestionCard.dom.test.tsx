@@ -66,7 +66,6 @@ const SelectedRangeCard = ({
         undo: null,
         written: 0,
       }}
-      editable
       flags={[]}
       onAccept={() => onAccept(suggestion.roundedTenths * 6)}
       onAcceptProposal={noop}
@@ -173,7 +172,7 @@ describe("a selected range's card", () => {
     const accept = testing.screen.getByRole("button", {
       name: new RegExp(messages.accept, "u"),
     });
-    expect(accept.hasAttribute("disabled")).toBe(true);
+    expect(accept.getAttribute("aria-disabled")).toBe("true");
     await testing.act(async () => {
       testing.fireEvent.click(accept);
     });
@@ -198,7 +197,6 @@ describe("the stella AI consent on a card", () => {
             undo: null,
             written: 0,
           }}
-          editable
           flags={[]}
           onAccept={noop}
           onAcceptProposal={noop}

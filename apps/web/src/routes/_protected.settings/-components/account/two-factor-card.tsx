@@ -22,13 +22,6 @@ import {
   DialogPopup,
   DialogTitle,
 } from "@stll/ui/dialog";
-import {
-  Frame,
-  FrameDescription,
-  FrameHeader,
-  FramePanel,
-  FrameTitle,
-} from "@stll/ui/frame";
 import { InputOTP, InputOTPGroup, InputOTPSlot } from "@stll/ui/input-otp";
 import { stellaToast } from "@stll/ui/toast";
 import { cn } from "@stll/ui/utils";
@@ -52,6 +45,10 @@ import { toAuthClientError } from "@/lib/errors/auth";
 import { notifyUserError, notifyUserProblem } from "@/lib/errors/user-toast";
 import { queryView } from "@/lib/query-view.logic";
 import { downloadFile } from "@/lib/utils";
+import {
+  TWO_FACTOR_STATUS_CLASS,
+  TwoFactorCardFrame,
+} from "@/routes/_protected.settings/-components/account/two-factor-card.pending";
 
 const ERROR_CAPTURE = {
   enable: {
@@ -125,55 +122,50 @@ export const TwoFactorCard = () => {
       : undefined;
 
   return (
-    <Frame>
-      <FrameHeader>
-        <FrameTitle>{t("settings.account.twoFactor.title")}</FrameTitle>
-        <FrameDescription>
-          {t("settings.account.twoFactor.description")}
-        </FrameDescription>
-      </FrameHeader>
-      <FramePanel>
-        <div className="flex items-center justify-between gap-4 p-4">
-          <span
-            className={cn(
-              enabled
-                ? "bg-success/16 text-success-foreground inline-flex items-center rounded-md px-2 py-0.5 text-xs font-medium"
-                : "bg-muted text-muted-foreground inline-flex items-center rounded-md px-2 py-0.5 text-xs font-medium",
-            )}
+    <TwoFactorCardFrame
+      action={
+        <Button
+          onClick={() => {
+            if (enabled) {
+              setIsDisableOpen(true);
+              return;
+            }
+            setIsEnableOpen(true);
+          }}
+          size="sm"
+          variant={enabled ? "destructive" : "default"}
+        >
+          {enabled
+            ? t("settings.account.twoFactor.disable")
+            : t("settings.account.twoFactor.enable")}
+        </Button>
+      }
+      footer={
+        enabled && (
+          <Button
+            onClick={() => setIsRegenerateOpen(true)}
+            size="sm"
+            variant="outline"
           >
-            {enabled
-              ? t("settings.account.twoFactor.enabledStatus")
-              : t("settings.account.twoFactor.disabledStatus")}
-          </span>
-          <div className="flex gap-2">
-            {enabled && (
-              <Button
-                onClick={() => setIsRegenerateOpen(true)}
-                size="sm"
-                variant="outline"
-              >
-                {t("settings.account.twoFactor.regenerateBackupCodes")}
-              </Button>
-            )}
-            <Button
-              onClick={() => {
-                if (enabled) {
-                  setIsDisableOpen(true);
-                  return;
-                }
-                setIsEnableOpen(true);
-              }}
-              size="sm"
-              variant={enabled ? "destructive" : "default"}
-            >
-              {enabled
-                ? t("settings.account.twoFactor.disable")
-                : t("settings.account.twoFactor.enable")}
-            </Button>
-          </div>
-        </div>
-      </FramePanel>
-
+            {t("settings.account.twoFactor.regenerateBackupCodes")}
+          </Button>
+        )
+      }
+      status={
+        <span
+          className={cn(
+            TWO_FACTOR_STATUS_CLASS,
+            enabled
+              ? "bg-success/16 text-success-foreground"
+              : "bg-muted text-muted-foreground",
+          )}
+        >
+          {enabled
+            ? t("settings.account.twoFactor.enabledStatus")
+            : t("settings.account.twoFactor.disabledStatus")}
+        </span>
+      }
+    >
       <EnableTwoFactorDialog
         queryFeedback={
           <>
@@ -199,7 +191,7 @@ export const TwoFactorCard = () => {
         open={isRegenerateOpen}
         requiresPassword={requiresPassword}
       />
-    </Frame>
+    </TwoFactorCardFrame>
   );
 };
 
@@ -590,6 +582,12 @@ const EnableTwoFactorDialog = ({
                 canEmailConfirmationCode === undefined ||
                 (requiresPassword && password.length === 0)
               }
+              disabledReason={
+                requiresPassword === undefined ||
+                canEmailConfirmationCode === undefined
+                  ? t("common.loading")
+                  : t("common.enterPassword")
+              }
               loading={
                 sendEnableOtpMutation.isPending || enableMutation.isPending
               }
@@ -608,6 +606,11 @@ const EnableTwoFactorDialog = ({
           {step === "code" && (
             <Button
               disabled={code.length !== TOTP_LENGTH || enableMutation.isPending}
+              disabledReason={
+                enableMutation.isPending
+                  ? t("common.verifying")
+                  : t("common.enterVerificationCode")
+              }
               loading={enableMutation.isPending}
               onClick={() => enableMutation.mutate({ code, password })}
               variant="default"
@@ -618,6 +621,7 @@ const EnableTwoFactorDialog = ({
           {step === "setup" && (
             <Button
               disabled={!qrSvg}
+              disabledReason={t("common.loading")}
               onClick={() => setStep("verify")}
               variant="default"
             >
@@ -627,6 +631,11 @@ const EnableTwoFactorDialog = ({
           {step === "verify" && (
             <Button
               disabled={code.length !== TOTP_LENGTH || verifyMutation.isPending}
+              disabledReason={
+                verifyMutation.isPending
+                  ? t("common.verifying")
+                  : t("common.enterVerificationCode")
+              }
               loading={verifyMutation.isPending}
               onClick={() => verifyMutation.mutate(code)}
             >
@@ -824,6 +833,11 @@ const DisableTwoFactorDialog = ({
                 requiresPassword === undefined ||
                 (requiresPassword && password.length === 0)
               }
+              disabledReason={
+                requiresPassword === undefined
+                  ? t("common.loading")
+                  : t("common.enterPassword")
+              }
               loading={sendDisableOtpMutation.isPending}
               onClick={() => sendDisableOtpMutation.mutate()}
               variant="destructive"
@@ -835,6 +849,11 @@ const DisableTwoFactorDialog = ({
             <Button
               disabled={
                 code.length !== TOTP_LENGTH || disableMutation.isPending
+              }
+              disabledReason={
+                disableMutation.isPending
+                  ? t("common.verifying")
+                  : t("common.enterVerificationCode")
               }
               loading={disableMutation.isPending}
               onClick={() => disableMutation.mutate({ code, password })}
@@ -1046,6 +1065,11 @@ const RegenerateBackupCodesDialog = ({
                     requiresPassword === undefined ||
                     (requiresPassword && password.length === 0)
                   }
+                  disabledReason={
+                    requiresPassword === undefined
+                      ? t("common.loading")
+                      : t("common.enterPassword")
+                  }
                   loading={sendOtpMutation.isPending}
                   onClick={() => sendOtpMutation.mutate()}
                   variant="destructive"
@@ -1057,6 +1081,11 @@ const RegenerateBackupCodesDialog = ({
                 <Button
                   disabled={
                     code.length !== TOTP_LENGTH || regenerateMutation.isPending
+                  }
+                  disabledReason={
+                    regenerateMutation.isPending
+                      ? t("common.verifying")
+                      : t("common.enterVerificationCode")
                   }
                   loading={regenerateMutation.isPending}
                   onClick={() => regenerateMutation.mutate({ code, password })}

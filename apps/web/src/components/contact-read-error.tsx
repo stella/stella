@@ -32,7 +32,12 @@ export const ContactReadError = ({
       <p className="text-destructive text-sm">
         {userErrorFromThrown(error, t(fallbackKey))}
       </p>
-      <Button disabled={retryDisabled} onClick={onRetry} variant="outline">
+      <Button
+        disabled={retryDisabled}
+        disabledReason={t("common.retrying")}
+        onClick={onRetry}
+        variant="outline"
+      >
         {t("common.retry")}
       </Button>
     </div>

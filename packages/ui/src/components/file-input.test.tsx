@@ -60,9 +60,15 @@ describe("FileInput", () => {
 
   test("disables the trigger", () => {
     const markup = renderToStaticMarkup(
-      <FileInput disabled file={null} onFileChange={() => {}} {...labels} />,
+      <FileInput
+        disabled
+        disabledReason="Uploading…"
+        file={null}
+        onFileChange={() => {}}
+        {...labels}
+      />,
     );
 
-    expect(markup).toContain('data-slot="file-input-trigger" disabled=""');
+    expect(markup).toContain('aria-disabled="true"');
   });
 });

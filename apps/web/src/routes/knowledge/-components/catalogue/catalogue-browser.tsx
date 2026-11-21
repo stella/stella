@@ -410,6 +410,7 @@ const CatalogueEntryRow = ({
     actions = (
       <Button
         disabled={install.isPending}
+        disabledReason={t("common.installing")}
         onClick={(e) => {
           e.stopPropagation();
           onInstall();
@@ -428,6 +429,7 @@ const CatalogueEntryRow = ({
     actions = (
       <Button
         disabled={uninstall.isPending}
+        disabledReason={t("common.removing")}
         onClick={(e) => {
           e.stopPropagation();
           requestRemoval();

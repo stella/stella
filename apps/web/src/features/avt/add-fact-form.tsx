@@ -118,7 +118,12 @@ export const AddFactForm = ({
         value={name}
       />
       <div className="flex gap-2">
-        <Button disabled={statement === ""} loading={saving} type="submit">
+        <Button
+          disabled={statement === ""}
+          disabledReason={t("avt.gap.sheet.statementRequired")}
+          loading={saving}
+          type="submit"
+        >
           {t("common.add")}
         </Button>
         <Button onClick={onClose} type="button" variant="ghost">

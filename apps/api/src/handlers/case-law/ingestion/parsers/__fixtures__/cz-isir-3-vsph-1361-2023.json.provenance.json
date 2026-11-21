@@ -1,0 +1,5 @@
+{
+  "capture": "synthetic",
+  "sha256": "b1c3bf34db725d1ff5ac9098341e607464b63cffad36d989becd3b6f0b243525",
+  "note": "anonymised paragraphs of insolvency register document 65350048 (Vrchní soud v Praze, usnesení of 22 February 2024 in an insolvency file), as the cz-isir reader and anonymiser produced them on 2026-11-19, shortened to the header, operative part, opening reasons and closing, with the parties' company names replaced by invented ones"
+}

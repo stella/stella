@@ -15,11 +15,13 @@ import type { StatuteRouteResolution } from "@/features/statutes/statute-route-r
 
 /**
  * A statute page's address, the `?asOf` day it asks the act on, and the
- * provision anchor it lands on, each null when the link names none.
+ * provision anchor it lands on, each null when the link names none. A link
+ * whose label names subdivisions of that provision carries their anchors.
  */
 export type StatuteLink = {
   anchor: string | null;
   asOf: string | null;
+  citedAnchorIds?: readonly string[] | undefined;
   params: StatuteRouteParams;
 };
 
@@ -65,7 +67,7 @@ type LinkedStatute = {
 /** The inspector tab a statute link opens: the act, landing on its anchor. */
 export const createStatuteLinkTab = (
   statute: LinkedStatute,
-  { anchor }: StatuteLink,
+  { anchor, citedAnchorIds }: StatuteLink,
 ) =>
   createStatuteViewTab({
     country: statute.country,
@@ -76,6 +78,7 @@ export const createStatuteLinkTab = (
       .text,
     versionValidFrom: statute.versionValidFrom,
     ...(anchor === null ? {} : { anchorId: anchor }),
+    citedAnchorIds,
   });
 
 /**

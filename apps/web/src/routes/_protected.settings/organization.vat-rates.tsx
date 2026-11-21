@@ -1,5 +1,4 @@
 import { createFileRoute, redirect } from "@tanstack/react-router";
-import { useTranslations } from "use-intl";
 
 import { isTimeBillingPreviewEnabled } from "@/hooks/use-time-billing-preview";
 import { getAnalytics } from "@/lib/analytics/provider";
@@ -12,8 +11,9 @@ import {
   prefetchNonCriticalInfiniteQuery,
 } from "@/lib/react-query";
 import { routePresentation } from "@/routes/-route-presentation";
-import { SettingsPageHeader } from "@/routes/_protected.settings/-components/settings-page-header";
-import { VatRatesCard } from "@/routes/_protected.settings/organization/-components/organization/vat-rates-card";
+
+import { VatRateSettingsPage } from "./-organization.vat-rates.page";
+import { VatRateSettingsPending } from "./-organization.vat-rates.pending";
 
 export const Route = createFileRoute(
   "/_protected/settings/organization/vat-rates",
@@ -63,14 +63,5 @@ export const Route = createFileRoute(
   // stays in the query, so the card shows its own refusal and retry.
   head: () => ({ meta: [{ title: pageTitle("billing.vatRates.title") }] }),
   component: VatRateSettingsPage,
+  pendingComponent: VatRateSettingsPending,
 });
-
-function VatRateSettingsPage() {
-  const t = useTranslations();
-  return (
-    <>
-      <SettingsPageHeader title={t("billing.vatRates.title")} />
-      <VatRatesCard />
-    </>
-  );
-}

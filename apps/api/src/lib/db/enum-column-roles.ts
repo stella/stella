@@ -166,6 +166,9 @@ export const ENUM_COLUMN_ROLES = {
   case_law_research_answers: {
     failure_reason: ATTRIBUTE,
   },
+  case_law_ingestion_failure_evidence: {
+    identity_kind: ATTRIBUTE,
+  },
   case_law_sources: {
     ingestion_lease_purpose: ATTRIBUTE,
   },
@@ -356,6 +359,9 @@ export const ENUM_COLUMN_ROLES = {
     applied_mode: ATTRIBUTE,
     entity_feature_gate: ATTRIBUTE,
     severity: ATTRIBUTE,
+  },
+  email_delivery_failures: {
+    reason: ATTRIBUTE,
   },
   entities: {
     agenda_kind: ATTRIBUTE,
@@ -593,6 +599,10 @@ export const ENUM_COLUMN_ROLES = {
   organization_data_exports: {
     version_scope: ATTRIBUTE,
   },
+  // Either requirement may follow the other at any time.
+  organization_sso_policy: {
+    requirement: ATTRIBUTE,
+  },
   organization_settings: {
     ai_billing_drafts_mode: ATTRIBUTE,
     document_processing_mode: ATTRIBUTE,
@@ -656,6 +666,10 @@ export const ENUM_COLUMN_ROLES = {
   },
   session: {
     refresh_mode: ATTRIBUTE,
+  },
+  session_sign_ins: {
+    location_kind: ATTRIBUTE,
+    review: LIFECYCLE,
   },
   signal_events: {
     type: ATTRIBUTE,

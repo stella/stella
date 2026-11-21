@@ -425,6 +425,49 @@ type DialogBodyProps = {
   onCreated?: (result: CreatePropertyResult) => void;
 };
 
+type ColumnSubmitDisabledReasonOptions = {
+  isMutationPending: boolean;
+  hasName: boolean;
+  showAiSections: boolean;
+  overDependencyCap: boolean;
+  hasPrompt: boolean;
+  hasDependencies: boolean;
+  t: (
+    key:
+      | "common.saving"
+      | "workspaces.properties.enterColumnName"
+      | "workspaces.properties.reduceDependencies"
+      | "workspaces.properties.addPromptAndDependencies"
+      | "workspaces.properties.completeColumnOptions",
+  ) => string;
+};
+
+const columnSubmitDisabledReason = ({
+  isMutationPending,
+  hasName,
+  showAiSections,
+  overDependencyCap,
+  hasPrompt,
+  hasDependencies,
+  t,
+}: ColumnSubmitDisabledReasonOptions) => {
+  if (isMutationPending) {
+    return t("common.saving");
+  }
+  if (!hasName) {
+    return t("workspaces.properties.enterColumnName");
+  }
+  if (showAiSections) {
+    if (overDependencyCap) {
+      return t("workspaces.properties.reduceDependencies");
+    }
+    if (!hasPrompt || !hasDependencies) {
+      return t("workspaces.properties.addPromptAndDependencies");
+    }
+  }
+  return t("workspaces.properties.completeColumnOptions");
+};
+
 const PropertyComposerBody = ({
   workspaceId,
   onClose,
@@ -642,6 +685,15 @@ const PropertyComposerBody = ({
   const aiRequirementsMet =
     !showAiSections ||
     (promptText.length > 0 && dependencyIds.length > 0 && !overDependencyCap);
+  const submitDisabledReason = columnSubmitDisabledReason({
+    isMutationPending,
+    hasName: trimmedName.length > 0,
+    showAiSections,
+    overDependencyCap,
+    hasPrompt: promptText.length > 0,
+    hasDependencies: dependencyIds.length > 0,
+    t,
+  });
   const canSubmit =
     trimmedName.length > 0 &&
     aiRequirementsMet &&
@@ -960,6 +1012,7 @@ const PropertyComposerBody = ({
           {(capabilityProps) => (
             <Button
               disabled={!canSubmit}
+              disabledReason={submitDisabledReason}
               loading={isMutationPending}
               onClick={handleSubmit}
               size="sm"
@@ -1111,6 +1164,7 @@ const ComposerCard = ({
         onSubmit={onSubmit}
         aiEditAction={{
           disabled: autoPromptDisabled,
+          disabledReason: t("workspaces.properties.enterColumnName"),
           isPending: autoPromptPending,
           label: t("ai.editWithAI"),
           onClick: onAutoPrompt,

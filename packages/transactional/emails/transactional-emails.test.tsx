@@ -1,10 +1,12 @@
 import type React from "react";
 
+import { panic } from "better-result";
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 
 import { UI_LOCALES } from "@stll/locales";
 
 import { renderEmail } from "../render/render";
+import { ICON_URL } from "./_shared";
 import * as BetterAuthOTP from "./better-auth-otp";
 import { subject as otpSubject } from "./better-auth-otp-subject";
 import * as InvoiceLink from "./invoice-link";
@@ -16,6 +18,14 @@ import { subject as invitationSubject } from "./organization-invitation-subject"
 import * as ProductFeedback from "./product-feedback";
 
 const renderHtml = (email: React.ReactElement) => renderEmail(email).html;
+
+const PRAGUE_WITH_MAP = {
+  type: "known",
+  city: "Prague",
+  region: "Hlavni mesto Praha",
+  countryCode: "CZ",
+  map: { contentId: "sign-in-location-map" },
+} as const satisfies NewDeviceLogin.SignInLocation;
 
 /**
  * Render tests for the transactional emails. A broken OTP or invite render is
@@ -111,9 +121,10 @@ describe("link/CTA emails carry the correct href", () => {
     const sessionsUrl = "https://app.stella.test/account/sessions";
     const html = renderHtml(
       <NewDeviceLogin.Email
-        device="Chrome on macOS"
-        ipAddress="203.0.113.42"
+        device={{ type: "browserOnOs", browser: "Chrome", os: "macOS" }}
+        ipAddress={{ type: "known", address: "203.0.113.42" }}
         lang="en"
+        location={{ type: "unknown" }}
         sessionsUrl={sessionsUrl}
         time="Mar 6, 2026, 2:30 PM UTC"
       />,
@@ -162,14 +173,16 @@ describe("every supported locale renders without missing-interpolation errors", 
 
       const deviceHtml = renderHtml(
         <NewDeviceLogin.Email
-          device="Chrome on macOS"
-          ipAddress="203.0.113.42"
+          device={{ type: "browserOnOs", browser: "Chrome", os: "macOS" }}
+          ipAddress={{ type: "known", address: "203.0.113.42" }}
           lang={lang}
+          location={PRAGUE_WITH_MAP}
           sessionsUrl="https://app.stella.test/account/sessions"
           time="Mar 6, 2026, 2:30 PM UTC"
         />,
       );
-      expect(deviceHtml).toContain("Chrome on macOS");
+      expect(deviceHtml).toContain("Chrome");
+      expect(deviceHtml).toContain("macOS");
 
       // The subject helpers hit a second, separately-namespaced key path.
       expect(otpSubject(lang).length).toBeGreaterThan(0);
@@ -181,6 +194,44 @@ describe("every supported locale renders without missing-interpolation errors", 
       expectNoIntlErrors();
     }
   });
+
+  const DEVICES: readonly {
+    device: NewDeviceLogin.SignInDevice;
+    names: readonly string[];
+  }[] = [
+    {
+      device: { type: "browserOnOs", browser: "Chrome", os: "macOS" },
+      names: ["Chrome", "macOS"],
+    },
+    { device: { type: "browser", browser: "Chrome" }, names: ["Chrome"] },
+    { device: { type: "os", os: "macOS" }, names: ["macOS"] },
+    { device: { type: "unknown" }, names: [] },
+  ];
+
+  test.each(LOCALES.filter((lang) => lang !== "en"))(
+    "%s words the device and a missing address in its own language",
+    (lang) => {
+      for (const { device, names } of DEVICES) {
+        const { text } = renderEmail(
+          <NewDeviceLogin.Email
+            device={device}
+            ipAddress={{ type: "unknown" }}
+            lang={lang}
+            location={{ type: "unknown" }}
+            sessionsUrl="https://app.stella.test/account/sessions"
+            time="Mar 6, 2026, 2:30 PM UTC"
+          />,
+        );
+        // Browser and OS names are proper nouns and print as parsed; the
+        // words around them are the locale's.
+        for (const name of names) {
+          expect(text).toContain(name);
+        }
+        expect(text).not.toMatch(/\bUnknown\b|\bon macOS\b/u);
+      }
+      expectNoIntlErrors();
+    },
+  );
 
   test("Arabic renders right-to-left and Latin locales left-to-right", () => {
     const arabic = renderHtml(
@@ -214,9 +265,16 @@ describe("user-supplied strings are HTML-escaped in the rendered output", () => 
   test("new-device-login escapes the device string", () => {
     const html = renderHtml(
       <NewDeviceLogin.Email
-        device={INJECTION}
-        ipAddress="203.0.113.42"
+        device={{ type: "browserOnOs", browser: INJECTION, os: INJECTION }}
+        ipAddress={{ type: "known", address: "203.0.113.42" }}
         lang="en"
+        location={{
+          type: "known",
+          city: INJECTION,
+          region: INJECTION,
+          countryCode: "CZ",
+          map: null,
+        }}
         sessionsUrl="https://app.stella.test/account/sessions"
         time="Mar 6, 2026, 2:30 PM UTC"
       />,
@@ -245,6 +303,133 @@ describe("user-supplied strings are HTML-escaped in the rendered output", () => 
     );
     expect(html).not.toContain(INJECTION);
     expect(html).toContain("&lt;script&gt;");
+  });
+});
+
+describe("new-device-login location", () => {
+  const renderNotice = (
+    location: NewDeviceLogin.SignInLocation,
+    lang: "en" | "ar" = "en",
+  ) =>
+    renderEmail(
+      <NewDeviceLogin.Email
+        device={{ type: "browserOnOs", browser: "Firefox", os: "Linux" }}
+        ipAddress={{ type: "known", address: "198.51.100.7" }}
+        lang={lang}
+        location={location}
+        sessionsUrl="https://app.stella.test/account/sessions"
+        time="Mar 6, 2026, 2:30 PM UTC"
+      />,
+    );
+
+  const imageSources = (html: string) =>
+    [...html.matchAll(/<img\b[^>]*\bsrc="([^"]*)"/gu)].map(([, src]) => src);
+
+  test("a known location shows the place, the inline map and its sources", () => {
+    const { html, text } = renderNotice(PRAGUE_WITH_MAP);
+
+    // The logo is first-party; the map is a part of the message itself.
+    expect(imageSources(html)).toEqual([ICON_URL, "cid:sign-in-location-map"]);
+    expect(html).toContain(
+      'alt="Map showing the approximate sign-in location: Prague, Hlavni mesto Praha, Czechia"',
+    );
+    expect(text).toMatchInlineSnapshot(`
+      "NEW SIGN-IN TO YOUR ACCOUNT
+
+      Someone just signed in to your account from a new device or location.
+
+      Device: Firefox on Linux
+
+      Location: Prague, Hlavni mesto Praha, Czechia (approximate)
+
+      IP address: 198.51.100.7
+
+      Time: Mar 6, 2026, 2:30 PM UTC
+
+      If this was you, you don't need to do anything. If you don't recognize this sign-in, sign this device out.
+
+      Review signed-in devices https://app.stella.test/account/sessions
+
+      The button opens Settings › Security at this sign-in.
+
+      ----------------------------------------
+
+      stella | open source legal workspace"
+    `);
+    expectNoIntlErrors();
+  });
+
+  test("a known location without coordinates shows the place but no map", () => {
+    const { html, text } = renderNotice({ ...PRAGUE_WITH_MAP, map: null });
+
+    expect(imageSources(html)).toEqual([ICON_URL]);
+    expect(text).toContain(
+      "Location: Prague, Hlavni mesto Praha, Czechia (approximate)",
+    );
+    expectNoIntlErrors();
+  });
+
+  test("an unknown location leaves location and map out", () => {
+    const { html, text } = renderNotice({ type: "unknown" });
+
+    expect(imageSources(html)).toEqual([ICON_URL]);
+    expect(text).toMatchInlineSnapshot(`
+      "NEW SIGN-IN TO YOUR ACCOUNT
+
+      Someone just signed in to your account from a new device or location.
+
+      Device: Firefox on Linux
+
+      IP address: 198.51.100.7
+
+      Time: Mar 6, 2026, 2:30 PM UTC
+
+      If this was you, you don't need to do anything. If you don't recognize this sign-in, sign this device out.
+
+      Review signed-in devices https://app.stella.test/account/sessions
+
+      The button opens Settings › Security at this sign-in.
+
+      ----------------------------------------
+
+      stella | open source legal workspace"
+    `);
+    expectNoIntlErrors();
+  });
+
+  test("a region named like its city is said once", () => {
+    const { text } = renderNotice({
+      type: "known",
+      city: "Vienna",
+      region: "Vienna",
+      countryCode: "AT",
+      map: null,
+    });
+
+    expect(text).toContain("Location: Vienna, Austria (approximate)");
+  });
+
+  test("a location with only a country names the country", () => {
+    const { text } = renderNotice({
+      type: "known",
+      city: null,
+      region: null,
+      countryCode: "PT",
+      map: null,
+    });
+
+    expect(text).toContain("Location: Portugal (approximate)");
+  });
+
+  test("Arabic names the country in Arabic and separates with the Arabic comma", () => {
+    const { text } = renderNotice({ ...PRAGUE_WITH_MAP, map: null }, "ar");
+
+    const country =
+      new Intl.DisplayNames(["ar"], { type: "region" }).of("CZ") ??
+      panic("Arabic has a name for Czechia");
+    expect(country).not.toBe("Czechia");
+    expect(text).toContain(`Prague، Hlavni mesto Praha، ${country}`);
+    expectNoIntlErrors();
   });
 });
 

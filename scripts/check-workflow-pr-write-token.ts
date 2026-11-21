@@ -267,7 +267,7 @@ export const WORKFLOW_PRIVILEGE_ALLOWLIST = {
       ],
     },
     calls:
-      "stella/.github/.github/workflows/npm-independent-release.yml@ba1d8b5e67dd5b252f6d3edd0c9fa047c5d386fc",
+      "stella/.github/.github/workflows/npm-independent-release.yml@2664e46f02aea7164ba71bcdd485a686166993a4",
     privileges: {
       write: ["contents", "id-token"],
       secrets: ["STELLA_RELEASE_APP_ID", "STELLA_RELEASE_APP_PRIVATE_KEY"],

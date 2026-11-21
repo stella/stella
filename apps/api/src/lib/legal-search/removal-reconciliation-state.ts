@@ -19,6 +19,14 @@ const activeRemovalCheckpointSchema = v.variant("status", [
     status: v.literal("waiting"),
     nextCycleAt: apiDateTimeSchema,
   }),
+  /**
+   * After the source's own decisions: its records held as attachments to
+   * other sources' decisions, in publisher-id order after `after`.
+   */
+  v.strictObject({
+    status: v.literal("running-attachments"),
+    after: v.nullable(v.pipe(v.string(), v.minLength(1), v.maxLength(256))),
+  }),
 ]);
 
 export const removalCheckpointSchema = v.variant("status", [
@@ -31,6 +39,19 @@ export const removalCheckpointSchema = v.variant("status", [
 ]);
 
 export type RemovalCheckpoint = v.InferOutput<typeof removalCheckpointSchema>;
+
+/**
+ * Pause a source's removal walk. A source that is already paused keeps the
+ * walk it was paused from, so a pause never nests inside another.
+ */
+export const pauseRemovalCheckpoint = (
+  current: RemovalCheckpoint | null,
+  resumeAt: string,
+): RemovalCheckpoint => ({
+  status: "paused",
+  resume: current?.status === "paused" ? current.resume : current,
+  resumeAt,
+});
 
 export const REMOVAL_RETRY_KIND = {
   ERASURE: "removal-erasure",
@@ -82,6 +103,7 @@ export const removalRetryPayloadSchema = v.union([
   v.strictObject({
     type: v.literal("pending"),
     operation: v.literal("erase"),
+    claim: v.optional(v.literal("accepted")),
     evidence: removalEvidenceSchema,
     decisionId: uuid,
     reason: v.picklist([
@@ -94,6 +116,11 @@ export const removalRetryPayloadSchema = v.union([
 export type RemovalRetryPayload = v.InferOutput<
   typeof removalRetryPayloadSchema
 >;
+export const isClaimedErasureRetry = (payload: RemovalRetryPayload) =>
+  payload.type === "pending" &&
+  payload.operation === "erase" &&
+  payload.claim === "accepted";
+
 export type UnprobeableRemovalRead = Omit<
   Extract<RemovalRetryPayload, { type: "unprobeable" }>,
   "decisionId"

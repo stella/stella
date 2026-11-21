@@ -351,15 +351,28 @@ const desktopRustRequired = (files: readonly string[]) =>
     "packages/api-contract/src/chat-local-run-step-content.fixtures.json",
   ]);
 
+// Non-packaging desktop files (unit/e2e tests, locale JSONs, i18n baselines)
+// are validated by fast JS/i18n checks and do not need a 23-minute Windows
+// MSVC dry-run build.
+const isDesktopWindowsDryRunExcluded = (file: string): boolean =>
+  /\.mdx?$/u.test(file) ||
+  file.startsWith("apps/desktop/tests/") ||
+  file.startsWith("apps/desktop/e2e/") ||
+  file.startsWith("apps/desktop/src/i18n/langs/") ||
+  file === "apps/desktop/src/i18n/i18n-check-baseline.json" ||
+  file === "apps/desktop/src/i18n/i18n-lint-baseline.json" ||
+  file === "apps/desktop/src/i18n/i18n-source-lock.json";
+
+const matchesDesktopWindowsDryRunInput = (file: string): boolean =>
+  !isDesktopWindowsDryRunExcluded(file) &&
+  matches(file, DESKTOP_WINDOWS_DRY_RUN_INPUTS);
+
 const wideScope = (input: ChangedFileScopeInput): Record<string, string> => {
   const full = input.suiteDepth === "full";
   const desktopWindowsDryRun =
     input.eventName !== "merge_group" ||
     input.scopeUnknown ||
-    input.changedFiles.some(
-      (file) =>
-        !/\.mdx?$/u.test(file) && matches(file, DESKTOP_WINDOWS_DRY_RUN_INPUTS),
-    );
+    input.changedFiles.some(matchesDesktopWindowsDryRunInput);
   const releaseTypecheck =
     input.heavyOnly &&
     (PERIODIC_RELEASE_TYPECHECK_EVENTS.some(
@@ -1188,11 +1201,7 @@ export const OUTPUT_RULES = {
       ({ input, files, full }) =>
         bool(
           (full && input.eventName !== "merge_group") ||
-            files.some(
-              (file) =>
-                !/\.mdx?$/u.test(file) &&
-                matches(file, DESKTOP_WINDOWS_DRY_RUN_INPUTS),
-            ),
+            files.some(matchesDesktopWindowsDryRunInput),
         ),
     ),
 } as const satisfies Record<ScopeOutput, (facts: ScopeFacts) => string>;

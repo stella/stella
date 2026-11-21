@@ -89,7 +89,12 @@ const VersionOrNewFileDialogBody = ({
       </DialogHeader>
 
       <DialogFooter>
-        <Button disabled={isUploadPending} onClick={onCancel} variant="ghost">
+        <Button
+          disabled={isUploadPending}
+          disabledReason={t("common.uploading")}
+          onClick={onCancel}
+          variant="ghost"
+        >
           {t("common.cancel")}
         </Button>
         <DecisionActions
@@ -195,7 +200,7 @@ const DecisionActions = ({
 
   if (decision === null) {
     return (
-      <Button disabled loading>
+      <Button disabled disabledReason={t("common.loading")} loading>
         {t("workspaces.files.versionOrNewFile.replaceOption")}
       </Button>
     );
@@ -207,6 +212,7 @@ const DecisionActions = ({
         <>
           <Button
             disabled={isUploadPending}
+            disabledReason={t("common.uploading")}
             onClick={() => onChoose(VERSION_OR_NEW_FILE_CHOICE.newDocument)}
             variant="outline"
           >
@@ -214,6 +220,11 @@ const DecisionActions = ({
           </Button>
           <Button
             disabled={!decision.canReplace || isUploadPending}
+            disabledReason={
+              isUploadPending
+                ? t("common.uploading")
+                : t("workspaces.files.versionOrNewFile.incompatibleFileType")
+            }
             loading={isUploadPending}
             onClick={() => onChoose(VERSION_OR_NEW_FILE_CHOICE.versionHere)}
           >
@@ -267,6 +278,7 @@ const ReferenceActions = ({
   const versionButton = (
     <Button
       disabled={isUploadPending}
+      disabledReason={t("common.uploading")}
       loading={isUploadPending}
       onClick={() =>
         onChoose(
@@ -290,6 +302,7 @@ const ReferenceActions = ({
   const newDocumentButton = (
     <Button
       disabled={isUploadPending}
+      disabledReason={t("common.uploading")}
       onClick={() => onChoose(VERSION_OR_NEW_FILE_CHOICE.newDocument)}
       variant={leadsWithNewDocument ? "default" : "outline"}
     >

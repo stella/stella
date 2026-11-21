@@ -4,12 +4,7 @@ import { useDebouncedCallback } from "use-debounce";
 import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
-import {
-  DownloadIcon,
-  PlusIcon,
-  TextQuoteIcon,
-  UploadIcon,
-} from "@stll/ui/icons";
+import { DownloadIcon, PlusIcon, UploadIcon } from "@stll/ui/icons";
 import { InputGroup, InputGroupInput } from "@stll/ui/input-group";
 import {
   DropdownMenu,
@@ -19,10 +14,6 @@ import {
 } from "@stll/ui/menu";
 import { TruncatedText } from "@stll/ui/truncated-text";
 
-import {
-  ResponsiveActionToolbar,
-  ResponsiveActionToolbarItem,
-} from "@/components/responsive-action-toolbar";
 import { usePermissions } from "@/hooks/use-permissions";
 import { useFormatter } from "@/i18n/formatting-context";
 import { api } from "@/lib/api";
@@ -42,6 +33,10 @@ import type {
   CategoryOps,
 } from "@/routes/knowledge/-components/category-sidebar";
 import { ClauseImportDialog } from "@/routes/knowledge/-components/clause-import-dialog";
+import {
+  ClauseListShell,
+  ClauseRowBody,
+} from "@/routes/knowledge/-components/clause-list.pending";
 
 // ── Types ────────────────────────────────────────────
 
@@ -145,100 +140,70 @@ export const ClauseList = ({
   };
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col md:flex-row">
-      <div className="hidden md:contents">
-        <ClauseCategorySidebar
-          categories={categories}
-          labels={categoryLabels}
-          onCategoriesChanged={onCategoriesChanged}
-          onSelect={onCategorySelect}
-          ops={categoryOps}
-          selectedId={selectedCategoryId}
-        />
-      </div>
-
-      <div className="flex min-h-0 flex-1 flex-col md:border-s">
-        <div className="border-b px-4 py-2">
-          <ResponsiveActionToolbar>
-            <ResponsiveActionToolbarItem slot="primary">
-              <InputGroup className="min-h-11 sm:min-h-0">
-                <InputGroupInput
-                  className="max-sm:h-11 max-sm:leading-11"
-                  onChange={handleSearchChange}
-                  placeholder={t("clauses.searchPlaceholder")}
+    <ClauseListShell
+      actions={
+        <>
+          {canCreateClause && (
+            <Button
+              aria-label={t("common.import")}
+              onClick={() => setImportOpen(true)}
+              size="sm"
+              title={t("common.import")}
+              variant="outline"
+            >
+              <UploadIcon />
+              <span className="hidden sm:inline">{t("common.import")}</span>
+            </Button>
+          )}
+          <DropdownMenu>
+            <DropdownMenuTrigger
+              render={
+                <Button
+                  aria-label={t("clauses.export")}
                   size="sm"
-                  type="search"
-                  value={searchInput}
-                />
-              </InputGroup>
-            </ResponsiveActionToolbarItem>
-            <ResponsiveActionToolbarItem slot="action">
-              <div className="flex gap-1">
-                {canCreateClause && (
-                  <Button
-                    aria-label={t("common.import")}
-                    onClick={() => setImportOpen(true)}
-                    size="sm"
-                    title={t("common.import")}
-                    variant="outline"
-                  >
-                    <UploadIcon />
-                    <span className="hidden sm:inline">
-                      {t("common.import")}
-                    </span>
-                  </Button>
-                )}
-                <DropdownMenu>
-                  <DropdownMenuTrigger
-                    render={
-                      <Button
-                        aria-label={t("clauses.export")}
-                        size="sm"
-                        title={t("clauses.export")}
-                        variant="outline"
-                      >
-                        <DownloadIcon />
-                        <span className="hidden sm:inline">
-                          {t("clauses.export")}
-                        </span>
-                      </Button>
-                    }
-                  />
-                  <DropdownMenuContent>
-                    <DropdownMenuItem
-                      onClick={() => {
-                        detached(handleExport("json"), "clause-list.export");
-                      }}
-                    >
-                      {t("clauses.exportAsJson")}
-                    </DropdownMenuItem>
-                    <DropdownMenuItem
-                      onClick={() => {
-                        detached(handleExport("csv"), "clause-list.export");
-                      }}
-                    >
-                      {t("clauses.exportAsCsv")}
-                    </DropdownMenuItem>
-                  </DropdownMenuContent>
-                </DropdownMenu>
-                {canCreateClause && (
-                  <Button
-                    aria-label={t("clauses.createClause")}
-                    onClick={onNewClause}
-                    size="sm"
-                    title={t("clauses.createClause")}
-                  >
-                    <PlusIcon />
-                    <span className="hidden sm:inline">
-                      {t("clauses.createClause")}
-                    </span>
-                  </Button>
-                )}
-              </div>
-            </ResponsiveActionToolbarItem>
-          </ResponsiveActionToolbar>
-        </div>
-
+                  title={t("clauses.export")}
+                  variant="outline"
+                >
+                  <DownloadIcon />
+                  <span className="hidden sm:inline">
+                    {t("clauses.export")}
+                  </span>
+                </Button>
+              }
+            />
+            <DropdownMenuContent>
+              <DropdownMenuItem
+                onClick={() => {
+                  detached(handleExport("json"), "clause-list.export");
+                }}
+              >
+                {t("clauses.exportAsJson")}
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                onClick={() => {
+                  detached(handleExport("csv"), "clause-list.export");
+                }}
+              >
+                {t("clauses.exportAsCsv")}
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+          {canCreateClause && (
+            <Button
+              aria-label={t("clauses.createClause")}
+              onClick={onNewClause}
+              size="sm"
+              title={t("clauses.createClause")}
+            >
+              <PlusIcon />
+              <span className="hidden sm:inline">
+                {t("clauses.createClause")}
+              </span>
+            </Button>
+          )}
+        </>
+      }
+      filters={
         <CategoryMobileFilterBar
           canCreate={canCreateClause}
           categories={categories}
@@ -247,56 +212,79 @@ export const ClauseList = ({
           onSelect={onCategorySelect}
           selectedId={selectedCategoryId}
         />
-
-        <CategoryFormDialog
+      }
+      search={
+        <InputGroup className="min-h-11 sm:min-h-0">
+          <InputGroupInput
+            className="max-sm:h-11 max-sm:leading-11"
+            onChange={handleSearchChange}
+            placeholder={t("clauses.searchPlaceholder")}
+            size="sm"
+            type="search"
+            value={searchInput}
+          />
+        </InputGroup>
+      }
+      sidebar={
+        <ClauseCategorySidebar
+          categories={categories}
           labels={categoryLabels}
-          onChanged={onCategoriesChanged}
-          onOpenChange={setCreateCategoryOpen}
-          open={createCategoryOpen}
+          onCategoriesChanged={onCategoriesChanged}
+          onSelect={onCategorySelect}
           ops={categoryOps}
+          selectedId={selectedCategoryId}
         />
+      }
+    >
+      <CategoryFormDialog
+        labels={categoryLabels}
+        onChanged={onCategoriesChanged}
+        onOpenChange={setCreateCategoryOpen}
+        open={createCategoryOpen}
+        ops={categoryOps}
+      />
 
-        <ClauseImportDialog
-          onImported={onRefresh}
-          onOpenChange={setImportOpen}
-          open={importOpen}
-        />
+      <ClauseImportDialog
+        onImported={onRefresh}
+        onOpenChange={setImportOpen}
+        open={importOpen}
+      />
 
-        <div className="flex-1 overflow-y-auto">
-          {clauses.length === 0 && !loading && (
-            <div className="flex items-center justify-center p-8">
-              <p className="text-muted-foreground text-sm">
-                {t("clauses.noResults")}
-              </p>
-            </div>
-          )}
+      <div className="flex-1 overflow-y-auto" data-slot="clause-list-body">
+        {clauses.length === 0 && !loading && (
+          <div className="flex items-center justify-center p-8">
+            <p className="text-muted-foreground text-sm">
+              {t("clauses.noResults")}
+            </p>
+          </div>
+        )}
 
-          <ul className="divide-y">
-            {clauses.map((clause) => (
-              <ClauseRow
-                categories={categories}
-                clause={clause}
-                key={clause.id}
-                onSelect={() => onClauseSelect(clause)}
-              />
-            ))}
-          </ul>
+        <ul className="divide-y">
+          {clauses.map((clause) => (
+            <ClauseRow
+              categories={categories}
+              clause={clause}
+              key={clause.id}
+              onSelect={() => onClauseSelect(clause)}
+            />
+          ))}
+        </ul>
 
-          {nextCursor && (
-            <div className="flex justify-center border-t p-3">
-              <Button
-                disabled={loading}
-                onClick={onLoadMore}
-                size="sm"
-                variant="ghost"
-              >
-                {t("common.loadMore")}
-              </Button>
-            </div>
-          )}
-        </div>
+        {nextCursor && (
+          <div className="flex justify-center border-t p-3">
+            <Button
+              disabled={loading}
+              disabledReason={t("common.loading")}
+              onClick={onLoadMore}
+              size="sm"
+              variant="ghost"
+            >
+              {t("common.loadMore")}
+            </Button>
+          </div>
+        )}
       </div>
-    </div>
+    </ClauseListShell>
   );
 };
 
@@ -321,32 +309,30 @@ const ClauseRow = ({
   return (
     <li>
       <Button className="w-full" onClick={onSelect} variant="plain">
-        <span className="hover:bg-muted/50 flex w-full items-center gap-3 px-4 py-3 text-start">
-          <div className="bg-muted flex size-9 shrink-0 items-center justify-center rounded-lg">
-            <TextQuoteIcon className="text-muted-foreground size-4" />
-          </div>
-          <div className="min-w-0 flex-1">
-            <TruncatedText
-              className="text-sm font-medium"
-              dir="auto"
-              render={<p />}
-            >
-              {clause.title}
-            </TruncatedText>
-            <p className="text-muted-foreground text-xs">
+        <ClauseRowBody
+          className="hover:bg-muted/50"
+          meta={
+            <>
               {categoryName ?? t("common.uncategorized")}
               {" \u00b7 "}
               {format.dateTime(new Date(clause.createdAt), {
                 dateStyle: "medium",
               })}
-            </p>
-          </div>
-          <span className="text-muted-foreground shrink-0 text-xs">
-            {t("common.versionLabel", {
-              version: String(clause.currentVersion),
-            })}
-          </span>
-        </span>
+            </>
+          }
+          title={
+            <TruncatedText
+              className="text-sm font-medium"
+              dir="auto"
+              render={<span />}
+            >
+              {clause.title}
+            </TruncatedText>
+          }
+          trailing={t("common.versionLabel", {
+            version: String(clause.currentVersion),
+          })}
+        />
       </Button>
     </li>
   );

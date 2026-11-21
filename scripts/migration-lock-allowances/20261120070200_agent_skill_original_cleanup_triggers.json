@@ -1,0 +1,3 @@
+{
+  "create-trigger": "Installing the original erasure and staleness triggers on agent_skill_resources is a catalog-only change without a row scan; each SHARE ROW EXCLUSIVE acquisition is bounded by the 1s lock_timeout, and a lost lock wait rolls the migration back for the runner's lock-retry ladder to apply again."
+}

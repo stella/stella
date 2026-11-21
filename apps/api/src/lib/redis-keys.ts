@@ -39,6 +39,7 @@ export const COORDINATION_KEY_EXPIRY = {
   "mcp-read-fence": "ttl",
   "public-read-continuation": "ttl",
   "feedback-intake": "ttl",
+  "sign-in-code-delivery": "ttl",
   // Pub/sub channels do not materialize values. The only stored key under this
   // scope is Hocuspocus's Redlock key, whose lockTimeout supplies its TTL.
   [FOLIO_COLLAB_REDIS_SCOPE]: "ttl",
@@ -125,13 +126,23 @@ export const unboundedCoordinationKey = (
   return buildKey(options);
 };
 
+/**
+ * A relative lifetime, or `epoch-milliseconds`: an absolute expiry on the
+ * server clock, so a key can end exactly when another one does.
+ */
 type CoordinationTtl = {
-  unit: "seconds" | "milliseconds";
+  unit: "seconds" | "milliseconds" | "epoch-milliseconds";
   value: number;
 };
 
+const TTL_TOKEN = {
+  seconds: "EX",
+  milliseconds: "PX",
+  "epoch-milliseconds": "PXAT",
+} as const satisfies Record<CoordinationTtl["unit"], string>;
+
 const ttlArguments = ({ unit, value }: CoordinationTtl): [string, string] => [
-  unit === "seconds" ? "EX" : "PX",
+  TTL_TOKEN[unit],
   String(value),
 ];
 

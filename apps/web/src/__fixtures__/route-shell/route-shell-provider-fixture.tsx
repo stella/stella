@@ -38,6 +38,7 @@ import { sessionOptions } from "@/lib/auth-query-options";
 import { toSafeId } from "@/lib/safe-id";
 import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
 import { APP_FRAME_SCOPE, matchedAppFrameScope } from "@/routes/-app-frame-scope";
+import { isLegacyAdminRouteId } from "@/routes/-organization-settings-route";
 import { withTestServerIsomorphicHalf } from "@/testing/isomorphic-half";
 
 type RouteShellProviderFixtureOptions = {
@@ -347,6 +348,10 @@ const installFixtureNetwork = () => {
       }
       if (pathname === "/api/auth/organization/get-active-member-role") {
         return Response.json({ role: "owner" });
+      }
+      // The settings navigation counts sign-ins waiting for review.
+      if (pathname === "/api/auth/session-sign-ins") {
+        return Response.json({ sessions: [] });
       }
       if (pathname === "/v1/me/professional-use") {
         if (professionalUseState.status === "required") {
@@ -713,8 +718,12 @@ const loadFixtureRuntime = async (
     ancestors(route).some(({ id }) => id === "/tools");
   const hasChildren = (route: FixtureRoute) =>
     registeredRoutes.some(({ parentRoute }) => parentRoute?.id === route.id);
+  // The legacy admin parent redirects before its aliases can mount a page.
   const uiLeaves = registeredRoutes.filter(
-    (route) => !hasChildren(route) && route.options.component !== undefined,
+    (route) =>
+      !isLegacyAdminRouteId(route.id) &&
+      !hasChildren(route) &&
+      route.options.component !== undefined,
   );
   const selectedLeaves =
     suite === "leaf-shells"

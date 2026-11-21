@@ -369,10 +369,12 @@ test.each([
     });
     const remove = view.getByRole("button", {
       name: messages.folio.removeLink,
+      description: messages.chat.answerEdit.autolinkLabel,
     });
-    expect(remove.hasAttribute("disabled")).toBe(true);
-    const explanation = view.getByText(messages.chat.answerEdit.autolinkLabel);
-    expect(remove.getAttribute("aria-describedby")).toBe(explanation.id);
+    expect(remove.getAttribute("aria-disabled")).toBe("true");
+    expect(
+      view.getByText(messages.chat.answerEdit.autolinkLabel, { selector: "p" }),
+    ).toBeDefined();
     expect(view.queryByRole("button", { name: "Accept" })).toBeNull();
     expect(view.container.querySelector("ins")).toBeNull();
     expect(requests).toEqual([]);

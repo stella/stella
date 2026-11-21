@@ -112,6 +112,7 @@ export const CAPABILITY_RUNTIME_INPUTS = [
   "packages/transactional/components/**",
   "packages/transactional/emails/**",
   "packages/transactional/i18n/**",
+  "packages/transactional/map/**",
   "packages/transactional/render/**",
   "bunfig.toml",
   "bun.lock",

@@ -60,7 +60,9 @@ export const ConversionRefusalFallback = ({
 export const FilePreviewUnavailable = ({
   onDownload,
   message,
+  downloadLabel,
 }: {
+  downloadLabel?: string;
   message?: string;
   onDownload?: (() => void) | undefined;
 }) => {
@@ -75,7 +77,7 @@ export const FilePreviewUnavailable = ({
       {onDownload === undefined ? null : (
         <Button onClick={onDownload} size="sm" variant="outline">
           <DownloadIcon />
-          {t("common.download")}
+          {downloadLabel ?? t("common.download")}
         </Button>
       )}
     </div>

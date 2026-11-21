@@ -194,6 +194,7 @@ const ExtractFactsForm = ({
               aria-label={t("common.search")}
               clearLabel={t("common.cancel")}
               disabled={extraction.starting}
+              disabledReason={t("avt.extraction.starting")}
               onValueChange={setSearch}
               placeholder={t("common.search")}
               value={search}
@@ -237,6 +238,7 @@ const ExtractFactsForm = ({
           </DialogClose>
           <Button
             disabled={entityIds.length === 0}
+            disabledReason={t("avt.extraction.selectDocument")}
             loading={extraction.starting}
             type="submit"
           >
@@ -298,6 +300,7 @@ const DocumentChoices = ({
                 <Button
                   aria-label={t("common.remove")}
                   disabled={disabled}
+                  disabledReason={t("avt.extraction.starting")}
                   onClick={() => onToggle(document.entityId)}
                   size="icon-xs"
                   variant="ghost"

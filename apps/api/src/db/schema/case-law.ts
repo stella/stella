@@ -31,6 +31,11 @@ import {
 } from "@stll/legal-ast/decision-identifier";
 import type { DecisionIdentifierType } from "@stll/legal-ast/decision-identifier";
 import { EU_PRIMARY_WORKS } from "@stll/legal-atlas/eu-provision-citations";
+import {
+  CYCLE_OUTCOME,
+  CYCLE_OUTCOMES,
+  INGESTION_PAUSE_REASON,
+} from "@stll/legal-atlas/ingestion-cycle";
 
 import {
   SITEMAP_LANGUAGE_GROUP_INDEX,
@@ -103,6 +108,7 @@ import {
 } from "@/api/lib/case-law/decision-identifier-claims";
 import { DOCTRINAL_TREATMENTS } from "@/api/lib/case-law/doctrine";
 import { fallbackDecisionIdentityIndexes } from "@/api/lib/case-law/fallback-decision-identity-index";
+import { INGESTION_FAILURE_IDENTITY_KINDS } from "@/api/lib/case-law/ingestion-failure-identity";
 import { CASE_LAW_PROVISION_SEARCH_INDEX } from "@/api/lib/case-law/provision-search-index";
 import {
   publishedCaseLawDecisionFor,
@@ -1104,7 +1110,7 @@ export const caseLawDecisions = p.pgTable(
     ),
     p.check(
       "case_law_decisions_redacted_payload_erased",
-      sql`${t.redactedAt} IS NULL OR (${t.fulltext} IS NULL AND ${t.sections} IS NULL AND ${t.documentAst} IS NULL AND ${t.contentHash} IS NULL)`,
+      sql`${t.redactedAt} IS NULL OR (${t.fulltext} IS NULL AND ${t.sections} IS NULL AND ${t.documentAst} IS NULL AND ${t.contentHash} IS NULL AND ${t.sourceRaw} IS NULL)`,
     ),
     // The bounds `canonicalDecisionDate` enforces on the write path,
     // enforced at the table as well; both derive from `DECISION_DATE_BOUNDS`,
@@ -1133,16 +1139,12 @@ export const caseLawDecisions = p.pgTable(
       }),
     ),
     // Publisher ids identify documents; fallback keys include court and decision
-    // evidence. The obsolete docket-only index is removed by the contract migration.
+    // evidence; weak cohort members are distinguished by published content.
     p
       .uniqueIndex("case_law_decisions_source_document_idx")
       .on(t.sourceId, t.sourceDocumentId)
       .where(isNotNull(t.sourceDocumentId)),
     ...fallbackDecisionIdentityIndexes(t),
-    p
-      .uniqueIndex("case_law_decisions_source_case_lang_null_idx")
-      .on(t.sourceId, t.caseNumber, t.language)
-      .where(isNull(t.sourceDocumentId)),
     p
       .uniqueIndex("case_law_decisions_slug_uidx")
       .on(t.slug)
@@ -3462,7 +3464,9 @@ export const caseLawStatuteCitationCountState = p.pgTable(
  * whole by a background refresh, so a public read lists the shards without
  * counting the corpus. `year`/`month` are the shard's path segments
  * (`undated`/`00` for decisions without a date) and `bucket` is `all` for an
- * unsplit month or the two-digit bucket of a split one.
+ * unsplit month or the four-digit position of one range of a split one. A
+ * range is one contiguous key range of the decisions' date index, so serving
+ * it reads its own decisions and nothing else of the month.
  *
  * Row security is forced (migration `20260927230000_case_law_sitemap_shards`)
  * so the owner-run refresh needs a policy; table privileges decide access.
@@ -3504,9 +3508,19 @@ export const caseLawSitemapShards = p.pgTable(
     country: p.varchar({ length: 3 }).notNull(),
     year: p.varchar({ length: 7 }).notNull(),
     month: p.varchar({ length: 2 }).notNull(),
-    bucket: p.varchar({ length: 3 }).notNull(),
+    bucket: p.varchar({ length: 4 }).notNull(),
     total: p.integer().notNull(),
     lastModifiedAt: timestamptz("last_modified_at").notNull(),
+    /**
+     * Where a split month's range starts, inclusive, on the key of
+     * `case_law_decisions_country_date_published_idx` (the decision date,
+     * `-infinity` when undated, then the id); null from the month's start.
+     */
+    rangeStartDate: p.date("range_start_date"),
+    rangeStartId: p.uuid("range_start_id"),
+    /** Where the range ends, exclusive, on the same key; null to the month's end. */
+    rangeEndDate: p.date("range_end_date"),
+    rangeEndId: p.uuid("range_end_id"),
   },
   (t) => [
     p.primaryKey({
@@ -4715,6 +4729,10 @@ export const caseLawSearchDocumentPreviewPassages = p.pgTable(
 // Case Law — Ingestion observability
 // ---------------------------------------------------------------------------
 
+const INGESTION_CYCLE_OUTCOME_SQL_VALUES = CYCLE_OUTCOMES.map((outcome) =>
+  sql.raw(`'${outcome}'`),
+);
+
 export const caseLawIngestionEvents = p.pgTable(
   "case_law_ingestion_events",
   {
@@ -4722,7 +4740,11 @@ export const caseLawIngestionEvents = p.pgTable(
     sourceId: safeUuid<"caseLawSource">("source_id")
       .notNull()
       .references(() => caseLawSources.id, { onDelete: "cascade" }),
-    status: p.varchar({ length: 16 }).notNull().$type<"completed" | "failed">(),
+    status: p.varchar({ length: 16, enum: CYCLE_OUTCOMES }).notNull(),
+    pauseReason: p.varchar("pause_reason", {
+      length: 64,
+      enum: [INGESTION_PAUSE_REASON.DECISION_ALLOWANCE_EXHAUSTED],
+    }),
     inserted: p.integer().notNull().default(0),
     skipped: p.integer().notNull().default(0),
     searchVectorFailures: p
@@ -4738,12 +4760,69 @@ export const caseLawIngestionEvents = p.pgTable(
     finishedAt: timestamptz("finished_at").defaultNow().notNull(),
   },
   (t) => [
+    p.check(
+      "case_law_ingestion_events_status_valid",
+      sql`${t.status} IN (${sql.join(INGESTION_CYCLE_OUTCOME_SQL_VALUES, sql`, `)})`,
+    ),
+    p.check(
+      "case_law_ingestion_events_pause_reason_valid",
+      sql`(${t.status} = '${sql.raw(CYCLE_OUTCOME.PAUSED)}' AND ${t.pauseReason} IS NOT NULL AND ${t.pauseReason} = '${sql.raw(INGESTION_PAUSE_REASON.DECISION_ALLOWANCE_EXHAUSTED)}') OR (${t.status} <> '${sql.raw(CYCLE_OUTCOME.PAUSED)}' AND ${t.pauseReason} IS NULL)`,
+    ),
     p.index("case_law_ingestion_events_source_idx").on(t.sourceId),
     p.index("case_law_ingestion_events_finished_idx").on(t.finishedAt),
     p
       .index("case_law_ingestion_events_source_finished_idx")
       .on(t.sourceId, t.finishedAt.desc(), t.id.desc()),
     ...globalCaseLawPolicies(),
+  ],
+);
+
+/** Replay inputs for rejected records; never exposed through public failure summaries. */
+export const caseLawIngestionFailureEvidence = p.pgTable(
+  "case_law_ingestion_failure_evidence",
+  {
+    sourceId: safeUuid<"caseLawSource">("source_id").notNull(),
+    recordIdentity: p.varchar("record_identity", { length: 256 }).notNull(),
+    identityKind: p
+      .varchar("identity_kind", {
+        length: 32,
+        enum: INGESTION_FAILURE_IDENTITY_KINDS,
+      })
+      .notNull(),
+    sourceDocumentId: p.varchar("source_document_id", { length: 256 }),
+    payloadHash: p.varchar("payload_hash", { length: 64 }).notNull(),
+    observationOrder: p
+      .bigint("observation_order", { mode: "bigint" })
+      .notNull(),
+    observedAt: timestamptz("observed_at").notNull(),
+    /** Versioned JSON text with explicit base64 binary fields; retained verbatim. */
+    payload: p.text().notNull(),
+    errorType: p.varchar("error_type", { length: 128 }).notNull(),
+    createdAt: timestamptz("created_at").defaultNow().notNull(),
+  },
+  (t) => [
+    p
+      .foreignKey({
+        name: "case_law_ingestion_failure_evidence_source_fk",
+        columns: [t.sourceId],
+        foreignColumns: [caseLawSources.id],
+      })
+      .onDelete("cascade"),
+    p.primaryKey({
+      columns: [t.sourceId, t.recordIdentity, t.payloadHash, t.errorType],
+      name: "case_law_ingestion_failure_evidence_pk",
+    }),
+    p.check(
+      "case_law_ingestion_failure_evidence_identity_kind",
+      sql`${t.identityKind} IN (${sql.join(
+        INGESTION_FAILURE_IDENTITY_KINDS.map((kind) => sql`${kind}`),
+        sql`, `,
+      )})`,
+    ),
+    p
+      .index("case_law_ingestion_failure_evidence_document_idx")
+      .on(t.sourceId, t.sourceDocumentId),
+    ...caseLawIngestionOnlyPolicies(),
   ],
 );
 

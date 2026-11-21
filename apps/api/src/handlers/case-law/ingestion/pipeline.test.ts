@@ -29,10 +29,10 @@ import { createSha256 } from "@stll/sha256/node";
 
 import type { Transaction } from "@/api/db/root";
 import type { ScopedDb } from "@/api/db/safe-db";
-import type { caseLawIngestionFailures } from "@/api/db/schema";
 import {
   caseLawDecisionIdentifiers,
   caseLawDecisions,
+  caseLawIngestionFailures,
   caseLawSources,
 } from "@/api/db/schema";
 import { envBase } from "@/api/env-base";
@@ -97,14 +97,16 @@ import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
 import type { FakeS3 } from "@/api/tests/helpers/fake-s3";
 import { installRecordingLogger } from "@/api/tests/helpers/recording-telemetry";
 import type { RecordingLogger } from "@/api/tests/helpers/recording-telemetry";
+import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
-// An insert whose values can be awaited directly or chained into an upsert,
-// as the refresh path does for identifier rows.
-// oxlint-disable-next-line typescript/promise-function-async -- the double returns a promise that also carries onConflictDoUpdate; `async` would drop the extra method
-const insertedValues = () =>
-  Object.assign(Promise.resolve(undefined), {
-    onConflictDoUpdate: async () => await Promise.resolve(undefined),
-  });
+const insertFixture = (table: unknown) => ({
+  values:
+    table === caseLawDecisionIdentifiers
+      ? () => ({
+          onConflictDoUpdate: async () => await Promise.resolve(undefined),
+        })
+      : async () => await Promise.resolve(undefined),
+});
 
 const baseResult = (
   documentAst: IngestionResult["documentAst"],
@@ -147,7 +149,7 @@ const cursorOnlyDb =
   (onCursor: (cursor: string | null | undefined) => void): ScopedDb =>
   async (callback) => {
     const tx = {
-      insert: () => ({ values: insertedValues }),
+      insert: insertFixture,
       query: {
         caseLawDecisions: {
           findFirst: async () => undefined,
@@ -187,8 +189,7 @@ const cursorOnlyDb =
 
     // SAFETY: these cases exercise only the case_law_sources cursor update;
     // the fake implements that chain.
-    // oxlint-disable-next-line typescript/no-unsafe-type-assertion
-    return await callback(tx as unknown as Transaction);
+    return await callback(asTestRaw<Transaction>(tx));
   };
 
 afterEach(() => {
@@ -906,8 +907,7 @@ describe("runIngestionPipeline — database timeouts", () => {
 
       // SAFETY: this test exercises only the final case_law_sources cursor
       // update after the synthetic timeout; the fake implements that chain.
-      // oxlint-disable-next-line typescript/no-unsafe-type-assertion
-      return await callback(tx as unknown as Transaction);
+      return await callback(asTestRaw<Transaction>(tx));
     };
 
     const result = await runIngestionPipeline({
@@ -933,7 +933,7 @@ describe("runIngestionPipeline — failure records", () => {
   /**
    * Reject the third database call to simulate a decision failure after its
    * observation and source read. With rejection disabled, planning reads reach
-   * storage validation; both paths record the refusal and advance the cursor.
+   * storage validation; both paths must durably record the refusal before advancing.
    */
   const failingDecisionDb = (
     insertError: Error | null,
@@ -958,21 +958,31 @@ describe("runIngestionPipeline — failure records", () => {
             findMany: async () => [],
           },
         },
-        select: () => ({
+        select: (selection: unknown) => ({
           from: (table: unknown) => ({
-            // oxlint-disable-next-line typescript/promise-function-async -- returns awaitable rows with for/limit chains; async would discard those methods
-            where: () =>
-              Object.assign(Promise.resolve([]), {
-                for: () => ({ limit: async () => [] }),
-                limit: async () =>
-                  table === caseLawSources
-                    ? [{ adapterKey: ADAPTER_KEYS.CZ_NS }]
-                    : [],
-              }),
+            where:
+              table === caseLawDecisionIdentifiers ||
+              (typeof selection === "object" &&
+                selection !== null &&
+                "polarity" in selection)
+                ? async () => await Promise.resolve([])
+                : // oxlint-disable-next-line typescript/promise-function-async -- returns awaitable rows with for/limit chains; async would discard those methods
+                  () =>
+                    Object.assign(Promise.resolve([]), {
+                      for: () => ({ limit: async () => [] }),
+                      limit: async () =>
+                        table === caseLawSources &&
+                        typeof selection === "object" &&
+                        selection !== null &&
+                        "adapterKey" in selection
+                          ? [{ adapterKey: ADAPTER_KEYS.CZ_NS }]
+                          : [],
+                    }),
           }),
         }),
         insert: (table: unknown) => ({
-          values: async (rows: FailureRow[]) => {
+          // oxlint-disable-next-line typescript/promise-function-async -- returns awaitable rows with conflict chains; async would discard those methods
+          values: (rows: FailureRow[]) => {
             if (table === caseLawDecisions) {
               state.decisionWrites++;
               throw new Error("unexpected decision write");
@@ -980,8 +990,13 @@ describe("runIngestionPipeline — failure records", () => {
             if (insertError !== null) {
               throw insertError;
             }
-            state.insertedRows.push(...rows);
-            return await Promise.resolve([]);
+            if (table === caseLawIngestionFailures) {
+              state.insertedRows.push(...rows);
+            }
+            return Object.assign(Promise.resolve([]), {
+              onConflictDoNothing: async () => [],
+              onConflictDoUpdate: async () => [],
+            });
           },
         }),
         execute: async () => await Promise.resolve([]),
@@ -1007,8 +1022,7 @@ describe("runIngestionPipeline — failure records", () => {
 
       // SAFETY: this fake implements identity and polarity reads, failure-record
       // inserts and cursor updates; a decision insert fails explicitly.
-      // oxlint-disable-next-line typescript/no-unsafe-type-assertion
-      return await callback(tx as unknown as Transaction);
+      return await callback(asTestRaw<Transaction>(tx));
     };
     return { scopedDb, state };
   };
@@ -1055,6 +1069,7 @@ describe("runIngestionPipeline — failure records", () => {
       });
       expect(state.insertedRows).toHaveLength(1);
       const [row] = state.insertedRows;
+      expect(row?.recordIdentity).toMatch(/^input:[0-9a-f]{64}$/u);
       expect(row?.caseNumber).toBe(
         input.caseNumber.slice(0, CITATION_STORAGE_WIDTHS.caseNumber),
       );
@@ -1185,7 +1200,6 @@ describe("runIngestionPipeline — failure records", () => {
             language: "sk-SK-x-long",
           }),
         ],
-        itemBuildFailures: { type: "item_build_failed", count: 2 },
         publisherRequest: PUBLISHER_REQUEST.ANSWERED,
         nextCursor: "cursor-2",
       });
@@ -1209,14 +1223,72 @@ describe("runIngestionPipeline — failure records", () => {
     expect(result.haltReason).toBeNull();
     expect(result.nextCursor).toBe("cursor-2");
     expect(state.persistedCursor).toBe("cursor-2");
-    expect(
-      logs.records.find(
-        ({ message }) => message === "case_law.ingestion.pipeline_page_done",
-      )?.attributes?.["itemBuildFailures"],
-    ).toBe(2);
   });
 
-  test("reports a failure record the database rejects as invalid data and moves the cursor on", async () => {
+  test.each([0, 1])(
+    "holds a page with %i retained typed failures and one omitted item",
+    async (retained) => {
+      const source = caseLawSourceRow({ name: "Incomplete failed page" });
+      const rejected = plainTextIngestionResult({
+        ...baseResult({}),
+        sourceDocumentId: "retained-failed-input",
+        caseNumber: "{\\rtf1 invalid label}",
+        sourceRaw: "original publisher listing",
+      });
+      expect(rejected.plainTextOutcome.type).toBe("item_build_failed");
+      czNsAdapter.fetchPage = async () =>
+        Result.ok({
+          decisions: retained === 0 ? [] : [rejected],
+          itemBuildFailures: { type: "item_build_failed", count: retained + 1 },
+          publisherRequest: PUBLISHER_REQUEST.ANSWERED,
+          nextCursor: "cursor-2",
+        });
+      const { scopedDb, state } = failingDecisionDb(null, false);
+      const result = await runIngestionPipeline({
+        source,
+        sourceLease: testSourceLease(source),
+        scopedDb,
+        maxPages: 1,
+        acquireStoredTotalAdmission: async () => "held",
+      });
+      expect(result.haltReason).toContain("lack replayable per-item outcomes");
+      expect(result.stopKind).toBe(INGESTION_STOP_KIND.ADAPTER_ERROR);
+      expect(result.nextCursor).toBe(source.syncCursor);
+      expect(state.persistedCursor).toBe(source.syncCursor);
+      expect(state.insertedRows).toHaveLength(retained);
+    },
+  );
+
+  test("passes a failed build only after its retained input reaches the ledger", async () => {
+    const source = caseLawSourceRow({ name: "Retained failed page" });
+    const rejected = plainTextIngestionResult({
+      ...baseResult({}),
+      sourceDocumentId: "retained-failed-input",
+      caseNumber: "{\\rtf1 invalid label}",
+      sourceRaw: "original publisher listing",
+    });
+    expect(rejected.plainTextOutcome.type).toBe("item_build_failed");
+    czNsAdapter.fetchPage = async () =>
+      Result.ok({
+        decisions: [rejected],
+        itemBuildFailures: { type: "item_build_failed", count: 1 },
+        publisherRequest: PUBLISHER_REQUEST.ANSWERED,
+        nextCursor: "cursor-2",
+      });
+    const { scopedDb, state } = failingDecisionDb(null, false);
+    const result = await runIngestionPipeline({
+      source,
+      sourceLease: testSourceLease(source),
+      scopedDb,
+      maxPages: 1,
+      acquireStoredTotalAdmission: async () => "held",
+    });
+    expect(result.haltReason).toBeNull();
+    expect(result.nextCursor).toBe("cursor-2");
+    expect(state.insertedRows).toHaveLength(1);
+  });
+
+  test("holds the cursor when the database rejects the failure record", async () => {
     const source = caseLawSourceRow({ name: "Failure-record source" });
     czNsAdapter.fetchPage = async () =>
       Result.ok({
@@ -1235,8 +1307,10 @@ describe("runIngestionPipeline — failure records", () => {
       maxPages: 1,
     });
 
-    expect(state.persistedCursor).toBe("cursor-2");
-    expect(result.haltReason).toBeNull();
+    expect(state.persistedCursor).toBe("cursor-1");
+    expect(result.nextCursor).toBe("cursor-1");
+    expect(result.pagesProcessed).toBe(0);
+    expect(result.haltReason).toContain("cursor held for retry");
     expect(
       logs
         .at("ERROR")
@@ -1346,8 +1420,7 @@ describe("runIngestionPipeline — empty-page cursor progress", () => {
       // SAFETY: this test exercises only the final case_law_sources cursor
       // update (the empty page performs no decision writes); the fake
       // implements that chain.
-      // oxlint-disable-next-line typescript/no-unsafe-type-assertion
-      return await callback(tx as unknown as Transaction);
+      return await callback(asTestRaw<Transaction>(tx));
     };
 
     const result = await runIngestionPipeline({
@@ -2004,13 +2077,12 @@ describe("processDecision — corpus storage off", () => {
           },
         }),
         delete: () => ({ where: async () => undefined }),
-        insert: () => ({ values: insertedValues }),
+        insert: insertFixture,
       };
 
       // SAFETY: the refresh path walks only these chains; anything else
       // would throw and fail the test loudly.
-      // oxlint-disable-next-line typescript/no-unsafe-type-assertion
-      return await callback(tx as unknown as Transaction);
+      return await callback(asTestRaw<Transaction>(tx));
     };
 
     const outcome = (
@@ -2110,15 +2182,14 @@ describe("processDecision — the decision's judges", () => {
           }),
         }),
         delete: () => ({ where: async () => undefined }),
-        insert: () => ({ values: insertedValues }),
+        insert: insertFixture,
       };
 
       inTransaction = true;
       try {
         // SAFETY: the refresh path walks only these chains; anything else
         // would throw and fail the test loudly.
-        // oxlint-disable-next-line typescript/no-unsafe-type-assertion
-        return await callback(tx as unknown as Transaction);
+        return await callback(asTestRaw<Transaction>(tx));
       } finally {
         inTransaction = false;
       }
@@ -2274,13 +2345,12 @@ describe("processDecision — fields on an existing row", () => {
           },
         }),
         delete: () => ({ where: async () => undefined }),
-        insert: () => ({ values: insertedValues }),
+        insert: insertFixture,
       };
 
       // SAFETY: the refresh path walks only these chains; anything else
       // would throw and fail the test loudly.
-      // oxlint-disable-next-line typescript/no-unsafe-type-assertion
-      return await callback(tx as unknown as Transaction);
+      return await callback(asTestRaw<Transaction>(tx));
     };
 
     (
@@ -2426,8 +2496,7 @@ describe("processDecision — source raw upload failure", () => {
 
       // SAFETY: the raw upload runs before any decision write, so the
       // dedup lookup is the only chain this path reaches.
-      // oxlint-disable-next-line typescript/no-unsafe-type-assertion
-      return await callback(tx as unknown as Transaction);
+      return await callback(asTestRaw<Transaction>(tx));
     };
 
     const outcome = (
@@ -2520,8 +2589,7 @@ describe("processDecision — source raw upload failure", () => {
 
       // SAFETY: the raw upload runs before any decision write, so the
       // dedup lookup is the only chain this path reaches.
-      // oxlint-disable-next-line typescript/no-unsafe-type-assertion
-      return await callback(tx as unknown as Transaction);
+      return await callback(asTestRaw<Transaction>(tx));
     };
 
     (

@@ -2,8 +2,11 @@
 
 import type * as React from "react";
 
+import { cva } from "class-variance-authority";
+import type { VariantProps } from "class-variance-authority";
+
 import { cn } from "../lib/utils";
-import { Skeleton } from "./skeleton";
+import { InlineSkeleton, Skeleton } from "./skeleton";
 
 /*
  * The grouped list's shell (./list.tsx): the group, its header and title, and
@@ -46,14 +49,24 @@ const ListGroupHeading = ({
   />
 );
 
+/** `destructive` names an irreversible group (a danger zone). */
+type ListGroupTitleTone = "default" | "destructive";
+
+const LIST_GROUP_TITLE_TONE_CLASS = {
+  default: "text-foreground",
+  destructive: "text-destructive-foreground",
+} as const satisfies Record<ListGroupTitleTone, string>;
+
 const ListGroupTitle = ({
   className,
   children,
+  tone = "default",
   ...props
-}: React.ComponentProps<"h2">) => (
+}: React.ComponentProps<"h2"> & { tone?: ListGroupTitleTone | undefined }) => (
   <h2
     className={cn(
-      "text-foreground text-sm font-medium text-balance",
+      "text-sm font-medium text-balance",
+      LIST_GROUP_TITLE_TONE_CLASS[tone],
       className,
     )}
     data-slot="list-group-title"
@@ -61,6 +74,30 @@ const ListGroupTitle = ({
   >
     {children}
   </h2>
+);
+
+/** The group's one quiet line under its title. */
+const ListGroupDescription = ({
+  className,
+  ...props
+}: React.ComponentProps<"p">) => (
+  <p
+    className={cn("text-muted-foreground text-xs text-pretty", className)}
+    data-slot="list-group-description"
+    {...props}
+  />
+);
+
+/** Quiet trailing affordance on the header row (a link or ghost button). */
+const ListGroupAction = ({
+  className,
+  ...props
+}: React.ComponentProps<"div">) => (
+  <div
+    className={cn("flex shrink-0 items-center gap-1", className)}
+    data-slot="list-group-action"
+    {...props}
+  />
 );
 
 /**
@@ -79,6 +116,36 @@ const List = ({ className, ...props }: React.ComponentProps<"ul">) => (
       className,
     )}
     data-slot="list"
+    {...props}
+  />
+);
+
+const listItemMediaVariants = cva(
+  "bg-muted grid size-8 shrink-0 place-items-center overflow-hidden rounded-lg outline-1 -outline-offset-1 outline-black/5 dark:outline-white/10",
+  {
+    defaultVariants: { variant: "icon" },
+    variants: {
+      variant: {
+        /** A glyph or logo, drawn quietly. */
+        icon: "text-muted-foreground [&_svg:not([class*='size-'])]:size-4",
+        /** A letter standing in for a name that has no logo. */
+        initial: "text-foreground text-xs font-medium",
+      },
+    },
+  },
+);
+
+/** Fixed 32px tile for an icon, logo or initial. */
+const ListItemMedia = ({
+  className,
+  variant,
+  ...props
+}: React.ComponentProps<"div"> &
+  VariantProps<typeof listItemMediaVariants>) => (
+  <div
+    aria-hidden="true"
+    className={cn(listItemMediaVariants({ variant }), className)}
+    data-slot="list-item-media"
     {...props}
   />
 );
@@ -118,7 +185,7 @@ const ListItemSkeleton = ({
       {media && <Skeleton className="size-8 shrink-0 rounded-lg" />}
       <div className="flex min-w-0 flex-1 flex-col gap-0.5">
         <span className="flex h-5 items-center">
-          <Skeleton
+          <InlineSkeleton
             className={cn(
               "h-3.5 max-w-full",
               LIST_ITEM_TITLE_WIDTHS[index % LIST_ITEM_TITLE_WIDTHS.length],
@@ -127,7 +194,7 @@ const ListItemSkeleton = ({
         </span>
         {description && (
           <span className="flex h-4 items-center">
-            <Skeleton
+            <InlineSkeleton
               className={cn(
                 "h-3 max-w-full",
                 LIST_ITEM_DESCRIPTION_WIDTHS[
@@ -140,7 +207,7 @@ const ListItemSkeleton = ({
       </div>
       {trailing === "text" && (
         <span className="flex h-4 shrink-0 items-center">
-          <Skeleton className="h-3 w-12" />
+          <InlineSkeleton className="h-3 w-12" />
         </span>
       )}
     </div>
@@ -154,16 +221,20 @@ const ListGroupTitlePending = () => (
     className="flex h-5 items-center"
     data-slot="list-group-title-skeleton"
   >
-    <Skeleton className="h-3.5 w-24" />
+    <InlineSkeleton className="h-3.5 w-24" />
   </span>
 );
 
 export {
   List,
   ListGroup,
+  ListGroupAction,
+  ListGroupDescription,
   ListGroupHeader,
   ListGroupHeading,
   ListGroupTitle,
   ListGroupTitlePending,
+  ListItemMedia,
   ListItemSkeleton,
 };
+export type { ListGroupTitleTone };

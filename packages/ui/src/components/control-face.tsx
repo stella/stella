@@ -1,29 +1,63 @@
-import type { ReactNode } from "react";
+import type { ComponentType, ReactNode } from "react";
 
-import { ChevronDownIcon } from "../icons";
+import { ChevronDownIcon, ChevronsUpDownIcon } from "../icons";
 import { CONTROL_SIZE } from "../lib/control-size";
 import type { ControlSize } from "../lib/control-size";
+import { FIELD_TRIGGER_CLASS_NAME } from "../lib/field-trigger";
 import { cn } from "../lib/utils";
 import {
   BUTTON_BASE_CLASS,
   BUTTON_FACE_SIZE_CLASS_NAMES,
   BUTTON_LAYOUT_CLASS_NAMES,
+  BUTTON_SIZE_CLASS_NAMES,
   BUTTON_VARIANT_CLASS_NAMES,
   type ButtonFaceSize,
 } from "./button-classes";
 import type { ButtonTokenVariant } from "./button.shared";
 import {
+  FIELD_CLASS_NAME,
+  FIELD_DESCRIPTION_CLASS_NAME,
+} from "./field-classes";
+import {
   INPUT_CONTROL_CLASS_NAME,
   INPUT_ELEMENT_CLASS_NAME,
   INPUT_SIZE_CLASS_NAMES,
 } from "./input-control";
+import { LABEL_VARIANT_CLASS_NAME } from "./label-classes";
+import {
+  SELECT_TRIGGER_ICON_CLASS_NAME,
+  SELECT_TRIGGER_SIZE_CLASS_NAMES,
+  SELECT_VALUE_CLASS_NAME,
+} from "./select-classes";
 import { InlineSkeleton } from "./skeleton";
+import {
+  TABS_INDICATOR_DEFAULT_CLASS,
+  TABS_LIST_BASE_CLASS,
+  TABS_LIST_DEFAULT_CLASS,
+  TABS_TAB_CLASS,
+} from "./tabs-classes";
+import {
+  CHECKBOX_CLASS_NAME,
+  SWITCH_ROOT_CLASS_NAME,
+  SWITCH_ROOT_SIZE_CLASS_NAME,
+  type SwitchSize,
+} from "./toggle-classes";
+import {
+  SEGMENTED_ICON_TOGGLE_ICON_CLASS_NAME,
+  segmentedIconToggleClassName,
+  segmentedIconToggleItemClassName,
+  TOGGLE_GROUP_CLASS_NAME,
+  TOGGLE_GROUP_ITEM_CLASS_NAME,
+} from "./toggle-group-classes";
+import type { SegmentedIconToggleSize } from "./toggle-group-classes";
 
 /*
  * The faces of controls a loading view draws before the page mounts: a
- * button, a text field and a split button with no behaviour, from the same
- * classes the real controls are built from, so the control that replaces a
- * face lands in its box. A face takes no focus and no click, says nothing to
+ * button, a text field, a picker's trigger, a select trigger, a
+ * segmented toggle, a checkbox, a switch, a split button and a field's
+ * caption with no behaviour, from the same classes the real controls are
+ * built from, so the control that replaces a face lands in its box. A
+ * face takes no focus and no click, says nothing to
  * assistive technology, and reads as unavailable, which it is until the page
  * is there. It imports no Base UI and no popup, so a pending view that the
  * server paints before the providers mount can draw one.
@@ -54,7 +88,7 @@ export const buttonFaceClassName = ({
 }): string =>
   cn(
     BUTTON_BASE_CLASS,
-    BUTTON_FACE_SIZE_CLASS_NAMES[size],
+    BUTTON_SIZE_CLASS_NAMES[size],
     BUTTON_VARIANT_CLASS_NAMES[variant],
     size === "inline" && variant === "link" && "underline",
     FACE_UNAVAILABLE_CLASS,
@@ -146,6 +180,275 @@ export const InputFace = ({
     >
       {children}
     </span>
+  </span>
+);
+
+type SelectTriggerFaceProps = {
+  /** The chosen value's text, or a bar while it waits on data. */
+  children?: ReactNode;
+  className?: string | undefined;
+  size?: ControlSize;
+};
+
+/** A select trigger's face: its box, the chosen value and the chevrons. */
+export const SelectTriggerFace = ({
+  children,
+  className,
+  size = CONTROL_SIZE.default,
+}: SelectTriggerFaceProps) => (
+  <span
+    aria-hidden="true"
+    className={cn(
+      FIELD_TRIGGER_CLASS_NAME,
+      SELECT_TRIGGER_SIZE_CLASS_NAMES[size],
+      FACE_UNAVAILABLE_CLASS,
+      className,
+    )}
+    data-slot="select-trigger-face"
+  >
+    <span className={SELECT_VALUE_CLASS_NAME}>{children}</span>
+    {/* The span Base UI's `Select.Icon` draws around the chevrons. */}
+    <span>
+      <ChevronsUpDownIcon className={SELECT_TRIGGER_ICON_CLASS_NAME} />
+    </span>
+  </span>
+);
+
+type SegmentedIconToggleFaceProps<T extends string> = {
+  options: readonly {
+    value: T;
+    icon: ComponentType<{ className?: string }>;
+  }[];
+  /** The chosen option, or none while the choice is not read yet. */
+  value?: T | undefined;
+  size?: SegmentedIconToggleSize;
+};
+
+/**
+ * A segmented icon toggle's face (./segmented-icon-toggle.tsx): the tray and
+ * its icon items, the chosen one raised as the toggle raises it.
+ */
+export const SegmentedIconToggleFace = <T extends string>({
+  options,
+  size = "compact",
+  value,
+}: SegmentedIconToggleFaceProps<T>) => (
+  <span
+    aria-hidden="true"
+    className={cn(
+      TOGGLE_GROUP_CLASS_NAME,
+      segmentedIconToggleClassName(size),
+      FACE_UNAVAILABLE_CLASS,
+    )}
+    data-slot="segmented-icon-toggle-face"
+  >
+    {options.map((option) => {
+      const Icon = option.icon;
+      return (
+        <span
+          className={cn(
+            BUTTON_BASE_CLASS,
+            BUTTON_FACE_SIZE_CLASS_NAMES["icon-xs"],
+            BUTTON_VARIANT_CLASS_NAMES.muted,
+            TOGGLE_GROUP_ITEM_CLASS_NAME,
+            segmentedIconToggleItemClassName(size),
+          )}
+          data-pressed={option.value === value ? "" : undefined}
+          key={option.value}
+        >
+          <Icon className={SEGMENTED_ICON_TOGGLE_ICON_CLASS_NAME} />
+        </span>
+      );
+    })}
+  </span>
+);
+
+/**
+ * The face of a picker's trigger inside a form (a select, a combobox with
+ * `variant="field"`): the field box, the current choice, and the up-down
+ * chevron at the end.
+ */
+export const FieldTriggerFace = ({
+  children,
+  className,
+}: {
+  /** The current choice, or a bar while it waits on data. */
+  children?: ReactNode;
+  className?: string | undefined;
+}) => (
+  <span
+    aria-hidden="true"
+    className={cn(FIELD_TRIGGER_CLASS_NAME, FACE_UNAVAILABLE_CLASS, className)}
+    data-slot="field-trigger-face"
+  >
+    <span className="flex min-w-0 flex-1 items-center overflow-hidden whitespace-nowrap">
+      {children}
+    </span>
+    <ChevronsUpDownIcon className="-me-1 size-4.5 opacity-80 sm:size-4" />
+  </span>
+);
+
+/** A checkbox's face: its box, unticked (the value waits on data). */
+export const CheckboxFace = ({
+  className,
+}: {
+  className?: string | undefined;
+}) => (
+  <span
+    aria-hidden="true"
+    className={cn(CHECKBOX_CLASS_NAME, FACE_UNAVAILABLE_CLASS, className)}
+    data-slot="checkbox-face"
+  />
+);
+
+/** A switch's face: its track, off (the value waits on data). */
+export const SwitchFace = ({
+  className,
+  size = "default",
+}: {
+  className?: string | undefined;
+  size?: SwitchSize | undefined;
+}) => (
+  <span
+    aria-hidden="true"
+    className={cn(
+      SWITCH_ROOT_CLASS_NAME,
+      SWITCH_ROOT_SIZE_CLASS_NAME[size],
+      "bg-input",
+      FACE_UNAVAILABLE_CLASS,
+      className,
+    )}
+    data-slot="switch-face"
+  />
+);
+
+/**
+ * A field's caption, as `Label` draws it (its `default` variant), for a
+ * label whose text a pending view renders itself (a bar until the app's
+ * messages are there).
+ */
+export const LabelFace = ({
+  children,
+  className,
+}: {
+  children: ReactNode;
+  className?: string | undefined;
+}) => (
+  <span
+    className={cn(LABEL_VARIANT_CLASS_NAME.default, className)}
+    data-slot="label-face"
+  >
+    {children}
+  </span>
+);
+
+/**
+ * How a field's face lays out its parts, in `Form`'s names: `stack` puts the
+ * caption over the control over its lines (the field's column), `inline` a
+ * checkbox or switch beside its caption.
+ */
+type FieldFaceLayout = "stack" | "inline";
+
+const FIELD_FACE_LAYOUT_CLASS_NAMES = {
+  stack: "",
+  inline: "flex-row items-center",
+} as const satisfies Record<FieldFaceLayout, string>;
+
+/**
+ * How close a field's face sets its parts: `snug` a step closer (a checkbox
+ * row over its line).
+ */
+type FieldFaceDensity = "default" | "snug";
+
+const FIELD_FACE_DENSITY_CLASS_NAMES = {
+  default: "",
+  snug: "gap-1",
+} as const satisfies Record<FieldFaceDensity, string>;
+
+/**
+ * A form field's face, as `Field` draws it: the caption, the control's face
+ * and the quiet lines a pending view puts in, in the field's own box.
+ */
+export const FieldFace = ({
+  children,
+  className,
+  density = "default",
+  layout = "stack",
+}: {
+  children: ReactNode;
+  className?: string | undefined;
+  density?: FieldFaceDensity | undefined;
+  layout?: FieldFaceLayout | undefined;
+}) => (
+  <div
+    className={cn(
+      FIELD_CLASS_NAME,
+      FIELD_FACE_LAYOUT_CLASS_NAMES[layout],
+      FIELD_FACE_DENSITY_CLASS_NAMES[density],
+      className,
+    )}
+    data-slot="field-face"
+  >
+    {children}
+  </div>
+);
+
+/** A field's quiet line, as `FieldDescription` draws it. */
+export const FieldDescriptionFace = ({
+  children,
+  className,
+}: {
+  children: ReactNode;
+  className?: string | undefined;
+}) => (
+  <p
+    className={cn(FIELD_DESCRIPTION_CLASS_NAME, className)}
+    data-slot="field-description-face"
+  >
+    {children}
+  </p>
+);
+
+/**
+ * A `default` tab strip's face: the well, each tab's box and label, and the
+ * raised chip under the tab that opens first.
+ */
+export const TabsFace = ({
+  activeIndex = 0,
+  tabs,
+}: {
+  /** The tabs in order, each with its label (or a bar). */
+  tabs: readonly { key: string; label: ReactNode }[];
+  /** Which tab is open when the strip mounts. */
+  activeIndex?: number | undefined;
+}) => (
+  <span
+    aria-hidden="true"
+    className={cn(
+      TABS_LIST_BASE_CLASS,
+      TABS_LIST_DEFAULT_CLASS,
+      // Decoration: it never scrolls, it stays inside its box.
+      "pointer-events-none overflow-hidden",
+    )}
+    data-slot="tabs-face"
+  >
+    {tabs.map((tab, index) => (
+      <span
+        className={cn(
+          TABS_TAB_CLASS,
+          index === activeIndex && "text-foreground",
+        )}
+        key={tab.key}
+      >
+        {index === activeIndex && (
+          <span
+            // The live chip covers the tab's border box, not its padding box.
+            className={cn("absolute -inset-px", TABS_INDICATOR_DEFAULT_CLASS)}
+          />
+        )}
+        {tab.label}
+      </span>
+    ))}
   </span>
 );
 

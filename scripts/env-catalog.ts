@@ -171,6 +171,7 @@ const INTERNAL_SERVER_KEYS = new Set([
   "FEATURE_AI_MEMORY",
   "FEATURE_CHAT_TURN_HANDOVER",
   "FEATURE_CONFLICT_CHECK",
+  "FEATURE_ENTERPRISE_SSO",
   "FEATURE_FILE_USAGE_LIMITS",
   "FEATURE_FREE_TIER",
   "FEATURE_GOVERNED_WORKFLOW",
@@ -927,6 +928,7 @@ export const ENV_CREDENTIAL_CLASSIFICATION = {
   FEATURE_AI_MEMORY: ENV_CREDENTIAL_KIND.notCredential,
   FEATURE_CONFIGURED_ACCESS: ENV_CREDENTIAL_KIND.notCredential,
   FEATURE_CONFLICT_CHECK: ENV_CREDENTIAL_KIND.notCredential,
+  FEATURE_ENTERPRISE_SSO: ENV_CREDENTIAL_KIND.notCredential,
   FEATURE_FILE_USAGE_LIMITS: ENV_CREDENTIAL_KIND.notCredential,
   FEATURE_FREE_TIER: ENV_CREDENTIAL_KIND.notCredential,
   FEATURE_GOVERNED_WORKFLOW: ENV_CREDENTIAL_KIND.notCredential,
@@ -1568,6 +1570,10 @@ export const TOOLING_ENV_KEYS = new Set([
   "FAKE_SKILL_PATH",
   // The pause between a paced fake Codex scenario's outputs.
   "FAKE_CODEX_PACE_MS",
+  // The run folder and an unreadable folder the fake ACP agent names in the
+  // paths of its tool calls and permission requests.
+  "FAKE_ACP_WORKSPACE",
+  "FAKE_ACP_UNREADABLE",
   // The local stack's stand-in computer (`agent:up -- --local-runner`) logs
   // at the level this filter names.
   "RUST_LOG",
@@ -1783,6 +1789,10 @@ export const TOOLING_ENV_KEYS = new Set([
   "E2E_LANDING_URL",
   "E2E_NETWORK_BASELINE",
   "E2E_OUTPUT_DIR",
+  // Nightly route-scale workflow: also walk the small and large matters.
+  "E2E_ROUTE_SCALE",
+  // Playwright coordinator token persists isolated route worlds across worker replacement.
+  "E2E_ROUTE_SMOKE_RUN_ID",
   "E2E_SOAK_REPLAY",
   "E2E_SOAK_SEED",
   "E2E_SOAK_STEPS",
@@ -1804,6 +1814,9 @@ export const TOOLING_ENV_KEYS = new Set([
   "HEAVY_ONLY",
   // The dispatched cancel-after-job run: the failed job it waits for.
   "JOB_ID",
+  // Merge-group cancel step: its own job.status, so a job that failed itself
+  // hands off its cancellation before the jobs API lists the failed step.
+  "JOB_STATUS",
   // Scheduled journey checks: endpoint overrides, bounded request/retry timing,
   // and the clock and busy windows file the coverage check reads (fixtures pin them).
   "JOURNEY_BUSY_WINDOWS_FILE",

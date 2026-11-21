@@ -816,7 +816,7 @@ export const envApiServerSchema = {
   // Delegated Microsoft Graph connection: per-user, read-only SharePoint /
   // OneDrive access for future workspace import. Default-off; a deployment
   // opts in only after its Microsoft app registration is granted the
-  // read-only delegated scopes (see handlers/sharepoint/graph-oauth.ts).
+  // read-only delegated scopes (see lib/auth/microsoft365/graph-oauth.ts).
   FEATURE_SHAREPOINT: featureFlagSchema,
   /** Dark-launch internal conflict-of-interest checks until intake review. */
   FEATURE_CONFLICT_CHECK: featureFlagSchema,
@@ -829,6 +829,13 @@ export const envApiServerSchema = {
    * no issuer is accepted until an operator explicitly trusts one.
    */
   FEATURE_AGENT_ID_JAG: featureFlagSchema,
+
+  /**
+   * Dark-launch gate for organization single sign-on (OIDC). Off: the SSO
+   * sign-in endpoints are not mounted and no organization's SSO
+   * requirement is evaluated, so access is decided exactly as without SSO.
+   */
+  FEATURE_ENTERPRISE_SSO: featureFlagSchema,
 
   /**
    * Web search backend. Only Tavily is wired today; add a new

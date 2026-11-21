@@ -41,6 +41,7 @@ import { SKILL_PACKAGE_LIMITS } from "@stll/skills/format";
 import { DAY_IN_MS } from "@stll/time";
 
 import type { env } from "@/api/env";
+import { SITEMAP_RANGE_ROWS_CEILING } from "@/api/lib/case-law/sitemap-shard-budget";
 import {
   API_RATE_LIMITS,
   MCP_RATE_LIMITS,
@@ -570,6 +571,9 @@ export const LIMITS = {
    *  working set grows with it, so this bounds both. Larger files keep their
    *  original as the preview and record `failed`/`too-large`. */
   fileDerivativeSourceMaxBytes: 25 * 1024 * 1024,
+  /** Maximum PDF bytes a derivative conversion may return or native
+   * extraction may read. Matches the largest accepted document upload. */
+  fileDerivativePdfMaxBytes: 50 * 1024 * 1024,
   /** Derivative jobs one API process runs at once. Each conversion holds a
    *  whole source plus its output and, for images, a decoded surface: the
    *  largest single allocations the process makes. Running them one at a time
@@ -762,10 +766,12 @@ export const LIMITS = {
   caseLawLanguageAlternatesPerGroupMax: 30,
   /** Max URL entries in one sitemap file by protocol. */
   caseLawSitemapUrlLimit: SITEMAP_PROTOCOL_URL_LIMIT,
-  /** URL ceiling; XML serialization separately enforces the byte ceiling. */
-  caseLawSitemapShardUrlLimit: SITEMAP_PROTOCOL_URL_LIMIT,
-  /** Hreflang groups reserve room for their language alternates. */
-  caseLawSitemapMultilingualShardUrlLimit: 5000,
+  /**
+   * URLs one case-law sitemap file lists at most: the decisions one read may
+   * serve (`case-law/sitemap-shard-budget.ts`), far below the protocol's
+   * ceiling. XML serialization separately enforces the byte ceiling.
+   */
+  caseLawSitemapShardUrlLimit: SITEMAP_RANGE_ROWS_CEILING,
   /** Max child sitemap entries in one sitemap index by protocol. */
   caseLawSitemapIndexEntryLimit: 50_000,
   caseLawSourceFacetCountCap: 1000,
@@ -1032,6 +1038,15 @@ export const LIMITS = {
   workPoolHeavySidecarMaxWaiters: 0,
   workPoolHeavySidecarMaxWaitMs: 0,
   workPoolHeavySidecarDeadlineMs: 120_000,
+  /** CPU-heavy file scans one API process runs at once; other replicas keep
+   *  independent capacity. A single file above the byte budget runs alone. */
+  workPoolFileScanSlots: 1,
+  workPoolFileScanBytes: 150 * 1024 * 1024,
+  /** Scans that may wait for a slot, and how long, before the request fails
+   *  as retryable. */
+  workPoolFileScanMaxWaiters: 32,
+  workPoolFileScanMaxWaitMs: 20_000,
+  workPoolFileScanDeadlineMs: 120_000,
   /** Max distinct footer parts one DOCX stamp operation may update. */
   docxStampFooterPartsMax: 64,
   /** Max org-wide custom blacklist terms for anonymization. */

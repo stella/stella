@@ -23,10 +23,12 @@ import {
   pdfSigningSessions,
   sanctionsEditionFanouts,
   sanctionsMonitoringBackfills,
+  sharepointConnections,
   syntheticSessionControl,
   timeEntries,
   workObligations,
 } from "@/api/db/schema";
+import { SESSION_SIGN_IN_REVIEW_TRANSITIONS } from "@/api/lib/auth/session-sign-in-review-transitions";
 import { DATA_EXPORT_TRANSITIONS } from "@/api/lib/db/data-export-transition-spec";
 import {
   FLOW_RUN_STEP_TRANSITIONS_V1,
@@ -64,6 +66,13 @@ import {
   MATCH_REVIEW_TRANSITIONS,
   SCREENING_COVERAGE_TRANSITIONS,
 } from "@/api/lib/lists/sanctions/monitoring-transition-specs";
+
+const SHAREPOINT_CONNECTION_TRANSITIONS = defineTransitions(
+  sharepointConnections,
+  { connected: ["reconnect_required"], reconnect_required: ["connected"] },
+  // A stale refresh failure must not disable a newer credential snapshot.
+  { terminal: [], fence: "accessTokenEncrypted" },
+);
 
 // Each table chooses an ownership category explicitly; new status tables must
 // choose a category or declare a managed spec before the total map compiles.
@@ -584,7 +593,8 @@ export const TRANSITIONS = {
   sanctionsEditions: { unmanaged: UNMANAGED_REASONS.corpusEdition },
   schedulerJobRuns: { unmanaged: UNMANAGED_REASONS.workerRun },
   scoutRuns: { unmanaged: UNMANAGED_REASONS.workerRun },
-  sharepointConnections: { unmanaged: UNMANAGED_REASONS.connection },
+  sessionSignIns: SESSION_SIGN_IN_REVIEW_TRANSITIONS,
+  sharepointConnections: SHAREPOINT_CONNECTION_TRANSITIONS,
   sharepointOAuthState: { unmanaged: UNMANAGED_REASONS.antiForgery },
   signals: { unmanaged: UNMANAGED_REASONS.userWorkflow },
   softLawDocumentLocators: { unmanaged: UNMANAGED_REASONS.projection },

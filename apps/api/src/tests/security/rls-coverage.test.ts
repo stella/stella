@@ -504,6 +504,10 @@ describe("policy coverage", () => {
 
   // Tables exempt from RLS
   const EXEMPT = new Set([
+    // Skill original erasure queue: owner-only forced RLS with a deny-all
+    // request-role policy; an owner-run trigger writes it and the scheduler
+    // drains it, so tenant CRUD policies do not apply.
+    "agent_skill_original_cleanup_requests",
     "invitation", // auth table, no RLS
     "member", // auth table, no RLS
     // The anonymization catalog tables carry a nullable workspace_id
@@ -539,6 +543,11 @@ describe("policy coverage", () => {
     "oauth_grant_revocations",
     // Root-owned OAuth state denies all app-role access.
     "mcp_web_handoff",
+    // Organization SSO providers and policies are read only by the auth
+    // layer's owner connection: RLS is forced with an owner-only policy and
+    // the auth deny policy asserted below, so no tenant policy applies.
+    "sso_provider",
+    "organization_sso_policy",
     // Filed feedback reports: organization_id/user_id record who filed a
     // report for the maintainers' private view and are never a tenant scope.
     // The table has no read surface at all: RLS is enabled with no policy and
@@ -1655,7 +1664,9 @@ describe("policy coverage", () => {
       "mcp_web_handoff",
       "oauth_consent",
       "oauth_refresh_token",
+      "organization_sso_policy",
       "session",
+      "sso_provider",
       "two_factor",
       "verification",
     ]) {

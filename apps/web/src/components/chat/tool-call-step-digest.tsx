@@ -1,3 +1,5 @@
+import type { ReactElement } from "react";
+
 import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 
@@ -15,7 +17,12 @@ import type {
   StepDigestCall,
   StepDigestCounts,
   StepDigestRow,
+  StepMatterReference,
 } from "@/components/chat/tool-call-step-digest.logic";
+import {
+  ReferenceChip,
+  useReferenceAvailability,
+} from "@/components/references/reference-chip";
 import { useFormatter } from "@/i18n/formatting-context";
 import type { TranslationKey } from "@/i18n/types";
 import { statuteDocumentIdentity } from "@/lib/legal/statute-act-number";
@@ -311,27 +318,59 @@ const StepRefLabel = ({ row }: { row: StepDigestRow }) => {
       );
     }
     case "document":
-    case "matter":
-      return (
-        <span className="text-foreground flex min-w-0 items-center gap-1.5">
-          {ref.type === "document" ? (
-            <DocumentIdentityBadge identity={{ kind: "unknown" }} />
-          ) : (
-            <MatterIcon
-              className="text-muted-foreground size-3.5 shrink-0"
-              variant="none"
-            />
-          )}
-          <TruncatedText render={<BidiText as="span" />}>
-            {ref.title}
-          </TruncatedText>
-        </span>
+    case "matter": {
+      const title = <StepMatterTitle type={ref.type} title={ref.title} />;
+      return row.reference === null ? (
+        title
+      ) : (
+        <StepMatterReferenceLink fallback={title} reference={row.reference} />
       );
+    }
     default:
       ref satisfies never;
       return panic("Unhandled step ledger item");
   }
 };
+
+/** A matter item by its title alone, for one that opens nowhere. */
+const StepMatterTitle = ({
+  title,
+  type,
+}: {
+  title: string;
+  type: "document" | "matter";
+}) => (
+  <span className="text-foreground flex min-w-0 items-center gap-1.5">
+    {type === "document" ? (
+      <DocumentIdentityBadge identity={{ kind: "unknown" }} />
+    ) : (
+      <MatterIcon
+        className="text-muted-foreground size-3.5 shrink-0"
+        variant="none"
+      />
+    )}
+    <TruncatedText render={<BidiText as="span" />}>{title}</TruncatedText>
+  </span>
+);
+
+/**
+ * A found document or matter, opening where a mention of it in chat opens
+ * (`ReferenceChip`), once the viewer's own read of it says they may; while
+ * that read is out, or when it says they may not, the title alone, as the
+ * step already showed it.
+ */
+const StepMatterReferenceLink = ({
+  fallback,
+  reference,
+}: {
+  fallback: ReactElement;
+  reference: StepMatterReference;
+}) =>
+  useReferenceAvailability(reference) === "resolved" ? (
+    <ReferenceChip interactive reference={reference} />
+  ) : (
+    fallback
+  );
 
 /** The line an opened code step shows when it kept no ledger. */
 export const STEP_DIGEST_NOT_RECORDED_KEY =

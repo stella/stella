@@ -356,7 +356,7 @@ export const InvoiceComposer = ({
         <ComposerFooter
           currency={currency}
           canSave={hasItems && vat.reason !== "no_vat_rate"}
-          canIssue={prefill.issueBlockers.length === 0}
+          issueBlocker={prefill.issueBlockers.at(0)}
           hasItems={hasItems}
           onSave={send}
           onStep={setStep}
@@ -612,6 +612,7 @@ const StepNav = ({ step, hasItems, onStep }: StepNavProps) => {
           <Button
             aria-current={candidate === step ? "step" : undefined}
             disabled={index > current && !hasItems}
+            disabledReason={t("billing.invoiceComposer.addItemsFirst")}
             onClick={() => onStep(candidate)}
             size="chip"
             variant={candidate === step ? "default" : "secondary"}
@@ -1295,11 +1296,40 @@ type ComposerFooterProps = {
   hasItems: boolean;
   /** False while nothing is billable or no VAT rate is in force. */
   canSave: boolean;
-  /** False while a precondition of issuing is missing; a draft still saves. */
-  canIssue: boolean;
+  issueBlocker: InvoiceIssueBlocker | undefined;
   pending: boolean;
   onStep: (step: ComposerStep) => void;
   onSave: (issue: boolean) => void;
+};
+
+type InvoiceDraftDisabledReasonOptions = {
+  pending: boolean;
+  hasItems: boolean;
+  canSave: boolean;
+  t: (
+    key:
+      | "common.saving"
+      | "billing.invoiceComposer.addItemsFirst"
+      | "billing.invoiceComposer.vatReasons.noVatRate",
+  ) => string;
+};
+
+const invoiceDraftDisabledReason = ({
+  pending,
+  hasItems,
+  canSave,
+  t,
+}: InvoiceDraftDisabledReasonOptions) => {
+  if (pending) {
+    return t("common.saving");
+  }
+  if (!hasItems) {
+    return t("billing.invoiceComposer.addItemsFirst");
+  }
+  if (!canSave) {
+    return t("billing.invoiceComposer.vatReasons.noVatRate");
+  }
+  return undefined;
 };
 
 const ComposerFooter = ({
@@ -1308,7 +1338,7 @@ const ComposerFooter = ({
   currency,
   hasItems,
   canSave,
-  canIssue,
+  issueBlocker,
   pending,
   onStep,
   onSave,
@@ -1317,6 +1347,17 @@ const ComposerFooter = ({
   const index = COMPOSER_STEPS.findIndex(({ id }) => id === step);
   const previous = COMPOSER_STEPS[index - 1]?.id;
   const next = COMPOSER_STEPS[index + 1]?.id;
+  const draftDisabledReason = invoiceDraftDisabledReason({
+    pending,
+    hasItems,
+    canSave,
+    t,
+  });
+  const issueDisabledReason =
+    draftDisabledReason ??
+    (issueBlocker === undefined
+      ? undefined
+      : t(INVOICE_ISSUE_BLOCKER_FIXES[issueBlocker].messageKey));
   return (
     <ComposerFooterFrame
       summary={
@@ -1331,6 +1372,7 @@ const ComposerFooter = ({
       {previous !== undefined && (
         <Button
           disabled={pending}
+          disabledReason={t("common.saving")}
           onClick={() => onStep(previous)}
           variant="ghost"
         >
@@ -1342,20 +1384,26 @@ const ComposerFooter = ({
         <>
           <Button
             disabled={!canSave || pending}
+            disabledReason={draftDisabledReason}
             onClick={() => onSave(false)}
             variant="outline"
           >
             {t("billing.invoiceComposer.saveDraft")}
           </Button>
           <Button
-            disabled={!canSave || !canIssue || pending}
+            disabled={issueDisabledReason !== undefined}
+            disabledReason={issueDisabledReason}
             onClick={() => onSave(true)}
           >
             {t("billing.invoiceComposer.issueInvoice")}
           </Button>
         </>
       ) : (
-        <Button disabled={!hasItems} onClick={() => onStep(next)}>
+        <Button
+          disabled={!hasItems}
+          disabledReason={t("billing.invoiceComposer.addItemsFirst")}
+          onClick={() => onStep(next)}
+        >
           {t(
             next === "details"
               ? "billing.invoiceComposer.continueToDetails"

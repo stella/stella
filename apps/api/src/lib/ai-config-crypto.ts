@@ -11,6 +11,7 @@ import { Result, TaggedError } from "better-result";
 import * as v from "valibot";
 
 import { TANSTACK_AI_PROVIDERS } from "@stll/ai-catalog";
+import type { ModelOverrideGroup } from "@stll/ai-catalog";
 import { declareFingerprintFields } from "@stll/errors";
 
 import { normalizeOrgAIConfig, type OrgAIConfig } from "@/api/lib/ai-config";
@@ -112,17 +113,23 @@ const decisionModelSchema = v.variant("provider", [
   }),
 ]);
 
+// One entry per role, checked against the role list: the stored blob is read
+// strictly, so a role saved but missing here made the whole config unreadable.
+const overrideModelsSchemaEntries = {
+  fast: v.optional(modelSelectionSchema),
+  chat: v.optional(modelSelectionSchema),
+  reasoning: v.optional(modelSelectionSchema),
+  pdf: v.optional(modelSelectionSchema),
+  browse: v.optional(modelSelectionSchema),
+} satisfies Record<
+  ModelOverrideGroup,
+  v.OptionalSchema<typeof modelSelectionSchema, undefined>
+>;
+
 /** Validate the decrypted JSON matches OrgAIConfig shape. */
 const orgAIConfigSchema = v.strictObject({
   providers: v.pipe(v.array(providerSchema), v.minLength(1)),
-  overrideModels: v.nullable(
-    v.strictObject({
-      fast: v.optional(modelSelectionSchema),
-      chat: v.optional(modelSelectionSchema),
-      reasoning: v.optional(modelSelectionSchema),
-      pdf: v.optional(modelSelectionSchema),
-    }),
-  ),
+  overrideModels: v.nullable(v.strictObject(overrideModelsSchemaEntries)),
   // A blob written before the decision model existed has no key for it and
   // reads as "none", the same state clearing the setting writes.
   decision: v.optional(v.nullable(decisionModelSchema), null),

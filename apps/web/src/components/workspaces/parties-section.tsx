@@ -534,6 +534,7 @@ const PromoteDialog = ({ workspaceId }: PromoteDialogProps) => {
           </DialogClose>
           <Button
             disabled={!selectedContact}
+            disabledReason={t("workspaces.parties.chooseContact")}
             loading={updateWorkspace.isPending}
             onClick={handleSubmit}
           >
@@ -650,6 +651,7 @@ const PartyRow = ({ party, workspaceId }: PartyRowProps) => {
         aria-label={t("workspaces.parties.removeParty")}
         className="ms-auto"
         disabled={removeParty.isPending}
+        disabledReason={t("common.removing")}
         onClick={handleRemove}
         size="icon-xs"
         variant="ghost"
@@ -865,6 +867,11 @@ const AddPartyDialog = ({
           </DialogClose>
           <Button
             disabled={!selectedContact || !selectedRole}
+            disabledReason={
+              selectedContact
+                ? t("common.selectARole")
+                : t("workspaces.parties.chooseContact")
+            }
             loading={addParty.isPending}
             onClick={handleSubmit}
           >

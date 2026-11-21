@@ -1,8 +1,14 @@
-import type { ReactNode, Ref } from "react";
+import type { ReactNode } from "react";
 
-import { CheckIcon, XIcon } from "../icons";
-import { cn } from "../lib/utils";
-import { StellaMark } from "./stella-mark";
+import {
+  OUTCOME_TILE_CLASS,
+  OutcomeContent,
+  OutcomePage,
+  OutcomeStatusBadge,
+  OutcomeTitle,
+  StellaOutcomeTile,
+} from "./outcome-screen-core";
+import type { OutcomeContentProps, OutcomeTone } from "./outcome-screen-core";
 
 // The outcome screen's markup, with no browser behaviour: `OutcomeScreen`
 // (./outcome-screen.tsx) adds closing the tab, and this package's
@@ -13,7 +19,7 @@ import { StellaMark } from "./stella-mark";
 // `OutcomeNote`) on its own,
 // so a listener fills in exactly the markup this module draws.
 
-export type OutcomeTone = "success" | "error";
+export type { OutcomeTone } from "./outcome-screen-core";
 
 /** One fact about what the flow connected, e.g. Account: jan@firm.example. */
 export type OutcomeDetail = {
@@ -23,37 +29,25 @@ export type OutcomeDetail = {
   value: ReactNode;
 };
 
-type OutcomeLayoutProps = {
-  tone: OutcomeTone;
-  /** What happened, in a few words. Also the document title. */
-  title: string;
-  /** What it means, or what to do next. */
-  description?: ReactNode;
+type OutcomeLayoutProps = OutcomeContentProps & {
   /** The other side's identity (a logo), drawn in a tile beside stella's. */
   counterpart?: ReactNode;
   /** The flow's facts, drawn by `OutcomeDetailList`. */
   details?: ReactNode;
   /** A command to run next, drawn by `OutcomeCommand`. */
   command?: ReactNode;
-  /** The way on, as buttons or links. */
-  actions?: ReactNode;
   /** A quiet footnote, drawn by `OutcomeNote`. */
   note?: ReactNode;
-  /**
-   * `page` owns the viewport; `embedded` sits inside a layout that already
-   * frames the page (the sign-in layout).
-   */
+  /** A page owns the viewport, or is embedded in a frame that already owns it. */
   surface?: "page" | "embedded";
-  /** The document title, when it differs from `title` (an app suffix). */
-  documentTitle?: string;
-  /** Makes the heading focusable and hands it over, to move focus to it. */
-  headingRef?: Ref<HTMLHeadingElement>;
 };
 
 export type OutcomeScreenViewProps = Omit<
   OutcomeLayoutProps,
-  "details" | "command" | "note"
+  "details" | "command" | "note" | "title"
 > & {
+  /** What happened. Also the document title when none is supplied. */
+  title: string;
   /**
    * What the flow connected, 1 to 3 facts it already holds (the account, the
    * organization, the access granted). Leave it out when there is nothing
@@ -69,79 +63,27 @@ export type OutcomeScreenViewProps = Omit<
   note?: ReactNode;
 };
 
-const TONE_BADGE = {
-  success: { className: "bg-success", Icon: CheckIcon },
-  error: { className: "bg-destructive", Icon: XIcon },
-} as const satisfies Record<
-  OutcomeTone,
-  { className: string; Icon: typeof CheckIcon }
->;
-
-// The tile's edge is a layered shadow, not a border. On a lone tile the badge
-// is centred on the corner's curve (16px radius: 4.7px in from each edge), so
-// its ring cuts the corner symmetrically.
-const TILE_CLASS =
-  "bg-card text-foreground shadow-outcome-tile relative flex size-14 shrink-0 items-center justify-center rounded-2xl";
-
-const StatusBadge = ({
-  className,
-  tone,
-}: {
-  className?: string;
-  tone: OutcomeTone;
-}) => {
-  const { className: toneClass, Icon } = TONE_BADGE[tone];
-  return (
-    <span
-      className={cn(
-        "text-background ring-background motion-safe:animate-outcome-badge flex size-5 items-center justify-center rounded-full ring-2",
-        toneClass,
-        className,
-      )}
-      data-slot="outcome-badge"
-      data-tone={tone}
-    >
-      <Icon className="size-3" strokeWidth={3} />
-    </span>
-  );
-};
-
-const OutcomeGlyph = ({
+const PairedOutcomeGlyph = ({
   counterpart,
   tone,
 }: {
   counterpart: ReactNode;
   tone: OutcomeTone;
-}) => {
-  const stellaTile = (
-    <span className={TILE_CLASS} data-slot="outcome-tile">
-      <StellaMark className="size-7" />
+}) => (
+  <div className="flex items-center" aria-hidden="true">
+    <span className={OUTCOME_TILE_CLASS} data-slot="outcome-tile">
+      {counterpart}
     </span>
-  );
-  if (counterpart === undefined || counterpart === null) {
-    return (
-      <div className="relative" aria-hidden="true">
-        {stellaTile}
-        <StatusBadge className="absolute -end-1.25 -bottom-1.25" tone={tone} />
-      </div>
-    );
-  }
-  return (
-    <div className="flex items-center" aria-hidden="true">
-      <span className={TILE_CLASS} data-slot="outcome-tile">
-        {counterpart}
-      </span>
-      <span className="relative flex w-16 items-center justify-center">
-        <span
-          className="bg-border motion-safe:animate-outcome-connector h-px w-full"
-          data-slot="outcome-connector"
-        />
-        <StatusBadge className="absolute" tone={tone} />
-      </span>
-      {stellaTile}
-    </div>
-  );
-};
+    <span className="relative flex w-16 items-center justify-center">
+      <span
+        className="bg-border motion-safe:animate-outcome-connector h-px w-full"
+        data-slot="outcome-connector"
+      />
+      <OutcomeStatusBadge className="absolute" tone={tone} />
+    </span>
+    <StellaOutcomeTile />
+  </div>
+);
 
 /** The facts' one quiet surface; its rows are `OutcomeDetailRow`s. */
 // Two columns shared by every row: the labels' column is as wide as the
@@ -220,70 +162,39 @@ export const OutcomeNote = ({ children }: { children: ReactNode }) => (
  * draws them from props, the generator puts template slots in their place.
  */
 export const OutcomeLayout = ({
-  tone,
-  title,
-  description,
   counterpart,
   details,
   command,
-  actions,
   note,
   surface = "page",
-  documentTitle,
-  headingRef,
+  ...layout
 }: OutcomeLayoutProps) => {
-  const outcome = (
-    <section
-      className="motion-safe:animate-rise flex w-full max-w-[26rem] flex-col items-center text-center wrap-anywhere"
-      data-slot="outcome"
-      data-tone={tone}
-      role="status"
-    >
-      <OutcomeGlyph counterpart={counterpart} tone={tone} />
-      <h1
-        className="mt-7 text-2xl font-semibold tracking-tight text-balance outline-none"
-        ref={headingRef}
-        tabIndex={headingRef === undefined ? undefined : -1}
-      >
-        {title}
-      </h1>
-      {description === undefined ? null : (
-        <p className="text-muted-foreground mt-2 max-w-[22rem] text-sm text-pretty">
-          {description}
-        </p>
-      )}
-      {details}
-      {command}
-      {actions === undefined ? null : (
-        <div className="mt-7 flex flex-wrap justify-center gap-2">
-          {actions}
-        </div>
-      )}
-      {note}
-    </section>
-  );
-  const titleElement = <title>{documentTitle ?? title}</title>;
+  const content = {
+    ...layout,
+    glyph:
+      counterpart === undefined || counterpart === null ? undefined : (
+        <PairedOutcomeGlyph counterpart={counterpart} tone={layout.tone} />
+      ),
+    beforeActions: (
+      <>
+        {details}
+        {command}
+      </>
+    ),
+    afterActions: note,
+  };
   if (surface === "embedded") {
     return (
       <div
         className="flex w-full justify-center py-10"
         data-slot="outcome-screen"
       >
-        {titleElement}
-        {outcome}
+        <OutcomeTitle {...layout} />
+        <OutcomeContent {...content} />
       </div>
     );
   }
-  return (
-    <main
-      className="bg-background text-foreground flex min-h-dvh w-full flex-col items-center justify-center px-4 pt-12 pb-[14svh] font-sans"
-      data-slot="outcome-screen"
-    >
-      {titleElement}
-      {/* Optical centre: a little above the middle. */}
-      {outcome}
-    </main>
-  );
+  return <OutcomePage {...content} />;
 };
 
 export const OutcomeScreenView = ({

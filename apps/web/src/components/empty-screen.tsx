@@ -222,6 +222,7 @@ type EmptyScreenActionButtonProps = {
 };
 
 const EmptyScreenActionButton = ({ action }: EmptyScreenActionButtonProps) => {
+  const t = useTranslations();
   const Icon = action.icon;
   const guideAnchorId = action["data-guide-anchor"];
   const children = (
@@ -256,6 +257,7 @@ const EmptyScreenActionButton = ({ action }: EmptyScreenActionButtonProps) => {
     <Button
       data-guide-anchor={guideAnchorId}
       disabled={action.disabled}
+      disabledReason={t("workspaces.files.uploading")}
       onClick={action.onClick}
     >
       {children}

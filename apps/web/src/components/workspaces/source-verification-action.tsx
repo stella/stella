@@ -58,6 +58,7 @@ export const SourceVerificationAction = ({
     <Button
       aria-label={t("common.accept")}
       disabled={verified}
+      disabledReason={t("workspaces.alreadyVerified")}
       onClick={() => detached(verifySource(), "lists.verify-source")}
       size="icon-sm"
       variant="ghost"

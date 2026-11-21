@@ -1,4 +1,4 @@
-import { useId, useState } from "react";
+import { useState } from "react";
 import type { ReactNode, RefObject } from "react";
 import { createPortal } from "react-dom";
 
@@ -192,7 +192,6 @@ export const SelectionAIActions = ({
   explainRefusal,
 }: SelectionAIActionsProps) => {
   const t = useTranslations();
-  const explainReasonId = useId();
 
   return (
     <>
@@ -231,18 +230,15 @@ export const SelectionAIActions = ({
         ) : (
           <>
             <Button
-              aria-describedby={explainReasonId}
               disabled
+              disabledReason={explainRefusal}
               size="sm"
               variant="ghost"
             >
               <SparklesIcon className="size-3.5" />
               {t("readerAnswers.explain")}
             </Button>
-            <span
-              className="text-muted-foreground px-2 text-xs"
-              id={explainReasonId}
-            >
+            <span className="text-muted-foreground px-2 text-xs">
               {explainRefusal}
             </span>
           </>

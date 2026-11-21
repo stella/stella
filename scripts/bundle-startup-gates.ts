@@ -9,7 +9,10 @@
 //   1. Initial JS ratchet: the gzip of the initial chunks stays within
 //      INITIAL_GROWTH_LIMIT_BYTES of the committed budget.
 //   2. Pending layer: `*.pending.tsx` loading views are eager by design, so
-//      each stays small and so does their sum.
+//      each stays within PENDING_MODULE_LIMIT_BYTES. Their minified sum stays
+//      within PENDING_SLACK_BYTES of the committed `pending` total. Raising
+//      that total is a re-anchor its pull request justifies, as for
+//      `initial`; gate 1 counts the pending layer too.
 //   3. No page code at startup: no page module, no `?tsr-shared=1` module and
 //      no route-file code that only the route's `component` reaches in the
 //      initial chunks (see STARTUP_KINDS).
@@ -20,18 +23,14 @@
 //      component, and every app module the component reaches statically (its
 //      page module and what that imports).
 //
-// Gates 3 and 4 share a shrink-only ledger: a listed offender passes, a new
-// one fails, and a listed one that stopped offending fails until its line is
-// deleted. The ledger can only get shorter.
+// Gates 3 and 4 allow no offender.
 //
 // The gates are pure functions over a StartupGraph; bundle-startup-build.ts
 // reads one from a production build.
 
-import * as v from "valibot";
-
 export const INITIAL_GROWTH_LIMIT_BYTES = 8 * 1024;
 export const PENDING_MODULE_LIMIT_BYTES = 6 * 1024;
-export const PENDING_TOTAL_LIMIT_BYTES = 150 * 1024;
+export const PENDING_SLACK_BYTES = 1024;
 
 /** A module's minified size in one chunk, keyed by its app-relative id. */
 export type BuiltChunk = {
@@ -116,30 +115,38 @@ const isSplitComponentModule = (id: string, routeFile: string): boolean =>
   modulePath(id) === routeFile &&
   (moduleQuery(id).get("tsr-split") ?? "").split("---").includes("component");
 
-// --- Gate 1: initial JS ratchet ----------------------------------------------
+// --- Ratchets (gates 1 and 2) ------------------------------------------------
+
+type RatchetResult = {
+  /** over: past budget + slack. shrunk: below budget - slack. */
+  status: "ok" | "over" | "shrunk";
+  measured: number;
+  budget: number;
+};
+
+type RatchetArgs = { measured: number; budget: number; slack: number };
+
+export const checkRatchet = ({
+  measured,
+  budget,
+  slack,
+}: RatchetArgs): RatchetResult => {
+  if (measured > budget + slack) {
+    return { status: "over", measured, budget };
+  }
+  if (measured < budget - slack) {
+    return { status: "shrunk", measured, budget };
+  }
+  return { status: "ok", measured, budget };
+};
+
+// --- Gate 1: initial JS ------------------------------------------------------
 
 export const initialGzipBytes = (graph: StartupGraph): number =>
   graph.initialChunks.reduce(
     (sum, file) => sum + (graph.chunks.get(file)?.gzipBytes ?? 0),
     0,
   );
-
-export type InitialBudgetResult =
-  | { status: "ok" | "shrunk"; measured: number; budget: number }
-  | { status: "over"; measured: number; budget: number };
-
-export const checkInitialBudget = (
-  measured: number,
-  budget: number,
-): InitialBudgetResult => {
-  if (measured > budget + INITIAL_GROWTH_LIMIT_BYTES) {
-    return { status: "over", measured, budget };
-  }
-  if (measured < budget - INITIAL_GROWTH_LIMIT_BYTES) {
-    return { status: "shrunk", measured, budget };
-  }
-  return { status: "ok", measured, budget };
-};
 
 // --- Initial modules -----------------------------------------------------------
 
@@ -160,7 +167,6 @@ export type PendingLayer = {
   modules: readonly { module: string; bytes: number }[];
   totalBytes: number;
   oversized: readonly { module: string; bytes: number }[];
-  overTotal: boolean;
 };
 
 export const pendingLayer = (graph: StartupGraph): PendingLayer => {
@@ -175,7 +181,6 @@ export const pendingLayer = (graph: StartupGraph): PendingLayer => {
     oversized: modules.filter(
       (entry) => entry.bytes > PENDING_MODULE_LIMIT_BYTES,
     ),
-    overTotal: totalBytes > PENDING_TOTAL_LIMIT_BYTES,
   };
 };
 
@@ -337,92 +342,16 @@ export const coldLoadHops = (graph: StartupGraph): ColdLoadHop[] => {
   );
 };
 
-// --- Shrink-only ledger ------------------------------------------------------------
-
-const reason = v.pipe(v.string(), v.trim(), v.minLength(1));
-
-export const StartupLedgerSchema = v.strictObject({
-  startupPageCode: v.array(
-    v.strictObject({
-      kind: v.picklist(STARTUP_KINDS),
-      module: v.string(),
-      reason,
-    }),
-  ),
-  coldLoadHops: v.array(
-    v.strictObject({
-      route: v.string(),
-      /** The late page module; a chunk hash churns, this does not. */
-      module: v.string(),
-      reason,
-    }),
-  ),
-});
-export type StartupLedger = v.InferOutput<typeof StartupLedgerSchema>;
-
-export type LedgerVerdict<T> = {
-  /** Offenders the ledger does not list: each fails the gate. */
-  unlisted: readonly T[];
-  /** Ledger lines that no longer offend: each fails until deleted. */
-  stale: readonly string[];
-  /** Listed offenders, still allowed. */
-  listed: readonly T[];
-};
-
-const reconcile = <T>(
-  offenders: readonly T[],
-  offenderKey: (offender: T) => string,
-  ledgerKeys: readonly string[],
-): LedgerVerdict<T> => {
-  const allowed = new Set(ledgerKeys);
-  const offending = new Set(offenders.map(offenderKey));
-  return {
-    unlisted: offenders.filter(
-      (offender) => !allowed.has(offenderKey(offender)),
-    ),
-    listed: offenders.filter((offender) => allowed.has(offenderKey(offender))),
-    stale: ledgerKeys.filter((key) => !offending.has(key)),
-  };
-};
-
-export const startupKey = (entry: { kind: string; module: string }): string =>
-  `${entry.kind} ${entry.module}`;
-
-/** One exception per route and late page, so a second late page is new. */
-export const hopKey = (entry: { route: string; module: string }): string =>
-  `${entry.route} ${entry.module}`;
-
-/**
- * Every exception the ledger grants, as the identities the gates match on.
- * scripts/check-bundle-startup-ledger.ts compares them with the merge base:
- * an identity the base did not grant fails, so the ledger only shrinks.
- */
-export const startupLedgerKeys = (ledger: StartupLedger): string[] => [
-  ...ledger.startupPageCode.map((entry) => `page-code ${startupKey(entry)}`),
-  ...ledger.coldLoadHops.map((entry) => `cold-load-hop ${hopKey(entry)}`),
-];
-
-export const reconcileStartupPageCode = (
-  offenders: readonly StartupOffender[],
-  ledger: StartupLedger,
-): LedgerVerdict<StartupOffender> =>
-  reconcile(offenders, startupKey, ledger.startupPageCode.map(startupKey));
-
-export const reconcileColdLoadHops = (
-  hops: readonly ColdLoadHop[],
-  ledger: StartupLedger,
-): LedgerVerdict<ColdLoadHop> =>
-  reconcile(hops, hopKey, ledger.coldLoadHops.map(hopKey));
-
 // --- Evaluation ----------------------------------------------------------------------
 
 export type GateFailure = { title: string; message: string };
 
 export type StartupEvaluation = {
-  initial: InitialBudgetResult;
+  initial: RatchetResult;
   pending: PendingLayer;
-  pageCode: LedgerVerdict<StartupOffender>;
-  hops: LedgerVerdict<ColdLoadHop>;
+  pendingBudget: RatchetResult;
+  pageCode: readonly StartupOffender[];
+  hops: readonly ColdLoadHop[];
   failures: readonly GateFailure[];
   /** Not failures: a ratchet the budget can take. */
   notices: readonly string[];
@@ -431,20 +360,28 @@ export type StartupEvaluation = {
 const kib = (bytes: number): string =>
   bytes < 1024 ? `${bytes} B` : `${(bytes / 1024).toFixed(1)} KiB`;
 
-const LEDGER_HINT =
-  "Delete its line from scripts/bundle-startup-ledger.json: the ledger only shrinks.";
+/** The committed totals the startup ratchets are measured against. */
+export type StartupBudget = {
+  /** Gzip of the initial chunks. */
+  initial: number;
+  /** Minified sum of the pending views in the initial chunks. */
+  pending: number;
+};
 
 /** Runs all four gates; a run passes when `failures` is empty. */
 export const evaluateStartup = (
   graph: StartupGraph,
-  budget: number,
-  ledger: StartupLedger,
+  budget: StartupBudget,
   writeHint: string,
 ): StartupEvaluation => {
   const failures: GateFailure[] = [];
   const notices: string[] = [];
 
-  const initial = checkInitialBudget(initialGzipBytes(graph), budget);
+  const initial = checkRatchet({
+    measured: initialGzipBytes(graph),
+    budget: budget.initial,
+    slack: INITIAL_GROWTH_LIMIT_BYTES,
+  });
   if (initial.status === "over") {
     failures.push({
       title: "Initial JS over budget",
@@ -463,47 +400,52 @@ export const evaluateStartup = (
       message: `${entry.module} puts ${kib(entry.bytes)} minified into the initial chunks; a pending view may use ${kib(PENDING_MODULE_LIMIT_BYTES)}. Keep it to the page's skeleton and import nothing from its page.`,
     });
   }
-  if (pending.overTotal) {
+  const pendingBudget = checkRatchet({
+    measured: pending.totalBytes,
+    budget: budget.pending,
+    slack: PENDING_SLACK_BYTES,
+  });
+  if (pendingBudget.status === "over") {
     failures.push({
-      title: "Pending layer too large",
-      message: `The pending views put ${kib(pending.totalBytes)} minified into the initial chunks, over the ${kib(PENDING_TOTAL_LIMIT_BYTES)} total.`,
+      title: "Pending layer over budget",
+      message: `The pending views put ${kib(pendingBudget.measured)} minified into the initial chunks, ${kib(pendingBudget.measured - pendingBudget.budget)} over the committed ${kib(pendingBudget.budget)} (limit +${kib(PENDING_SLACK_BYTES)}). Trim the loading views, or re-anchor \`pending\` with \`${writeHint}\` and state why every cold visit should pay for it, as for \`initial\`.`,
     });
+  } else if (pendingBudget.status === "shrunk") {
+    notices.push(
+      `The pending views shrank to ${kib(pendingBudget.measured)} minified from the committed ${kib(pendingBudget.budget)}. Run \`${writeHint}\` and commit the lower total.`,
+    );
   }
 
-  const pageCode = reconcileStartupPageCode(startupPageCode(graph), ledger);
-  for (const offender of pageCode.unlisted) {
+  const pageCode = startupPageCode(graph);
+  for (const offender of pageCode) {
     failures.push({
       title: `Page code at startup: ${offender.module}`,
       message: `${offender.module} (${offender.kind}) puts ${kib(offender.bytes)} minified into the initial chunks. Import the page only from the route's component, and give the pending view its own .pending.tsx module that imports nothing from the page.`,
     });
   }
-  for (const key of pageCode.stale) {
-    failures.push({
-      title: "Ledger line no longer offends",
-      message: `${key} no longer puts page code into the initial chunks. ${LEDGER_HINT}`,
-    });
-  }
 
-  const hops = reconcileColdLoadHops(coldLoadHops(graph), ledger);
-  for (const hop of hops.unlisted) {
+  const hops = coldLoadHops(graph);
+  for (const hop of hops) {
     failures.push({
       title: `Extra cold-load hop: ${hop.route}`,
       message: `${hop.route} loads ${hop.module} (${hop.chunk}, ${kib(hop.bytes)}) with import() outside its manifest preloads, so a cold visit fetches it only after the route chunk ran. Import the page statically from the route's component and let the router split it.`,
     });
   }
-  for (const key of hops.stale) {
-    failures.push({
-      title: "Ledger line no longer offends",
-      message: `${key}: the route no longer loads that page outside its preloads. ${LEDGER_HINT}`,
-    });
-  }
 
-  return { initial, pending, pageCode, hops, failures, notices };
+  return {
+    initial,
+    pending,
+    pendingBudget,
+    pageCode,
+    hops,
+    failures,
+    notices,
+  };
 };
 
 /** The job summary: one row per gate, then every offender. */
 export const startupSummary = (evaluation: StartupEvaluation): string => {
-  const { initial, pending, pageCode, hops } = evaluation;
+  const { initial, pending, pendingBudget, pageCode, hops } = evaluation;
   const result = (ok: boolean): string => (ok ? "pass" : "**fail**");
   const lines = [
     "### Startup bundle gates",
@@ -511,38 +453,26 @@ export const startupSummary = (evaluation: StartupEvaluation): string => {
     "| Gate | Measured | Limit | Result |",
     "| --- | ---: | ---: | --- |",
     `| Initial JS (gzip) | ${kib(initial.measured)} | ${kib(initial.budget)} + ${kib(INITIAL_GROWTH_LIMIT_BYTES)} | ${result(initial.status !== "over")} |`,
-    `| Pending layer (minified) | ${kib(pending.totalBytes)} in ${pending.modules.length} module(s) | ${kib(PENDING_TOTAL_LIMIT_BYTES)}, ${kib(PENDING_MODULE_LIMIT_BYTES)} each | ${result(pending.oversized.length === 0 && !pending.overTotal)} |`,
-    `| Page code at startup | ${pageCode.unlisted.length} new, ${pageCode.listed.length} listed | 0 new | ${result(pageCode.unlisted.length === 0 && pageCode.stale.length === 0)} |`,
-    `| Cold-load hops | ${hops.unlisted.length} new, ${hops.listed.length} listed | 0 new | ${result(hops.unlisted.length === 0 && hops.stale.length === 0)} |`,
+    `| Pending layer (minified) | ${kib(pending.totalBytes)} in ${pending.modules.length} module(s) | ${kib(pendingBudget.budget)} + ${kib(PENDING_SLACK_BYTES)}, ${kib(PENDING_MODULE_LIMIT_BYTES)} each | ${result(pending.oversized.length === 0 && pendingBudget.status !== "over")} |`,
+    `| Page code at startup | ${pageCode.length} | 0 | ${result(pageCode.length === 0)} |`,
+    `| Cold-load hops | ${hops.length} | 0 | ${result(hops.length === 0)} |`,
     "",
   ];
   const rows = [
-    ...pageCode.unlisted.map(
-      (o) => `| \`${o.module}\` | ${o.kind} | ${kib(o.bytes)} | new |`,
-    ),
-    ...hops.unlisted.map(
+    ...pageCode.map((o) => `| \`${o.module}\` | ${o.kind} | ${kib(o.bytes)} |`),
+    ...hops.map(
       (h) =>
-        `| \`${h.route}\` loads \`${h.module}\` | cold-load hop | ${kib(h.bytes)} | new |`,
-    ),
-    ...[...pageCode.stale, ...hops.stale].map(
-      (key) => `| \`${key}\` | ledger | | stale: delete the line |`,
+        `| \`${h.route}\` loads \`${h.module}\` | cold-load hop | ${kib(h.bytes)} |`,
     ),
     ...pending.oversized.map(
       (p) =>
-        `| \`${p.module}\` | pending view | ${kib(p.bytes)} | over the cap |`,
-    ),
-    ...pageCode.listed.map(
-      (o) => `| \`${o.module}\` | ${o.kind} | ${kib(o.bytes)} | listed |`,
-    ),
-    ...hops.listed.map(
-      (h) =>
-        `| \`${h.route}\` loads \`${h.module}\` | cold-load hop | ${kib(h.bytes)} | listed |`,
+        `| \`${p.module}\` | pending view over the cap | ${kib(p.bytes)} |`,
     ),
   ];
   if (rows.length > 0) {
     lines.push(
-      "| Offender | Gate | Minified | Ledger |",
-      "| --- | --- | ---: | --- |",
+      "| Offender | Gate | Minified |",
+      "| --- | --- | ---: |",
       ...rows,
       "",
     );

@@ -85,6 +85,9 @@ const JSON_COLUMNS_WITHOUT_MEMBER_REFERENCES = [
   // A publisher's typed metadata of a public decision and the identifiers it
   // declares on it; no member ids.
   "case_law_held_decision_attachments.declared_identifiers",
+  // Publisher sections and the public decision identifiers used to match them.
+  "case_law_held_decision_attachments.document_part",
+  "case_law_held_decision_attachments.match_evidence",
   "case_law_held_decision_attachments.metadata",
   "case_law_judges.external_refs",
   // Corpus population buckets: kind/value pairs derived from public decisions.
@@ -273,6 +276,8 @@ const RETAINED_MEMBER_COLUMNS = {
     "Terminal billing replay receipt; current membership gates access and the row cascades with account or organization deletion.",
   "account_audit_logs.user_id":
     "User-owned account audit history; matter and organization removal do not erase the user account or grant membership.",
+  "sso_provider.user_id":
+    "Who registered the organization's SSO provider; the provider belongs to the organization, the attribution grants no membership or authority, and account deletion clears it.",
   "account_exports.attempt_object_keys":
     "Storage keys of the account's own archives, named by account id; reclamation and account deletion own them, not membership removal.",
   "account_exports.user_id":

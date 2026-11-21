@@ -49,6 +49,7 @@ const SHELL_WINDOW_MODULES: Record<string, readonly string[]> = {
     "src/mainview/PermissionsSection.tsx",
     "src/mainview/ShortcutSetting.tsx",
     "src/mainview/SigningDriverSection.tsx",
+    "src/mainview/UpdateCheck.tsx",
     "src/shared/ShortcutRecorder.tsx",
     "src/shared/use-clipboard-shortcut.ts",
   ],
@@ -58,6 +59,7 @@ const SHELL_WINDOW_MODULES: Record<string, readonly string[]> = {
   "src-tauri/capabilities/transcribe.json": [
     "src/transcribe/TranscribeApp.tsx",
     "src/transcribe/TranscribeMatterPicker.tsx",
+    "src/transcribe/transcript-docx.ts",
   ],
   "src-tauri/capabilities/dictation-notice.json": [
     "src/mainview/DictationNoticeApp.tsx",
@@ -69,6 +71,9 @@ const SHELL_WINDOW_MODULES: Record<string, readonly string[]> = {
     "src/onboarding/OnboardingApp.tsx",
     "src/onboarding/ConnectStep.tsx",
     "src/onboarding/use-dictation.ts",
+    "src/mainview/DictationDestination.tsx",
+    "src/mainview/DictationInputFix.tsx",
+    "src/mainview/DictationMicrophone.tsx",
     "src/onboarding/HowItWorksStep.tsx",
     "src/onboarding/PermissionsStep.tsx",
     "src/onboarding/TryItStep.tsx",

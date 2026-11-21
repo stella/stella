@@ -24,6 +24,11 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@stll/ui/select";
+import {
+  SettingsRow,
+  settingsRowIds,
+  SettingsSection,
+} from "@stll/ui/settings";
 import { Switch } from "@stll/ui/switch";
 import { Tooltip, TooltipFactTrigger, TooltipPopup } from "@stll/ui/tooltip";
 
@@ -40,12 +45,7 @@ import { DictationDestination } from "./DictationDestination";
 import type { DictationDestinationValue } from "./DictationDestination";
 import { DictationInputFix } from "./DictationInputFix";
 import { DictationMicrophoneRow } from "./DictationMicrophone";
-import {
-  SettingsGroup,
-  SettingsPageHeader,
-  SettingsRow,
-  settingsRowIds,
-} from "./settings-layout";
+import { SettingsPageHeader } from "./settings-layout";
 
 type DictationModel =
   | { status: "missing" | "failed" | "ready" }
@@ -84,6 +84,8 @@ export type DictationSnapshot = {
   language: DictationLanguage;
   /** Whether cleanup also gets the focused window's title. */
   shareWindowTitle: boolean;
+  /** Whether a short sound marks the start and the end of listening. */
+  sounds: boolean;
   /** Whether cleanup also gets the text before the cursor. */
   shareTextBeforeCursor: boolean;
   /** Whether this computer can read the text before the cursor; without it
@@ -127,11 +129,6 @@ const languageHasEffect = (snapshot: DictationSnapshot): boolean =>
   snapshot.cleanup ||
   snapshot.destination === "cloud" ||
   (snapshot.model.status === "ready" && snapshot.language.supported.length > 0);
-
-/** Custom words reach stella AI transcription and AI cleanup only; with
- *  neither they change nothing, so they are hidden. */
-const customWordsHaveEffect = (snapshot: DictationSnapshot): boolean =>
-  snapshot.cleanup || snapshot.destination === "cloud";
 
 /** Orders the snapshots the native side answers with. Each read or change
  *  takes a ticket as it starts; an answer is shown only when no answer to a
@@ -418,9 +415,10 @@ const DictationPage = ({
         // Keyed by the failure, so a new one reads its action afresh.
         <DictationInputFix key={snapshot.failure} />
       )}
+      <TranscribeRecordingGroup />
       {snapshot.enabled && (
         <>
-          <SettingsGroup title={t("groups.shortcut")}>
+          <SettingsSection title={t("groups.shortcut")}>
             {snapshot.holdKeys.length > 1 && (
               <DictationHoldKeyRow
                 holdKey={snapshot.holdKey}
@@ -435,8 +433,14 @@ const DictationPage = ({
               focused={focus === "microphone"}
               onFocused={onFocusShown}
             />
-          </SettingsGroup>
-          <SettingsGroup title={t("groups.transcription")}>
+            <DictationSoundsRow
+              checked={snapshot.sounds}
+              onChange={(sounds) => {
+                void change("dictation_set_sounds", { enabled: sounds });
+              }}
+            />
+          </SettingsSection>
+          <SettingsSection title={t("groups.transcription")}>
             {snapshot.cloudAvailable ? (
               <DictationDestination
                 cloudModel={snapshot.cloudModel}
@@ -470,8 +474,8 @@ const DictationPage = ({
                 }}
               />
             )}
-          </SettingsGroup>
-          <SettingsGroup title={t("groups.cleanup")}>
+          </SettingsSection>
+          <SettingsSection title={t("groups.cleanup")}>
             <SettingsRow
               description={
                 snapshot.destination === "cloud"
@@ -519,18 +523,18 @@ const DictationPage = ({
                 title={t("context.textBeforeCursor.title")}
               />
             )}
-          </SettingsGroup>
-          {customWordsHaveEffect(snapshot) && (
-            <DictationCustomWords
-              onChange={setCustomWords}
-              words={snapshot.customWords}
-            />
-          )}
+          </SettingsSection>
+          {/* stella AI and cleanup take the words; without either, the
+              text from the speech model here is spelled with them. */}
+          <DictationCustomWords
+            onChange={setCustomWords}
+            words={snapshot.customWords}
+          />
           {/* With stella AI the model is not needed, but a downloaded one
               can still be removed. */}
           {(snapshot.destination === "local" ||
             snapshot.model.status === "ready") && (
-            <SettingsGroup title={t("groups.thisComputer")}>
+            <SettingsSection title={t("groups.thisComputer")}>
               <DictationModelRow
                 busy={snapshot.phase !== "idle"}
                 model={snapshot.model}
@@ -543,7 +547,7 @@ const DictationPage = ({
                 }}
                 removeFailed={removeFailed}
               />
-            </SettingsGroup>
+            </SettingsSection>
           )}
           {snapshot.keepsInHistory && (
             <p className="text-muted-foreground px-1 text-xs">
@@ -552,7 +556,6 @@ const DictationPage = ({
           )}
         </>
       )}
-      <TranscribeRecordingGroup />
     </div>
   );
 };
@@ -569,7 +572,7 @@ const TranscribeRecordingGroup = () => {
     setOpenFailed(Result.isError(result));
   };
   return (
-    <SettingsGroup>
+    <SettingsSection>
       <SettingsRow
         description={t("description")}
         id="dictation-transcribe-recording"
@@ -592,7 +595,7 @@ const TranscribeRecordingGroup = () => {
           {t("failed")}
         </li>
       ) : null}
-    </SettingsGroup>
+    </SettingsSection>
   );
 };
 
@@ -656,6 +659,32 @@ const DictationHoldKeyRow = ({
           ))}
         </SelectPopup>
       </Select>
+    </SettingsRow>
+  );
+};
+
+/** Whether a short sound marks the start and the end of recording. */
+const DictationSoundsRow = ({
+  checked,
+  onChange,
+}: {
+  checked: boolean;
+  onChange: (enabled: boolean) => void;
+}) => {
+  const t = useTranslations("dictation.sounds");
+  const ids = settingsRowIds("dictation-sounds");
+  return (
+    <SettingsRow
+      description={t("description")}
+      id="dictation-sounds"
+      title={t("title")}
+    >
+      <Switch
+        aria-describedby={ids.description}
+        aria-labelledby={ids.label}
+        checked={checked}
+        onCheckedChange={onChange}
+      />
     </SettingsRow>
   );
 };
@@ -861,7 +890,12 @@ const DictationModelAction = ({
   switch (model.status) {
     case "ready":
       return (
-        <Button disabled={busy} onClick={onRemove} variant="ghost">
+        <Button
+          disabled={busy}
+          disabledReason={t("dictationInProgress")}
+          onClick={onRemove}
+          variant="ghost"
+        >
           {t("removeModel")}
         </Button>
       );

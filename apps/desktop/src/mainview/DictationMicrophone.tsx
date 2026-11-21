@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import type { ReactNode } from "react";
 
 import { invoke } from "@tauri-apps/api/core";
 import { Result } from "better-result";
@@ -13,6 +14,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@stll/ui/select";
+import { SettingsRow, settingsRowIds } from "@stll/ui/settings";
 
 import { subscribeDesktopEvent } from "../shared/desktop-events";
 import {
@@ -21,6 +23,7 @@ import {
   DESKTOP_TELEMETRY_WINDOWS,
   reportDesktopError,
 } from "../telemetry/desktop-telemetry";
+import type { DesktopTelemetryWindow } from "../telemetry/desktop-telemetry";
 import {
   isMicrophoneLevel,
   isMicrophonesSnapshot,
@@ -36,15 +39,14 @@ import type {
   MicrophoneLevel,
   MicrophonesSnapshot,
 } from "./dictation-microphone";
-import { SettingsRow, settingsRowIds } from "./settings-layout";
 
 /** With reduced motion the meter shows a level twice a second, not 25. */
 const REDUCED_MOTION_INTERVAL_MS = 500;
 
 /**
- * The microphone dictation records from, and a test of it: a live level
- * and whether speech is coming through. `focused` moves focus to the select
- * once, for a link that opens Settings on this choice.
+ * The microphone choice as a Settings row: the select beside its name, the
+ * test under it. `focused` moves focus to the select once, for a link that
+ * opens Settings on this choice.
  */
 export const DictationMicrophoneRow = ({
   focused,
@@ -55,6 +57,55 @@ export const DictationMicrophoneRow = ({
 }) => {
   const t = useTranslations("dictation.microphone");
   const ids = settingsRowIds("dictation-microphone");
+  return (
+    <DictationMicrophoneChoice
+      focused={focused}
+      labelledBy={ids.label}
+      layout={({ select, test }) => (
+        <SettingsRow
+          description={t("hint")}
+          footer={test}
+          id="dictation-microphone"
+          title={t("title")}
+        >
+          {select}
+        </SettingsRow>
+      )}
+      onFocused={onFocused}
+      telemetryWindow={DESKTOP_TELEMETRY_WINDOWS.main}
+    />
+  );
+};
+
+/** What the choice is drawn from: the select, and the test with its level
+ *  and what it heard. */
+type MicrophoneChoiceParts = { select: ReactNode; test: ReactNode };
+
+/**
+ * The microphone dictation records from, and a test of it: a live level
+ * and whether speech is coming through. Settings and setup lay the parts
+ * out their own way; both read and store the same choice.
+ */
+export const DictationMicrophoneChoice = ({
+  focused = false,
+  labelledBy,
+  layout,
+  onFocused,
+  telemetryWindow,
+}: {
+  focused?: boolean;
+  /** The id of the text that names the select. */
+  labelledBy: string;
+  layout: (parts: MicrophoneChoiceParts) => ReactNode;
+  onFocused?: () => void;
+  telemetryWindow: DesktopTelemetryWindow;
+}) => {
+  const t = useTranslations("dictation.microphone");
+  const reportFailure = () => {
+    reportChoiceFailure(telemetryWindow);
+  };
+  const command = async (name: string, args?: Record<string, unknown>) =>
+    runCommand(name, telemetryWindow, args);
   const trigger = useRef<HTMLButtonElement>(null);
   const [snapshot, setSnapshot] = useState<MicrophonesSnapshot | null>(null);
   const [testing, setTesting] = useState(false);
@@ -73,7 +124,7 @@ export const DictationMicrophoneRow = ({
         return;
       }
       if (Result.isError(result) || !isMicrophonesSnapshot(result.value)) {
-        reportFailure();
+        reportChoiceFailure(telemetryWindow);
         return;
       }
       setSnapshot(result.value);
@@ -87,13 +138,13 @@ export const DictationMicrophoneRow = ({
       disposed = true;
       window.removeEventListener("focus", onFocus);
     };
-  }, []);
+  }, [telemetryWindow]);
 
   useEffect(() => {
     if (focused && snapshot !== null) {
       trigger.current?.focus();
       trigger.current?.scrollIntoView({ block: "center" });
-      onFocused();
+      onFocused?.();
     }
   }, [focused, onFocused, snapshot]);
 
@@ -103,6 +154,9 @@ export const DictationMicrophoneRow = ({
     if (!testing) {
       return undefined;
     }
+    const onError = () => {
+      reportChoiceFailure(telemetryWindow);
+    };
     const stopLevels = subscribeDesktopEvent<unknown>({
       event: MICROPHONE_LEVEL_EVENT,
       handler: ({ payload }) => {
@@ -121,14 +175,14 @@ export const DictationMicrophoneRow = ({
         lastShown.current = now;
         setLevel(payload);
       },
-      onError: reportFailure,
+      onError,
     });
     const stopEnded = subscribeDesktopEvent({
       event: MICROPHONE_TEST_ENDED_EVENT,
       handler: () => {
         setTesting(false);
       },
-      onError: reportFailure,
+      onError,
     });
     const onBlur = () => {
       setTesting(false);
@@ -138,9 +192,9 @@ export const DictationMicrophoneRow = ({
       stopLevels();
       stopEnded();
       window.removeEventListener("blur", onBlur);
-      void command("dictation_test_microphone_stop");
+      void runCommand("dictation_test_microphone_stop", telemetryWindow);
     };
-  }, [reducedMotion, testing]);
+  }, [reducedMotion, telemetryWindow, testing]);
 
   if (snapshot === null) {
     return null;
@@ -190,100 +244,104 @@ export const DictationMicrophoneRow = ({
   const message = testMessage(level);
   const device = level?.device ?? defaultLabel;
 
+  // A fragment, so the component returns an element whatever the layout
+  // hands back.
   return (
-    <SettingsRow
-      description={t("hint")}
-      footer={
-        <div
-          className="flex min-w-0 flex-col gap-2"
-          data-slot="microphone-test"
-          data-status={level?.status ?? "idle"}
-        >
-          <div className="flex flex-wrap items-center gap-3">
-            <Button
-              onClick={() => {
-                if (testing) {
-                  setTesting(false);
-                } else {
-                  void startTest();
-                }
-              }}
-              variant="outline"
-            >
-              {testing ? t("stopTest") : t("test")}
-            </Button>
-            {testing || level !== null ? (
-              <LevelMeter
-                level={level}
-                label={t("level")}
-                still={reducedMotion}
-              />
-            ) : null}
-          </div>
-          {message === null ? null : (
-            <p
-              aria-live="polite"
-              className={
-                message === "hearing"
-                  ? "text-success-foreground text-sm"
-                  : "text-destructive-foreground text-sm"
+    <>
+      {layout({
+        select: (
+          <Select
+            onValueChange={(next) => {
+              if (typeof next === "string") {
+                void choose(next);
               }
+            }}
+            value={value}
+          >
+            <SelectTrigger
+              aria-labelledby={labelledBy}
+              className="w-56"
+              ref={trigger}
             >
-              {message === "hearing" ? t("hearing") : t("noSound", { device })}
-              {level?.status === "zeros" ? (
-                <>
-                  {" "}
-                  <Button
-                    onClick={() => {
-                      void command("permissions_open_settings", {
-                        permission: "microphone",
-                      });
-                    }}
-                    size="inline"
-                    variant="link"
-                  >
-                    {t("checkAccess")}
-                  </Button>
-                </>
+              <SelectValue>{label}</SelectValue>
+            </SelectTrigger>
+            <SelectPopup>
+              <SelectItem value={SYSTEM_DEFAULT}>{defaultLabel}</SelectItem>
+              {snapshot.devices.map((input) => (
+                <SelectItem key={input.id} value={input.id}>
+                  {label(input.id)}
+                </SelectItem>
+              ))}
+              {snapshot.chosenMissing === null ||
+              snapshot.chosen === null ? null : (
+                <SelectItem disabled value={snapshot.chosen}>
+                  {label(snapshot.chosen)}
+                </SelectItem>
+              )}
+            </SelectPopup>
+          </Select>
+        ),
+        test: (
+          <div
+            className="flex min-w-0 flex-col gap-2"
+            data-slot="microphone-test"
+            data-status={level?.status ?? "idle"}
+          >
+            <div className="flex flex-wrap items-center gap-3">
+              <Button
+                onClick={() => {
+                  if (testing) {
+                    setTesting(false);
+                  } else {
+                    void startTest();
+                  }
+                }}
+                variant="outline"
+              >
+                {testing ? t("stopTest") : t("test")}
+              </Button>
+              {testing || level !== null ? (
+                <LevelMeter
+                  level={level}
+                  label={t("level")}
+                  still={reducedMotion}
+                />
               ) : null}
-            </p>
-          )}
-        </div>
-      }
-      id="dictation-microphone"
-      title={t("title")}
-    >
-      <Select
-        onValueChange={(next) => {
-          if (typeof next === "string") {
-            void choose(next);
-          }
-        }}
-        value={value}
-      >
-        <SelectTrigger
-          aria-labelledby={ids.label}
-          className="w-56"
-          ref={trigger}
-        >
-          <SelectValue>{label}</SelectValue>
-        </SelectTrigger>
-        <SelectPopup>
-          <SelectItem value={SYSTEM_DEFAULT}>{defaultLabel}</SelectItem>
-          {snapshot.devices.map((input) => (
-            <SelectItem key={input.id} value={input.id}>
-              {label(input.id)}
-            </SelectItem>
-          ))}
-          {snapshot.chosenMissing === null ||
-          snapshot.chosen === null ? null : (
-            <SelectItem disabled value={snapshot.chosen}>
-              {label(snapshot.chosen)}
-            </SelectItem>
-          )}
-        </SelectPopup>
-      </Select>
-    </SettingsRow>
+            </div>
+            {message === null ? null : (
+              <p
+                aria-live="polite"
+                className={
+                  message === "hearing"
+                    ? "text-success-foreground text-sm"
+                    : "text-destructive-foreground text-sm"
+                }
+              >
+                {message === "hearing"
+                  ? t("hearing")
+                  : t("noSound", { device })}
+                {level?.status === "zeros" ? (
+                  <>
+                    {" "}
+                    <Button
+                      onClick={() => {
+                        void command("permissions_open_settings", {
+                          permission: "microphone",
+                        });
+                      }}
+                      size="inline"
+                      variant="link"
+                    >
+                      {t("checkAccess")}
+                    </Button>
+                  </>
+                ) : null}
+              </p>
+            )}
+          </div>
+        ),
+      })}
+    </>
   );
 };
 
@@ -327,19 +385,23 @@ const LevelMeter = ({
 };
 
 /** Runs a native command; false when it failed, which telemetry hears of. */
-const command = async (name: string, args?: Record<string, unknown>) => {
+const runCommand = async (
+  name: string,
+  window: DesktopTelemetryWindow,
+  args?: Record<string, unknown>,
+) => {
   const result = await Result.tryPromise(async () => invoke(name, args));
   if (Result.isError(result)) {
-    reportFailure();
+    reportChoiceFailure(window);
     return false;
   }
   return true;
 };
 
-const reportFailure = () => {
+const reportChoiceFailure = (window: DesktopTelemetryWindow) => {
   reportDesktopError({
     code: DESKTOP_TELEMETRY_ERROR_CODES.invokeFailed,
     operation: DESKTOP_TELEMETRY_OPERATIONS.runtime,
-    window: DESKTOP_TELEMETRY_WINDOWS.main,
+    window,
   });
 };

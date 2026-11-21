@@ -94,7 +94,9 @@ jobs:
           ref: ${{ github.workflow_sha }}
           path: .network-retry
           persist-credentials: false
-          sparse-checkout: scripts/retry.sh
+          sparse-checkout: |
+            package.json
+            scripts/retry.sh
           sparse-checkout-cone-mode: false
 
       # The workflow's own helper: this job fetches before, or without, a
@@ -114,6 +116,15 @@ jobs:
           RELEASE_CANDIDATE: ${{ inputs.release_candidate }}
         run: |
           [[ "$REQUESTED_SHA" =~ ^[0-9a-f]{40}$ && "$RELEASE_CANDIDATE" == true ]] || { echo '::error::RC proof requires sha and release_candidate=true'; exit 1; }
+
+      # The release candidate verifier runs on Bun, at the version the
+      # workflow revision pins.
+      - name: Setup Bun for the release candidate check
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.sha != '' && inputs.release_candidate == true }}
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version-file: .network-retry/package.json
+          no-cache: true
 
       - name: Check release candidate
         timeout-minutes: 5
@@ -723,7 +734,7 @@ jobs:
 
       - name: Setup Bun
         timeout-minutes: 3
-        uses: stella/.github/actions/setup-bun-cached@ba1d8b5e67dd5b252f6d3edd0c9fa047c5d386fc
+        uses: stella/.github/actions/setup-bun-cached@2664e46f02aea7164ba71bcdd485a686166993a4
         with:
           save: ${{ github.ref == 'refs/heads/main' }}
 
@@ -974,7 +985,7 @@ jobs:
 
       - name: Setup Bun
         timeout-minutes: 3
-        uses: stella/.github/actions/setup-bun-cached@ba1d8b5e67dd5b252f6d3edd0c9fa047c5d386fc
+        uses: stella/.github/actions/setup-bun-cached@2664e46f02aea7164ba71bcdd485a686166993a4
         with:
           save: ${{ github.ref == 'refs/heads/main' }}
 

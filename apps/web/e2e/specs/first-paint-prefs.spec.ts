@@ -5,11 +5,14 @@ import ar from "../../src/i18n/langs/ar.json" with { type: "json" };
 import en from "../../src/i18n/langs/en.json" with { type: "json" };
 import {
   defaultPresentationPrefs,
-  parsePresentationPrefs,
   PRESENTATION_PREFS_COOKIE,
   serializePresentationPrefs,
 } from "../../src/lib/account/presentation-prefs/preferences";
 import { E2E_API_ORIGIN } from "../helpers/api";
+import {
+  readPresentationPrefsCookie,
+  setPresentationPrefs,
+} from "../helpers/presentation-prefs";
 import { createProfileTestSession } from "../helpers/profile-session";
 import { expect, test } from "../helpers/test";
 
@@ -27,14 +30,9 @@ const sessionLocale = async (page: Page) => {
   return session?.user.locale ?? null;
 };
 
-const presentationPrefs = async (page: Page) => {
-  const cookie = (await page.context().cookies(page.url())).find(
-    (entry) => entry.name === PRESENTATION_PREFS_COOKIE,
-  );
-  return cookie === undefined
-    ? null
-    : parsePresentationPrefs(decodeURIComponent(cookie.value));
-};
+const presentationPrefs = async (page: Page) =>
+  (await readPresentationPrefsCookie(page.context(), page.url()))?.prefs ??
+  null;
 
 const selectProfileLanguage = async (
   page: Page,
@@ -199,6 +197,47 @@ test("profile language and collapsed sidebar render in the first HTML response",
     await profileSession.cleanup();
   }
 });
+
+// A member page's root does not render on the server, so its paint is the
+// cold frame; a public law page paints the real sidebar.
+const SERVER_PAINTED_SIDEBARS = [
+  { path: "/law?country=cze", slot: "sidebar" },
+  { path: "/workspaces", slot: "pending-sidebar" },
+] as const;
+
+for (const sidebarOpen of [false, true]) {
+  const state = sidebarOpen ? "expanded" : "collapsed";
+  test(`public law and member pages paint the saved ${state} sidebar on the server`, async ({
+    baseURL,
+    browser,
+    page,
+  }) => {
+    const webBaseURL = baseURL ?? "http://localhost:3000";
+    await setPresentationPrefs({
+      context: page.context(),
+      url: webBaseURL,
+      patch: { sidebarOpen },
+    });
+    // Without JavaScript the page stays the server's paint.
+    const serverContext = await browser.newContext({
+      baseURL: webBaseURL,
+      javaScriptEnabled: false,
+      storageState: await page.context().storageState(),
+      viewport: { width: 1280, height: 900 },
+    });
+    try {
+      const serverPage = await serverContext.newPage();
+      for (const { path, slot } of SERVER_PAINTED_SIDEBARS) {
+        await serverPage.goto(path, { waitUntil: "domcontentloaded" });
+        await expect(
+          serverPage.locator(`[data-slot="${slot}"]`),
+        ).toHaveAttribute("data-state", state);
+      }
+    } finally {
+      await serverContext.close();
+    }
+  });
+}
 
 test("a fresh visitor renders the preferred browser catalogue and explicit preference overrides it", async ({
   browser,

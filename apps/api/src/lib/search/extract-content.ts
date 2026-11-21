@@ -17,11 +17,16 @@ import { OFFICE_ARCHIVE_FORMATS } from "@stll/docx-utils/office-formats";
 
 import { captureError } from "@/api/lib/analytics/capture";
 import {
+  EXTRACTION_WORKER_ERROR_CODE,
   ExtractionWorkerError,
   extractionWorkerErrorCode,
   SUBPROCESS_TERMINATION_REASON,
 } from "@/api/lib/errors/tagged-errors";
 import type { ScannedFile } from "@/api/lib/file-scan/scanned-file";
+import {
+  DOCUMENT_ARCHIVE_MAX_BYTES,
+  isDocumentArchiveMimeType,
+} from "@/api/lib/files/archive-preview-protocol";
 import { LIMITS } from "@/api/lib/limits";
 import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { logger } from "@/api/lib/observability/logger";
@@ -151,7 +156,7 @@ type ExtractFileTextResultOptions = {
 };
 
 export const extractFileTextResult = async (
-  { bytes: buffer, mimeType }: ScannedFile,
+  { bytes: buffer, mimeType, fileName }: ScannedFile,
   {
     maxChars = LIMITS.extractedContentMaxChars,
     includeContainerAttachments = false,
@@ -159,9 +164,28 @@ export const extractFileTextResult = async (
     timeoutMs = LIMITS.extractionTimeoutMs,
   }: ExtractFileTextResultOptions = {},
 ): Promise<Result<string | null, ExtractionWorkerError>> => {
-  const normalizedMimeType = normalizeMimeType(mimeType);
+  const normalizedMimeType =
+    legalFileFormat(mimeType, fileName)?.mimeType ??
+    normalizeMimeType(mimeType);
   if (!canExtractMimeType(normalizedMimeType)) {
     return Result.ok(null);
+  }
+
+  if (
+    isDocumentArchiveMimeType(normalizedMimeType) &&
+    buffer.byteLength > DOCUMENT_ARCHIVE_MAX_BYTES
+  ) {
+    return Result.err(
+      new ExtractionWorkerError({
+        code: EXTRACTION_WORKER_ERROR_CODE.parser,
+        message: "The document exceeds the archive reading limit",
+        exitCode: null,
+        mimeType: normalizedMimeType,
+        sizeBytes: buffer.byteLength,
+        termination: null,
+        workerErrorClass: null,
+      }),
+    );
   }
 
   const result = await spawnWorker({

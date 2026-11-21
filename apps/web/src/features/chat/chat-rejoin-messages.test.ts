@@ -3,6 +3,15 @@ import type { UIMessage } from "@tanstack/ai-client";
 import { panic } from "better-result";
 import { expect, test } from "bun:test";
 
+import {
+  BROWSE_WEB_TOOL_NAME,
+  BROWSER_CONTROL_CONTENT_TRUST,
+  BROWSER_CONTROL_PROTOCOL_VERSION,
+  BROWSER_CONTROL_TOOL_NAME,
+  supersedeBrowserControlResult,
+} from "@stll/api-contract/browser-control";
+import type { BrowserControlResult } from "@stll/api-contract/browser-control";
+
 import { keepShownRejoinMessages } from "./chat-rejoin-messages";
 
 const message = (content: string): UIMessage => ({
@@ -398,4 +407,92 @@ test("standalone activity rows accept the SDK's replacement snapshot", () => {
     },
   ];
   expect(keepShownRejoinMessages(shown, replacement)).toBe(replacement);
+});
+
+const pageRead = (url: string) =>
+  ({
+    protocolVersion: BROWSER_CONTROL_PROTOCOL_VERSION,
+    snapshot: {
+      contentTrust: BROWSER_CONTROL_CONTENT_TRUST.untrustedWebContent,
+      elements: [],
+      elementsLeftOut: false,
+      facts: { meta: [] },
+      revision: "revision-1",
+      tabId: 3,
+      tabs: [{ active: true, tabId: 3, url }],
+      text: "Opening hours: 8:00 to 16:00",
+      title: "Registry",
+      url,
+      window: { cursor: "r1.window-1", fromPercent: 0, toPercent: 100 },
+    },
+    status: "success",
+  }) satisfies BrowserControlResult;
+
+/** A page read with its output on the call and on its result part. */
+const browserReadParts = (output: unknown): UIMessage["parts"] => [
+  {
+    type: "tool-call",
+    id: "read",
+    name: BROWSER_CONTROL_TOOL_NAME,
+    arguments: '{"action":"snapshot"}',
+    input: { action: "snapshot" },
+    state: "complete",
+    output,
+  },
+  {
+    type: "tool-result",
+    toolCallId: "read",
+    content: JSON.stringify(output),
+    state: "complete",
+  },
+];
+
+const inBrowsingRun = (parts: UIMessage["parts"]): UIMessage["parts"] => [
+  {
+    type: "subagent",
+    subagent: {
+      id: "run",
+      name: BROWSE_WEB_TOOL_NAME,
+      status: "finished",
+      parentToolCallId: "browse",
+      messages: [{ id: "run-answer", role: "assistant", parts }],
+    },
+  },
+];
+
+const answerWith = (parts: UIMessage["parts"]): UIMessage[] => [
+  { id: "answer", role: "assistant", parts },
+];
+
+// The server stores and replays a page read a later read superseded as its
+// declared projection, while the page still shows the read it ran.
+test("a replayed page read that is the shown read's declared projection has caught up, at top level and inside a sub-agent run", () => {
+  const shownOutput = pageRead("https://www.example.cz/hours");
+  const projection = supersedeBrowserControlResult(shownOutput);
+  expect(projection).not.toBeNull();
+  expect(projection).not.toEqual(shownOutput);
+  const otherPage = supersedeBrowserControlResult(
+    pageRead("https://www.example.cz/fees"),
+  );
+  for (const wrap of [(parts: UIMessage["parts"]) => parts, inBrowsingRun]) {
+    const shown = answerWith(wrap(browserReadParts(shownOutput)));
+    const replayed = answerWith(wrap(browserReadParts(projection)));
+    expect(keepShownRejoinMessages(shown, replayed)).toBe(replayed);
+    // The projection of another page is not this read caught up.
+    const other = answerWith(wrap(browserReadParts(otherPage)));
+    expect(keepShownRejoinMessages(shown, other)).toEqual(shown);
+  }
+});
+
+test("a projection catches up only for the tool that declares it", () => {
+  const shownOutput = pageRead("https://www.example.cz/hours");
+  const projection = supersedeBrowserControlResult(shownOutput);
+  const renamed = (output: unknown): UIMessage["parts"] =>
+    browserReadParts(output).map((part) =>
+      part.type === "tool-call" ? { ...part, name: "read_page" } : part,
+    );
+  const shown = answerWith(renamed(shownOutput));
+  expect(
+    keepShownRejoinMessages(shown, answerWith(renamed(projection))),
+  ).toEqual(shown);
 });

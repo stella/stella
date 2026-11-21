@@ -77,6 +77,10 @@ import type { TableContentMode } from "@/lib/workspaces/table-store";
 import { useTableStore } from "@/lib/workspaces/table-store";
 
 import {
+  ENTITY_VIEW_COLUMN_SIZES,
+  entityViewSizingScope,
+} from "./columns.logic";
+import {
   ENTITY_VIEW_GROUP,
   ENTITY_VIEW_SORT_KINDS,
   entityViewSortValues,
@@ -91,21 +95,22 @@ import { useEntityTableGroups } from "./table-groups";
 import type { EntityViewEntry, EntityViewRow, EntityViewScope } from "./types";
 import { WorkRiskBadge } from "./work-risk-badge";
 
+// The widths live in ENTITY_VIEW_COLUMN_SIZES, which the loading grid reads
+// too; this map's key order is the table's column order, as there.
 const COLUMN_MODEL = {
-  _name: { label: "common.name", icon: TextIcon, size: 300 },
-  _matter: { label: "common.matter", icon: MattersNavIcon, size: 200 },
-  "_agenda-kind": { label: "common.type", icon: ShapesIcon, size: 130 },
-  _status: { label: "tasks.status", icon: CircleDotIcon, size: 140 },
-  _priority: { label: "tasks.priority", icon: FlagIcon, size: 130 },
-  "_due-date": { label: "tasks.dueDate", icon: CalendarIcon, size: 150 },
-  _assignee: { label: "common.assignee", icon: UsersIcon, size: 180 },
-  _actions: { label: "common.actions", icon: ListChecksIcon, size: 240 },
+  _name: { label: "common.name", icon: TextIcon },
+  _matter: { label: "common.matter", icon: MattersNavIcon },
+  "_agenda-kind": { label: "common.type", icon: ShapesIcon },
+  _status: { label: "tasks.status", icon: CircleDotIcon },
+  _priority: { label: "tasks.priority", icon: FlagIcon },
+  "_due-date": { label: "tasks.dueDate", icon: CalendarIcon },
+  _assignee: { label: "common.assignee", icon: UsersIcon },
+  _actions: { label: "common.actions", icon: ListChecksIcon },
 } as const satisfies Record<
   keyof typeof ENTITY_VIEW_COLUMNS,
   {
     label: TranslationKey;
     icon: ComponentType<{ className?: string }>;
-    size: number;
   }
 >;
 type CollectionColumn = keyof typeof COLUMN_MODEL;
@@ -197,7 +202,7 @@ export const EntityViewTable = ({
   onLoadMore,
 }: EntityViewTableProps) => {
   const t = useTranslations();
-  const scopeId = `entity-view:${organizationId}`;
+  const scopeId = entityViewSizingScope(organizationId);
   const sizing = useTableStore(
     (state) => state.columnSizing[scopeId]?.[view.id] ?? EMPTY_SIZING,
   );
@@ -247,7 +252,7 @@ export const EntityViewTable = ({
       const columnId = column;
       return {
         id: columnId,
-        size: model.size,
+        size: ENTITY_VIEW_COLUMN_SIZES[columnId],
         minSize: DEFAULT_TABLE_COLUMN_MIN_SIZE,
         enableSorting: ENTITY_VIEW_COLUMNS[columnId].sortable,
         accessorFn: ({ entry }) =>
@@ -359,6 +364,7 @@ export const EntityViewTable = ({
             {hasNextPage && (
               <Button
                 disabled={loadingMore}
+                disabledReason={t("caseLaw.loadingMore")}
                 onClick={onLoadMore}
                 variant="ghost"
               >

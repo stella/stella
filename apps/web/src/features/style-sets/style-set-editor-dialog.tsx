@@ -300,7 +300,13 @@ const LoadedStyleSetEditor = ({
         <DialogClose render={<Button type="button" variant="outline" />}>
           {t("common.cancel")}
         </DialogClose>
-        <Button disabled={saving || name.trim() === ""} type="submit">
+        <Button
+          disabled={saving || name.trim() === ""}
+          disabledReason={
+            saving ? t("common.saving") : t("knowledge.playbooks.nameRequired")
+          }
+          type="submit"
+        >
           {saving ? t("common.loading") : t("common.save")}
         </Button>
       </DialogFooter>

@@ -275,14 +275,13 @@ const PDFViewerContent = ({
     // surround. Painting on the root fills the whole visible area
     // uniformly at every scroll position and page size.
     //
-    // `scrollbarClassName` elevates the scrollbar above the docked AI
-    // chat composer: every mount of this viewport is wrapped in
-    // `FileViewerWithAI` (peek and full view alike), whose composer
-    // stack floats at z-50 over the bottom of the viewer. Without this
-    // the scrollbar's bottom section painted underneath that glass veil
-    // instead of on top of it.
+    // `scrollbarClassName` lifts the scrollbars over the pages. The docked
+    // AI composer still paints above them (overlay chrome band), so the
+    // horizontal bar is moved up to rest on the composer stack instead of
+    // under its veil: see `data-pdf-viewport` in file-viewer-with-ai.css.
     <ScrollArea
       className={className}
+      data-pdf-viewport=""
       scrollbarClassName="z-[60]"
       viewportRef={wheelZoomRef}
     >
@@ -369,16 +368,30 @@ const PDFPasswordPrompt = ({
             </FieldError>
           )}
         </Field>
-        <PDFPasswordSubmitButton label={t("workspaces.pdf.unlock")} />
+        <PDFPasswordSubmitButton
+          label={t("workspaces.pdf.unlock")}
+          pendingLabel={t("common.loading")}
+        />
       </Form>
     </div>
   );
 };
 
-const PDFPasswordSubmitButton = ({ label }: { label: string }) => {
+const PDFPasswordSubmitButton = ({
+  label,
+  pendingLabel,
+}: {
+  label: string;
+  pendingLabel: string;
+}) => {
   const { pending } = useFormStatus();
   return (
-    <Button className="w-full" disabled={pending} type="submit">
+    <Button
+      className="w-full"
+      disabled={pending}
+      disabledReason={pendingLabel}
+      type="submit"
+    >
       {label}
     </Button>
   );

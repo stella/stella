@@ -14,6 +14,7 @@ import { notifyUserProblem } from "@/lib/errors/user-toast";
 import { createUuid } from "@/lib/uuid";
 import { useContactPatch } from "@/routes/_protected.contacts/-components/contact-caches";
 import { getContactMetadata } from "@/routes/_protected.contacts/-components/contact-metadata";
+import { DetailSection } from "@/routes/_protected.contacts/-components/detail-section.pending";
 import type {
   ContactCustomField,
   ContactData,
@@ -99,10 +100,10 @@ export const ContactCustomFieldsEditor = ({
   };
 
   return (
-    <section className="rounded-lg border p-4 md:col-span-2">
-      <h2 className="text-muted-foreground mb-3 text-sm font-medium">
-        {t("contacts.customFields.title")}
-      </h2>
+    <DetailSection
+      className="md:col-span-2"
+      title={t("contacts.customFields.title")}
+    >
       <div className="space-y-3">
         {customFields.map((field) => {
           const handleSave = async (patch: ContactCustomField) =>
@@ -145,24 +146,34 @@ export const ContactCustomFieldsEditor = ({
           />
           <AddCustomFieldSubmitButton
             disabled={isPending || labelDraft.trim().length === 0}
+            disabledReason={
+              isPending ? t("common.saving") : t("common.enterName")
+            }
             label={t("contacts.customFields.addField")}
           />
         </Form>
       </div>
-    </section>
+    </DetailSection>
   );
 };
 
 const AddCustomFieldSubmitButton = ({
   disabled,
+  disabledReason,
   label,
 }: {
   disabled: boolean;
+  disabledReason: string;
   label: string;
 }) => {
+  const t = useTranslations();
   const { pending } = useFormStatus();
   return (
-    <Button disabled={disabled || pending} type="submit">
+    <Button
+      disabled={disabled || pending}
+      disabledReason={pending ? t("common.saving") : disabledReason}
+      type="submit"
+    >
       <PlusIcon className="size-4" />
       {label}
     </Button>
@@ -232,6 +243,7 @@ const CustomFieldRow = ({
       <Button
         aria-label={t("contacts.customFields.removeField")}
         disabled={disabled}
+        disabledReason={t("common.saving")}
         onClick={onRemove}
         size="icon-sm"
         type="button"

@@ -1,8 +1,9 @@
-import { lazy, memo, Suspense } from "react";
+import { type ComponentType, lazy, memo, Suspense } from "react";
 
 import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 
+import type { LegalFileFormatKind } from "@stll/api-contract/legal-file-formats";
 import { cn } from "@stll/ui/utils";
 
 import { FileChatWarmup } from "@/components/ai-suggestions/file-chat-warmup";
@@ -37,17 +38,76 @@ import {
   PeekSuspenseFallback,
 } from "@/components/pdf/peek/peek-pdf-viewer";
 import { QuerySuspenseBoundary } from "@/components/query-suspense-boundary";
-import { RecoverableViewerBoundary } from "@/components/viewer/recoverable-viewer-boundary";
+import {
+  RecoverableViewerBoundary,
+  type ViewerSurface,
+} from "@/components/viewer/recoverable-viewer-boundary";
+import type { TranslationKey } from "@/i18n/types";
 import { PDF_MIME, TOOLBAR_ROW_HEIGHT } from "@/lib/consts";
 import { detached } from "@/lib/detached";
 import { isPreviewUnavailableError } from "@/lib/errors/api";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import type { PDFColorMode } from "@/lib/pdf/pdf-color-mode";
 
+const AsicFileViewer = lazy(async () => {
+  const m = await import("@/components/inspector/asic-file-viewer");
+  return { default: m.AsicFileViewer };
+});
+
+const CadesFileViewer = lazy(async () => {
+  const m = await import("@/components/inspector/cades-file-viewer");
+  return { default: m.CadesFileViewer };
+});
+
 const DataBoxFileViewer = lazy(async () => {
   const m = await import("@/features/correspondence/data-box-file-viewer");
   return { default: m.DataBoxFileViewer };
 });
+
+const StructuredDocumentViewer = lazy(async () => {
+  const m = await import("@/components/inspector/structured-document-viewer");
+  return { default: m.StructuredDocumentViewer };
+});
+
+type LegalFileViewer = {
+  Viewer: ComponentType<{ onDownload: () => void; tab: FileTab }>;
+  unreadable: TranslationKey;
+  download: TranslationKey;
+  surface: ViewerSurface;
+};
+
+const asicFileViewer = {
+  Viewer: AsicFileViewer,
+  unreadable: "signedFile.unreadable",
+  download: "common.downloadOriginal",
+  surface: "inspector-asic",
+} as const satisfies LegalFileViewer;
+
+const structuredDocumentViewer = {
+  Viewer: StructuredDocumentViewer,
+  unreadable: "structuredDocument.noReadableContent",
+  download: "common.downloadOriginal",
+  surface: "inspector-structured-document",
+} as const satisfies LegalFileViewer;
+
+const legalFileViewers = {
+  asicE: asicFileViewer,
+  asicS: asicFileViewer,
+  cades: {
+    Viewer: CadesFileViewer,
+    unreadable: "signedFile.unreadable",
+    download: "common.downloadOriginal",
+    surface: "inspector-cades",
+  },
+  ofd: structuredDocumentViewer,
+  uyap: structuredDocumentViewer,
+  dataBox: {
+    Viewer: DataBoxFileViewer,
+    unreadable: "correspondence.dataBox.unreadable",
+    download: "common.download",
+    surface: "inspector-data-box",
+  },
+} as const satisfies Record<LegalFileFormatKind, LegalFileViewer>;
 
 const OfficeFileViewer = lazy(async () => {
   const m = await import("@/components/office/office-file-viewer");
@@ -170,26 +230,35 @@ const FileTabViewerComponent = ({
 
   const fileViewer = (() => {
     switch (nativePreviewKind) {
+      case "asicE":
+      case "asicS":
+      case "cades":
       case "dataBox":
+      case "ofd":
+      case "uyap": {
+        const { Viewer, unreadable, download, surface } =
+          legalFileViewers[nativePreviewKind];
         return (
           <RecoverableViewerBoundary
             finalFallback={(error) =>
               isPreviewUnavailableError(error) ? (
                 <FilePreviewUnavailable
-                  message={t("correspondence.dataBox.unreadable")}
+                  downloadLabel={t(download)}
+                  message={t(unreadable)}
                   onDownload={handleDownload}
                 />
               ) : undefined
             }
             key={tab.id}
             onDownload={handleDownload}
-            surface="inspector-data-box"
+            surface={surface}
           >
             <Suspense fallback={<PeekSuspenseFallback />}>
-              <DataBoxFileViewer onDownload={handleDownload} tab={tab} />
+              <Viewer onDownload={handleDownload} tab={tab} />
             </Suspense>
           </RecoverableViewerBoundary>
         );
+      }
       case "email":
         if (entity.shouldSurfaceEmailResolutionError) {
           return (

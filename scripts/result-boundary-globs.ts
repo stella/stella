@@ -255,6 +255,7 @@ export const RESULT_CONVENTION_ENABLED_GLOBS = [
   "packages/country-codes/src/**/*.ts",
   "packages/db-load-gate/src/**/*.ts",
   "packages/decision-reader/src/**/*.{ts,tsx}",
+  "packages/docx-authoring/src/**/*.ts",
   "packages/docx-utils/src/**/*.ts",
   "packages/errors/src/**/*.ts",
   "packages/fetch/src/**/*.ts",
@@ -328,6 +329,13 @@ export const RESULT_BOUNDARY_GLOBS = [
   // Better Auth maps a rejected code exchange to its callback error, so the
   // retry wrapper hands the provider's rejection back unchanged.
   "apps/api/src/lib/auth/social-token-exchange.ts",
+  // Better Auth consumes an SSO endpoint gate's and the session provenance
+  // hook's refusals as rejected APIError values.
+  "apps/api/src/lib/auth/sso-sign-in.ts",
+  // Better Auth consumes the organization endpoints' SSO refusal as a
+  // rejected APIError value.
+  "apps/api/src/lib/auth/sso-organization-guard.ts",
+  "apps/api/src/lib/auth/sso-organization-guard.ts",
 
   "apps/api/src/lib/api-handlers.ts",
   "apps/api/src/handlers/**/routes.ts",

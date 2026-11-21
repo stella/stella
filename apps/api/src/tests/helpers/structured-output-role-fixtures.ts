@@ -13,6 +13,7 @@ import { outputSchema as spanEditOutputSchema } from "@/api/handlers/chat/messag
 import { rewriteOutputSchema } from "@/api/handlers/clauses/rewrite";
 import { extractProcuracaoOutputSchema } from "@/api/handlers/contacts/extract-procuracao";
 import { dictationCleanupModelOutputSchema } from "@/api/handlers/dictation/cleanup-model";
+import { recordingCleanupModelOutputSchema } from "@/api/handlers/dictation/recording-cleanup-model";
 import { proposedPositionsSchema } from "@/api/handlers/document-reviews/reference-position-normalizer";
 import {
   generatedSummariesAISchema,
@@ -119,6 +120,7 @@ export const STRUCTURED_OUTPUT_ENTRY_POINTS = [
   "generateTanStackChatObject",
   "createVerificationCall",
   "generateAdmittedObject",
+  "generateDictationAnswer",
 ] as const;
 
 /**
@@ -128,6 +130,7 @@ export const STRUCTURED_OUTPUT_ENTRY_POINTS = [
 export const STRUCTURED_OUTPUT_PASSTHROUGHS: Readonly<
   Record<string, readonly string[]>
 > = {
+  "handlers/dictation/model-endpoint.ts": ["outputSchema"],
   "lib/docx/ai-field-generator.ts": ["input.outputSchema"],
   "lib/lists/verification/model-call.ts": ["outputSchema"],
 };
@@ -164,6 +167,13 @@ export const STRUCTURED_OUTPUT_ROLE_FIXTURES: readonly StructuredOutputRoleFixtu
       schema: dictationCleanupModelOutputSchema,
       answer:
         '{"segments":[{"type":"lineBreak","text":"","bold":false},{"type":"text","text":"Smlouva se prodlužuje o ","bold":false},{"type":"text","text":"24","bold":true},{"type":"text","text":" dní.","bold":false},{"type":"paragraphBreak","text":"","bold":false},{"type":"text","text":"Hotovo?","bold":false}]}',
+    },
+    {
+      file: "handlers/dictation/recording-cleanup.ts",
+      outputSchema: "recordingCleanupModelOutputSchema",
+      schema: recordingCleanupModelOutputSchema,
+      answer:
+        '{"instructions":["Odpověď na včerejší mail."],"markdown":"Ahoj Petře,\\n\\ndíky za **rychlou** reakci.\\n\\n1. čtvrtek"}',
     },
     {
       file: "handlers/case-law/decisions/search-expand.ts",

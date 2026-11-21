@@ -3,16 +3,14 @@ import { useTranslations } from "use-intl";
 import type { ChatCorpus, ChatCorpusScope } from "@stll/api-contract";
 import { isPublicCountry } from "@stll/api-contract/public-country-capability";
 import { Button } from "@stll/ui/button";
+import { Form } from "@stll/ui/form";
 import { AiActionIcon, MessageSquareTextIcon } from "@stll/ui/icons";
+import { Input } from "@stll/ui/input";
 import { Loader } from "@stll/ui/loader";
 
 import { ACCOUNT_GATE_OUTCOME } from "@/components/auth/require-account.logic";
 import { useRequireAccount } from "@/components/auth/use-require-account";
 import { askPublicLawInChat } from "@/components/public-law-ask";
-import {
-  PublicLawSearchFrame,
-  PublicLawSearchInput,
-} from "@/components/public-law-search.pending";
 import { useMaybeAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { CapabilityAction } from "@/lib/organization/feature-access/capability-actions";
 
@@ -80,12 +78,23 @@ export const PublicLawSearch = ({
   const trimmed = query.trim();
 
   return (
-    <PublicLawSearchFrame onSubmit={onSubmit}>
-      <PublicLawSearchInput
+    <Form
+      className="mx-auto max-w-2xl flex-wrap justify-center"
+      density="compact"
+      layout="inline"
+      onSubmit={(event) => {
+        event.preventDefault();
+        onSubmit();
+      }}
+      role="search"
+    >
+      <Input
         aria-label={searchLabel}
+        className="h-11 min-h-11 min-w-64 flex-1"
         maxLength={maxLength}
         onChange={(event) => onQueryChange(event.currentTarget.value)}
         placeholder={placeholder}
+        type="search"
         value={query}
       />
       {refine !== undefined && (
@@ -98,7 +107,7 @@ export const PublicLawSearch = ({
       {askScope !== null && trimmed.length > 0 && (
         <PublicLawAskInChat askScope={askScope} question={trimmed} />
       )}
-    </PublicLawSearchFrame>
+    </Form>
   );
 };
 
@@ -136,6 +145,11 @@ export const PublicLawRefine = ({
         <Button
           aria-label={labelled ? undefined : t("search.aiRefine")}
           disabled={disabled || isPending}
+          disabledReason={
+            isPending
+              ? t("search.refiningQuery")
+              : t("search.enterQueryToRefine")
+          }
           onClick={() => {
             if (ensureAccount() !== ACCOUNT_GATE_OUTCOME.allowed) {
               return;

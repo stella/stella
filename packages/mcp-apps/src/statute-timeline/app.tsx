@@ -160,6 +160,11 @@ const Timeline = ({
                   className="max-w-full"
                   variant="outline"
                   disabled={!canCompare}
+                  disabledReason={t(
+                    next === undefined
+                      ? "timelineNoAdjacentVersion"
+                      : "timelineComparisonRequiresWording",
+                  )}
                   aria-pressed={mode === "comparison"}
                   onClick={() =>
                     setMode(mode === "comparison" ? "wording" : "comparison")
@@ -199,6 +204,9 @@ const Timeline = ({
           className="max-w-full"
           variant="outline"
           disabled={!bridge.supportsTools() || read.status === "loading"}
+          disabledReason={t(
+            read.status === "loading" ? "loading" : "hostToolsUnavailable",
+          )}
           onClick={() =>
             bridge.detached(loadMore(), "statuteTimeline.loadMore")
           }

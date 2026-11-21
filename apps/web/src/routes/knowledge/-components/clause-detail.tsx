@@ -569,12 +569,16 @@ const ClauseLeaveDialog = ({
               }}
               variant="ghost"
               disabled={savingVersion}
+              disabledReason={t("common.saving")}
             >
               {t("clauses.leaveWithoutVersion")}
             </Button>
           )}
           <Button
             disabled={savingVersion || reviewStatus !== "resolved"}
+            disabledReason={
+              savingVersion ? t("common.saving") : t("common.finishReview")
+            }
             onClick={() => {
               detached(
                 saveVersionAndLeave(),
@@ -779,6 +783,16 @@ const ClauseHeader = ({
     },
   });
 
+  const resolveClauseVersionSaveDisabledReason = () => {
+    if (savingVersion) {
+      return t("common.saving");
+    }
+    if (reviewStatus !== "resolved") {
+      return t("common.finishReview");
+    }
+    return t("common.noChangesToSave");
+  };
+
   return (
     <div className="flex items-center gap-2">
       {editingTitle && canEdit ? (
@@ -833,6 +847,7 @@ const ClauseHeader = ({
           disabled={
             !dirtySinceVersion || savingVersion || reviewStatus !== "resolved"
           }
+          disabledReason={resolveClauseVersionSaveDisabledReason()}
           onClick={() => {
             detached(saveVersion(), "clause-detail.save-version");
           }}
@@ -866,6 +881,7 @@ const ClauseHeader = ({
               </AlertDialogClose>
               <Button
                 disabled={deleteClause.isPending}
+                disabledReason={t("common.deleting")}
                 onClick={() => {
                   deleteClause.mutate();
                 }}
@@ -1365,6 +1381,9 @@ const VariantRow = ({
           <Button
             aria-label={t("common.moveUp")}
             disabled={!canMoveUp || reordering}
+            disabledReason={
+              reordering ? t("common.saving") : t("common.alreadyFirst")
+            }
             onClick={() => {
               detached(handleReorder("up"), "clause-detail.reorder");
             }}
@@ -1376,6 +1395,9 @@ const VariantRow = ({
           <Button
             aria-label={t("common.moveDown")}
             disabled={!canMoveDown || reordering}
+            disabledReason={
+              reordering ? t("common.saving") : t("common.alreadyLast")
+            }
             onClick={() => {
               detached(handleReorder("down"), "clause-detail.reorder");
             }}
@@ -1432,6 +1454,7 @@ const VariantRow = ({
             </AlertDialogClose>
             <Button
               disabled={deleting}
+              disabledReason={t("common.deleting")}
               onClick={() => {
                 detached(handleDelete(), "clause-detail.delete");
               }}
@@ -1457,6 +1480,7 @@ const VariantRow = ({
             </AlertDialogClose>
             <Button
               disabled={promoting}
+              disabledReason={t("common.saving")}
               onClick={() => {
                 detached(handlePromote(), "clause-detail.promote");
               }}
@@ -1616,6 +1640,7 @@ const VariantFormDialogBody = ({
         </DialogClose>
         <Button
           disabled={saving || !label.trim()}
+          disabledReason={saving ? t("common.saving") : t("common.enterName")}
           onClick={() => {
             detached(handleSave(), "clause-detail.save");
           }}
@@ -1825,6 +1850,7 @@ const VersionRow = ({
             </AlertDialogClose>
             <Button
               disabled={restoring}
+              disabledReason={t("common.restoring")}
               onClick={() => {
                 detached(handleRestore(), "clause-detail.restore");
               }}

@@ -26,6 +26,28 @@ type RegistryCredentialSetupProps = {
   source: "public" | "deployment" | "organization" | null;
 };
 
+type RegistrySaveDisabledReasonOptions = {
+  isSaving: boolean;
+  isRemoving: boolean;
+  t: (
+    key: "common.saving" | "common.removing" | "search.enterRegistryCredential",
+  ) => string;
+};
+
+const registrySaveDisabledReason = ({
+  isSaving,
+  isRemoving,
+  t,
+}: RegistrySaveDisabledReasonOptions) => {
+  if (isSaving) {
+    return t("common.saving");
+  }
+  if (isRemoving) {
+    return t("common.removing");
+  }
+  return t("search.enterRegistryCredential");
+};
+
 export const RegistryCredentialSetup = ({
   registry,
   source,
@@ -142,6 +164,11 @@ export const RegistryCredentialSetup = ({
         <Button
           className="min-h-11"
           disabled={pending || credential.trim() === ""}
+          disabledReason={registrySaveDisabledReason({
+            isSaving: save.isPending,
+            isRemoving: remove.isPending,
+            t,
+          })}
           loading={save.isPending}
           onClick={() => save.mutate()}
         >
@@ -152,6 +179,9 @@ export const RegistryCredentialSetup = ({
             className="min-h-11"
             variant="ghost"
             disabled={pending}
+            disabledReason={
+              remove.isPending ? t("common.removing") : t("common.saving")
+            }
             loading={remove.isPending}
             onClick={() => remove.mutate()}
           >

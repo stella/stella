@@ -159,6 +159,9 @@ export function BulkDeleteContacts({
       <div>
         <Button
           disabled={exceedsLimit}
+          disabledReason={t("contacts.deleteSelectedLimit", {
+            limit: String(CONTACT_BULK_DELETE_LIMIT),
+          })}
           onClick={() => setOpen(true)}
           size="sm"
           variant="destructive"
@@ -188,6 +191,9 @@ export function BulkDeleteContacts({
             </AlertDialogClose>
             <Button
               disabled={exceedsLimit}
+              disabledReason={t("contacts.deleteSelectedLimit", {
+                limit: String(CONTACT_BULK_DELETE_LIMIT),
+              })}
               loading={pending}
               onClick={() => {
                 detached(

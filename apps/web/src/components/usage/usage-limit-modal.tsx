@@ -91,6 +91,7 @@ export const UsageLimitModal = ({
           {hasHostedEntitlement ? (
             <Button
               disabled={managementMutation.isPending}
+              disabledReason={t("common.loading")}
               onClick={() => managementMutation.mutate()}
             >
               {t("settings.organization.usageManage")}

@@ -9,14 +9,16 @@ use crate::{
   transcribe_recording, transcribe_recording::TRANSCRIBE_WINDOW_LABEL, window_placement,
 };
 
-const WINDOW_WIDTH: f64 = 760.0;
-const WINDOW_HEIGHT: f64 = 600.0;
+const WINDOW_WIDTH: f64 = 1120.0;
+const WINDOW_HEIGHT: f64 = 720.0;
 
 pub fn show(app: &AppHandle) {
   if !transcribe_recording::available(app) {
     tracing::info!("transcribe window refused: dictation is not available");
     return;
   }
+  // Expired transcripts go before the window lists any.
+  crate::transcribe_history::window_opened(app);
   #[cfg(target_os = "macos")]
   crate::logging::best_effort(app.show(), "app could not be shown");
   if let Some(window) = app.get_webview_window(TRANSCRIBE_WINDOW_LABEL) {
@@ -28,7 +30,7 @@ pub fn show(app: &AppHandle) {
   let builder = crate::app_window::builder(app, TRANSCRIBE_WINDOW_LABEL, "index.html")
     .title("stella")
     .inner_size(WINDOW_WIDTH, WINDOW_HEIGHT)
-    .min_inner_size(560.0, 460.0)
+    .min_inner_size(760.0, 520.0)
     .resizable(true)
     .visible(false);
   let builder = window_placement::centered_on_target_screen(

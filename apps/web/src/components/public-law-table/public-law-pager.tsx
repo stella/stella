@@ -7,6 +7,7 @@ import { PUBLIC_LAW_PAGE_SIZES } from "@stll/api-contract/limits";
 import { SEARCH_TOTAL_TYPE } from "@stll/api-contract/search";
 import { Button } from "@stll/ui/button";
 import { ChevronRightIcon } from "@stll/ui/icons";
+import { Label } from "@stll/ui/label";
 import {
   Select,
   SelectItem,
@@ -18,9 +19,7 @@ import {
 import {
   PublicLawCurrentPage,
   PublicLawPagerFrame,
-  PublicLawPagerStepDisabled,
   PublicLawPagerStepLabel,
-  PublicLawPageSizeLabel,
 } from "@/components/public-law-table/public-law-pager.pending";
 import type {
   PublicLawNumberedPagerModel,
@@ -95,6 +94,7 @@ export const PublicLawPager = ({
 
   return (
     <PublicLawPagerFrame
+      label={t("caseLaw.pagination.label")}
       position={
         <>
           {navigation.type === "numbered" ? (
@@ -108,7 +108,8 @@ export const PublicLawPager = ({
               {t("caseLaw.pagination.refineForMore")}
             </p>
           ) : null}
-          <PublicLawPageSizeLabel>
+          <Label variant="muted">
+            {t("caseLaw.pagination.perPage")}
             <Select
               onValueChange={(value: string | null) => {
                 const next = PUBLIC_LAW_PAGE_SIZES.find(
@@ -135,12 +136,13 @@ export const PublicLawPager = ({
                 ))}
               </SelectPopup>
             </Select>
-          </PublicLawPageSizeLabel>
+          </Label>
         </>
       }
       steps={
         <>
           <StepLink
+            disabledReason={t("common.firstPageReached")}
             label={t("common.previous")}
             onPageRequest={onPageRequest}
             page={model.previousPage}
@@ -162,6 +164,7 @@ export const PublicLawPager = ({
               aria-busy={navigation.isWalking}
               className="h-7 min-h-0"
               disabled={navigation.isWalking}
+              disabledReason={t("common.loading")}
               onClick={navigation.onWalkForward}
               size="sm"
               variant="ghost"
@@ -176,6 +179,11 @@ export const PublicLawPager = ({
             </Button>
           ) : (
             <StepLink
+              disabledReason={
+                navigation.type === "numbered" && navigation.model.beyondReach
+                  ? t("caseLaw.pagination.refineForMore")
+                  : t("common.lastPageReached")
+              }
               label={t("common.next")}
               onPageRequest={onPageRequest}
               page={model.nextPage}
@@ -334,12 +342,14 @@ const PageLink = ({
 
 /** Previous or next, drawn even when there is nowhere to go, so the row holds still. */
 const StepLink = ({
+  disabledReason,
   label,
   onPageRequest,
   page,
   pageLink,
   placement,
 }: {
+  disabledReason: string;
   label: string;
   onPageRequest: (page: number) => void;
   page: number | null;
@@ -347,7 +357,17 @@ const StepLink = ({
   placement: "previous" | "next";
 }) => {
   if (page === null) {
-    return <PublicLawPagerStepDisabled label={label} placement={placement} />;
+    return (
+      <Button
+        className="h-7 min-h-0"
+        disabled
+        disabledReason={disabledReason}
+        size="sm"
+        variant="ghost"
+      >
+        <PublicLawPagerStepLabel label={label} placement={placement} />
+      </Button>
+    );
   }
   return (
     <PageLink

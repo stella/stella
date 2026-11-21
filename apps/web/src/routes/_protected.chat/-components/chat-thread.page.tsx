@@ -125,7 +125,6 @@ import { useQueryViewError } from "@/lib/use-query-view";
 import { ChatBackgroundTasks } from "@/routes/_protected.chat/-components/chat-background-tasks";
 import { ChatThreadFilesButton } from "@/routes/_protected.chat/-components/chat-file-stack";
 import { ChatForkedFromBanner } from "@/routes/_protected.chat/-components/chat-forked-from-banner";
-import { ChatHistoryLink } from "@/routes/_protected.chat/-components/chat-history-link";
 import { CHAT_READING_COLUMN_CLASS_NAME } from "@/routes/_protected.chat/-components/chat-reading-column";
 import { ChatThreadRecap } from "@/routes/_protected.chat/-components/chat-thread-recap";
 import {
@@ -137,6 +136,7 @@ import {
 } from "@/routes/_protected.chat/-components/chat-thread.pending";
 import { ChatTurnAnnouncer } from "@/routes/_protected.chat/-components/chat-turn-announcer";
 import { ChatTurnNavigator } from "@/routes/_protected.chat/-components/chat-turn-navigator";
+import { OrganizationSetupNudge } from "@/routes/_protected.chat/-components/organization-setup-nudge";
 
 // The composer block publishes its live height on this element, the
 // transcript's nearest shared ancestor (see `observeComposerBlock`).
@@ -771,7 +771,6 @@ export const ChatThreadPage = ({
                     className={CHAT_THREAD_MOVE_TO_SIDE_CLASS}
                     onClick={moveToSide}
                   />
-                  <ChatHistoryLink />
                   <NewChatButton
                     hasMessages={messages.length > 0}
                     threadRef={threadRef}
@@ -803,6 +802,7 @@ export const ChatThreadPage = ({
                             prompts={suggestedSkills}
                           />
                         )}
+                        <OrganizationSetupNudge />
                         <GuideNudge />
                       </div>
                     ) : (
@@ -957,6 +957,10 @@ export const ChatThreadPage = ({
               // height, so transcript clearance and the scroll button's
               // offset track the change automatically.
               composerBlockRef={observeComposerBlock}
+              fileDrop={{
+                onDragOver: controller.handleDragOver,
+                onDrop: controller.handleDrop,
+              }}
               aboveComposer={
                 <>
                   {env.VITE_FEATURE_USAGE && <UsageFallbackNotice />}
@@ -1136,7 +1140,12 @@ const NewChatButton = ({
   // /chat/new (or workspace-scoped) redirect helper.
   if (!hasMessages) {
     return (
-      <Button disabled size="sm" tooltip={t("chat.newChat")} variant="ghost">
+      <Button
+        disabled
+        disabledReason={t("chat.newChatRequiresMessage")}
+        size="sm"
+        variant="ghost"
+      >
         <NewChatIcon />
         <span className={CHAT_THREAD_NEW_CHAT_LABEL_CLASS}>
           {t("chat.newChat")}

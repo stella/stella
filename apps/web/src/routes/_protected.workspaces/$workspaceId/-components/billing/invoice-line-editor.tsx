@@ -287,6 +287,7 @@ export const InvoiceLineEditor = ({
           {!isFlatFeeLine && (
             <Button
               disabled={remove.isPending}
+              disabledReason={t("common.removing")}
               onClick={() => remove.mutate()}
               size="sm"
               type="button"
@@ -298,6 +299,7 @@ export const InvoiceLineEditor = ({
           {edited && (
             <Button
               disabled={reset.isPending}
+              disabledReason={t("common.saving")}
               onClick={() => reset.mutate()}
               size="sm"
               type="button"

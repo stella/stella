@@ -1,9 +1,16 @@
-import { Result } from "better-result";
-import { and, eq, sql } from "drizzle-orm";
+import { panic, Result } from "better-result";
+import { and, eq, inArray, sql } from "drizzle-orm";
+
+import { sha256Hex } from "@stll/sha256/bun";
 
 import type { Transaction } from "@/api/db/root";
 import type { SafeDb } from "@/api/db/safe-db";
-import { agentSkillResources, agentSkills } from "@/api/db/schema";
+import {
+  AGENT_SKILL_COMMAND_PATTERN,
+  agentSkillResources,
+  agentSkills,
+  RESERVED_AGENT_SKILL_COMMANDS,
+} from "@/api/db/schema";
 import type { AgentSkillOrigin, AgentSkillScope } from "@/api/db/schema";
 import { UNBOUND } from "@/api/lib/agent-skills/binding";
 import type { SkillBinding } from "@/api/lib/agent-skills/binding";
@@ -11,6 +18,14 @@ import {
   hashSkillPackageContent,
   skillContentHashAfter,
 } from "@/api/lib/agent-skills/content-hash";
+import {
+  abandonSkillResourceOriginals,
+  binarySkillResourceText,
+  originalColumns,
+  publishSkillResourceOriginals,
+  storeSkillResourceOriginals,
+} from "@/api/lib/agent-skills/resource-originals";
+import type { SkillResourceOriginalFile } from "@/api/lib/agent-skills/resource-originals";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -24,14 +39,18 @@ import { LIMITS } from "@/api/lib/limits";
 import { hasManagementPermission } from "@/api/lib/permission-authorization";
 import type { AuthorizedMemberRole } from "@/api/lib/permission-authorization";
 import { PG_ERROR } from "@/api/lib/pg-error";
+import type { writeS3ObjectWithRetry } from "@/api/lib/s3";
 import type {
   FetchedSkillPackage,
   ParsedSkillPackage,
   UrlReplayIdentity,
 } from "@/api/lib/skills/skill-package";
+import { includes } from "@/api/lib/type-guards";
 
 // Advisory-lock namespaces are process-global. Dedicated first keys keep the
 // install caps independent from unrelated org/user locks elsewhere in the API.
+const UTF8_ENCODER = new TextEncoder();
+
 const SKILL_TEAM_CAP_LOCK_NAMESPACE = 0x53_4b_54_4d;
 const SKILL_USER_CAP_LOCK_NAMESPACE = 0x53_4b_55_53;
 
@@ -43,6 +62,12 @@ type InstallSkillSource =
 
 type InstallSkillProps = InstallSkillSource & {
   /**
+   * Files the package keeps as their bytes. Their originals are written to
+   * object storage before the install transaction and handed to their rows
+   * inside it; an install that stores no row for them abandons them.
+   */
+  binaryFiles?: readonly SkillResourceOriginalFile[];
+  /**
    * The matter or client the new skill is bound to, already authorized by
    * the caller (`authorizeSkillBinding`). Absent installs an unbound skill.
    */
@@ -51,6 +76,14 @@ type InstallSkillProps = InstallSkillSource & {
   // existing upload/import callers keep installing enabled skills.
   enabled?: boolean;
   memberRole: AuthorizedMemberRole;
+  /**
+   * What a slug the scope already holds does. `copy` installs the skill
+   * beside it under the next free suffixed slug (`review-2`), keeping its
+   * name and touching nothing that exists; `refuse` (the default) answers
+   * a name conflict. An import copies: a person importing a package never
+   * loses it to a name.
+   */
+  onSlugTaken?: "copy" | "refuse";
   onInstalled?: (
     tx: Transaction,
     skill: { id: SafeId<"agentSkill"> },
@@ -64,6 +97,8 @@ type InstallSkillProps = InstallSkillSource & {
   // blueprints) pass a unique slug to avoid (org, scope, slug) collisions.
   slug?: string;
   user: { id: SafeId<"user"> };
+  /** Injected by tests; production writes originals to object storage. */
+  writeObject?: typeof writeS3ObjectWithRetry;
 };
 
 export const SKILL_INSTALL_ERROR_CODE = {
@@ -211,23 +246,78 @@ const urlReplayIdentityOf = (
 ): UrlReplayIdentity | undefined =>
   source.origin === "url" ? source.parsed.urlReplayIdentity : undefined;
 
+/** Longest slug a skill row stores. */
+const SKILL_SLUG_MAX_CHARS = 64;
+
+/**
+ * Slugs a copy may take, in order: the slug itself, then `slug-2`,
+ * `slug-3`, ... with the base cut short so each stays a valid slug. One past
+ * the per-user cap: a scope cannot hold more copies than that.
+ */
+const skillSlugCandidates = (slug: string): string[] => [
+  slug,
+  ...Array.from({ length: LIMITS.agentSkillsPerUser }, (_, index) => {
+    const suffix = `-${String(index + 2)}`;
+    // A slug never holds two hyphens in a row, so a cut leaves at most one
+    // trailing.
+    const base = slug
+      .slice(0, SKILL_SLUG_MAX_CHARS - suffix.length)
+      .replace(/-$/u, "");
+    return `${base}${suffix}`;
+  }),
+];
+
+/** A command a package carries, or null when it is not one a skill may use. */
+const importedCommand = (command: string | null | undefined): string | null =>
+  typeof command === "string" &&
+  AGENT_SKILL_COMMAND_PATTERN.test(command) &&
+  !includes(RESERVED_AGENT_SKILL_COMMANDS, command)
+    ? command
+    : null;
+
 export const installSkill = async (props: InstallSkillProps) => {
   const {
+    binaryFiles = [],
     binding = UNBOUND,
     enabled = true,
     memberRole,
     onInstalled,
+    onSlugTaken = "refuse",
     origin,
     parsed,
     recordAuditEvent,
     safeDb,
     scope,
     session,
-    slug,
+    slug: requestedSlug,
     user,
+    writeObject,
   } = props;
+  // A stella package restores the slug, display name and command it was
+  // exported with; any other source names the skill after SKILL.md.
+  const slug = requestedSlug ?? parsed.identity?.slug;
+  const name = parsed.identity?.displayName ?? parsed.name;
   const urlReplayIdentity = urlReplayIdentityOf(props);
-  const contentHash = hashSkillPackageContent(parsed);
+  // A binary file is stored with a note saying what it is, as its text.
+  const binaryRows = binaryFiles.map((file) => {
+    const content = binarySkillResourceText({
+      mediaType: file.mediaType,
+      path: file.path,
+      sizeBytes: file.bytes.byteLength,
+    });
+    return {
+      content,
+      originalSha256: sha256Hex(file.bytes),
+      path: file.path,
+      sizeBytes: UTF8_ENCODER.encode(content).byteLength,
+    };
+  });
+  // The hash covers the row as stored, under the name it is stored with.
+  const contentHash = hashSkillPackageContent({
+    ...parsed,
+    name,
+    resources: [...parsed.resources, ...binaryRows],
+  });
   const authorization = authorizeSkillInstallScope({
     boundToMatter: binding.boundWorkspaceId !== null,
     memberRole,
@@ -235,6 +325,16 @@ export const installSkill = async (props: InstallSkillProps) => {
   });
   if (Result.isError(authorization)) {
     return Result.err(authorization.error);
+  }
+
+  const stored = await storeSkillResourceOriginals({
+    files: binaryFiles,
+    organizationId: session.activeOrganizationId,
+    safeDb,
+    ...(writeObject === undefined ? {} : { writeObject }),
+  });
+  if (Result.isError(stored)) {
+    return Result.err(stored.error);
   }
 
   const insertResult = await safeDb(
@@ -340,13 +440,38 @@ export const installSkill = async (props: InstallSkillProps) => {
             }
           }
 
+          const scopeRows = and(
+            eq(agentSkills.organizationId, session.activeOrganizationId),
+            eq(agentSkills.scope, scope),
+            scope === "private" ? eq(agentSkills.userId, user.id) : undefined,
+          );
+          const storedSlug = await freeSlug({
+            onSlugTaken,
+            scopeRows,
+            slug: slug ?? parsed.name,
+            tx: innerTx,
+          });
+          if (storedSlug === null) {
+            return { type: "conflict" };
+          }
+          const command = importedCommand(parsed.identity?.command);
+          // A command another skill of the scope holds stays with that
+          // skill; the import keeps everything else.
+          const commandTaken =
+            command !== null &&
+            (await innerTx.$count(
+              agentSkills,
+              and(scopeRows, eq(agentSkills.command, command)),
+            )) > 0;
+
           const insert = innerTx.insert(agentSkills).values({
             organizationId: session.activeOrganizationId,
             userId: user.id,
             scope,
             origin,
-            slug: slug ?? parsed.name,
-            name: parsed.name,
+            slug: storedSlug,
+            name,
+            command: commandTaken ? null : command,
             description: parsed.description,
             version: parsed.version,
             license: parsed.license,
@@ -376,14 +501,29 @@ export const installSkill = async (props: InstallSkillProps) => {
             return { type: "insert-failed" };
           }
 
-          if (parsed.resources.length > 0) {
+          await publishSkillResourceOriginals(innerTx, stored.value);
+          const resourceRows = [
+            ...parsed.resources.map(({ content, path, sizeBytes }) => ({
+              content,
+              path,
+              sizeBytes,
+            })),
+            ...binaryRows.map(({ content, path, sizeBytes }) => ({
+              content,
+              path,
+              sizeBytes,
+              ...originalColumns(
+                stored.value.originals.get(path) ??
+                  panic("Every binary file was stored before its row"),
+              ),
+            })),
+          ];
+          if (resourceRows.length > 0) {
             await innerTx.insert(agentSkillResources).values(
-              parsed.resources.map((resource) => ({
+              resourceRows.map((resource) => ({
                 organizationId: session.activeOrganizationId,
                 skillId: row.id,
-                path: resource.path,
-                content: resource.content,
-                sizeBytes: resource.sizeBytes,
+                ...resource,
               })),
             );
           }
@@ -398,9 +538,9 @@ export const installSkill = async (props: InstallSkillProps) => {
                 new: {
                   contentHash,
                   origin,
-                  resourceCount: parsed.resources.length,
+                  resourceCount: parsed.resources.length + binaryRows.length,
                   scope,
-                  slug: slug ?? parsed.name,
+                  slug: storedSlug,
                 },
               },
             },
@@ -411,6 +551,11 @@ export const installSkill = async (props: InstallSkillProps) => {
         },
       ),
   );
+
+  if (Result.isError(insertResult) || insertResult.value.type !== "installed") {
+    // No row names the originals: recovery erases them.
+    await abandonSkillResourceOriginals({ safeDb, stored: stored.value });
+  }
 
   if (Result.isError(insertResult)) {
     if (
@@ -476,6 +621,38 @@ export const installSkill = async (props: InstallSkillProps) => {
   }
 
   return Result.ok({ id: insertResult.value.id });
+};
+
+/**
+ * The slug a new skill is stored under: the one asked for when the scope
+ * does not hold it, else under `copy` the first free suffixed one, else
+ * null (a conflict). The caller holds the scope's install lock.
+ */
+const freeSlug = async ({
+  onSlugTaken,
+  scopeRows,
+  slug,
+  tx,
+}: {
+  onSlugTaken: "copy" | "refuse";
+  scopeRows: ReturnType<typeof and>;
+  slug: string;
+  tx: Transaction;
+}): Promise<string | null> => {
+  if (onSlugTaken === "refuse") {
+    // The insert's unique index answers a taken slug as a conflict.
+    return slug;
+  }
+  const candidates = skillSlugCandidates(slug);
+  const taken = new Set(
+    (
+      await tx
+        .select({ slug: agentSkills.slug })
+        .from(agentSkills)
+        .where(and(scopeRows, inArray(agentSkills.slug, candidates)))
+    ).map((row) => row.slug),
+  );
+  return candidates.find((candidate) => !taken.has(candidate)) ?? null;
 };
 
 export const isUnchangedUrlSkill = ({

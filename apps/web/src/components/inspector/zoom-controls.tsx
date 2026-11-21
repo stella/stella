@@ -52,6 +52,7 @@ export const ZoomControls = ({
       <Button
         aria-label={t("common.zoomOut")}
         disabled={atMin}
+        disabledReason={t("common.minZoomReached")}
         onClick={() => onZoom("out")}
         size="icon-xs"
         variant="ghost"
@@ -61,6 +62,7 @@ export const ZoomControls = ({
       <Button
         aria-label={t("common.zoomIn")}
         disabled={atMax}
+        disabledReason={t("common.maxZoomReached")}
         onClick={() => onZoom("in")}
         size="icon-xs"
         variant="ghost"
@@ -70,6 +72,7 @@ export const ZoomControls = ({
       <Button
         aria-label={t("common.resetZoom")}
         disabled={level === DEFAULT_LEVEL}
+        disabledReason={t("common.defaultZoomReached")}
         onClick={onReset}
         size="icon-xs"
         variant="ghost"

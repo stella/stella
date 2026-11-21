@@ -505,7 +505,7 @@ export const QuestionColumnControls = ({
 
   switch (surface.type) {
     case "pending":
-      return <QuestionColumnControlsPending />;
+      return <QuestionColumnControlsPending label={t("common.loading")} />;
     case "error":
       return <QuestionReadError retry={surface.retry} />;
     case "hidden":
@@ -574,6 +574,11 @@ export const QuestionColumnControls = ({
             </AlertDialogClose>
             <Button
               disabled={surface.isRunning || !surface.grants.run}
+              disabledReason={
+                surface.isRunning
+                  ? t("caseLaw.research.runInProgress")
+                  : t("caseLaw.research.runPermissionRequired")
+              }
               onClick={controller.onConfirmRun}
             >
               {t("caseLaw.research.runConfirm")}

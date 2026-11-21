@@ -6,9 +6,7 @@
  *
  * Pure and synchronous: the sandboxed extraction worker imports it too.
  */
-import * as asn1js from "asn1js";
 import { Result, TaggedError } from "better-result";
-import * as pkijs from "pkijs";
 import {
   type Element,
   parseXmlDocument,
@@ -30,6 +28,7 @@ import {
 import { numberFromString } from "@stll/api-contract/http-input";
 import { declareFingerprintFields } from "@stll/errors";
 
+import { readCmsSignedData } from "@/api/lib/files/cms-signed-data";
 import { FILE_SIZE_LIMIT_BYTES } from "@/api/lib/limits";
 
 import type {
@@ -37,10 +36,6 @@ import type {
   DataBoxReceipt,
 } from "./preview-contract";
 
-const SIGNED_DATA_OID = "1.2.840.113549.1.7.2";
-const SIGNING_TIME_OID = "1.2.840.113549.1.9.5";
-const COMMON_NAME_OID = "2.5.4.3";
-const ORGANIZATION_NAME_OID = "2.5.4.10";
 const ISDS_NAMESPACE_PREFIXES = [
   "http://isds.czechpoint.cz/",
   "http://isds.czebox.cz/",
@@ -106,104 +101,29 @@ const UNREAD_SEAL = {
   signedAt: null,
 } as const satisfies DataBoxSeal;
 
-// A constructed OCTET STRING (BER) carries its value in segments.
-const octetStringBytes = (value: asn1js.OctetString): Uint8Array => {
-  if (!value.idBlock.isConstructed) {
-    return value.valueBlock.valueHexView.slice();
-  }
-  const parts: Uint8Array[] = [];
-  for (const segment of value.valueBlock.value) {
-    if (!(segment instanceof asn1js.OctetString)) {
-      return new Uint8Array();
-    }
-    parts.push(octetStringBytes(segment));
-  }
-  return new Uint8Array(Buffer.concat(parts));
-};
-
-const nameAttribute = (name: pkijs.RelativeDistinguishedNames) => {
-  const value = (oid: string) =>
-    name.typesAndValues
-      .find((attribute) => attribute.type === oid)
-      ?.value.getValue() ?? null;
-  return boundedText(value(COMMON_NAME_OID) ?? value(ORGANIZATION_NAME_OID));
-};
-
-const signingTime = (signerInfo: pkijs.SignerInfo | undefined) => {
-  const attribute = signerInfo?.signedAttrs?.attributes.find(
-    ({ type }) => type === SIGNING_TIME_OID,
-  );
-  const value: unknown = attribute?.values.at(0);
-  if (
-    value instanceof asn1js.UTCTime ||
-    value instanceof asn1js.GeneralizedTime
-  ) {
-    const date = value.toDate();
-    return Number.isNaN(date.getTime()) ? null : date.toISOString();
-  }
-  return null;
-};
-
-const readSeal = (signedData: pkijs.SignedData): DataBoxSeal => {
-  const signerInfo = signedData.signerInfos.at(0);
-  const sid: unknown = signerInfo?.sid;
-  const serialNumber =
-    sid instanceof pkijs.IssuerAndSerialNumber
-      ? Buffer.from(sid.serialNumber.valueBlock.valueHexView).toString("hex")
-      : null;
-  const certificate =
-    signedData.certificates?.find(
-      (candidate): candidate is pkijs.Certificate =>
-        candidate instanceof pkijs.Certificate &&
-        (serialNumber === null ||
-          Buffer.from(candidate.serialNumber.valueBlock.valueHexView).toString(
-            "hex",
-          ) === serialNumber),
-    ) ?? null;
-  return {
-    status: "unverified",
-    signerName:
-      certificate === null ? null : nameAttribute(certificate.subject),
-    issuerName: certificate === null ? null : nameAttribute(certificate.issuer),
-    serialNumber,
-    signedAt: signingTime(signerInfo),
-  };
-};
-
 const unwrapSignedData = (
   bytes: Uint8Array,
 ): Result<SignedContent, DataBoxMessageParseError> => {
-  // asn1js throws on some malformed string bodies instead of reporting them.
-  const decoded = Result.try(() => asn1js.fromBER(bytes));
-  if (decoded.isErr() || decoded.value.offset === -1) {
-    return failure("not_signed_data", "The file is not DER data");
-  }
-  const { result: schema } = decoded.value;
-  const read = Result.try(() => {
-    const contentInfo = new pkijs.ContentInfo({ schema });
-    if (contentInfo.contentType !== SIGNED_DATA_OID) {
-      return null;
-    }
-    const signedData = new pkijs.SignedData({ schema: contentInfo.content });
-    const eContent = signedData.encapContentInfo.eContent;
-    if (!(eContent instanceof asn1js.OctetString)) {
-      return null;
-    }
-    // The seal is optional provenance: an unreadable one never fails the
-    // message.
-    const seal = Result.try(() => readSeal(signedData));
-    return {
-      content: octetStringBytes(eContent),
-      seal: seal.isOk() ? seal.value : UNREAD_SEAL,
-    };
-  });
-  if (read.isErr() || read.value === null) {
+  const signedData = readCmsSignedData(bytes);
+  if (signedData.isErr()) {
     return failure("not_signed_data", "The file is not a CMS SignedData");
   }
-  if (read.value.content.byteLength === 0) {
+  const { content, signers } = signedData.value;
+  if (content.byteLength === 0) {
     return failure("not_signed_data", "The signed content is empty");
   }
-  return Result.ok(read.value);
+  const signer = signers.at(0);
+  const seal: DataBoxSeal =
+    signer === undefined
+      ? UNREAD_SEAL
+      : {
+          status: "unverified",
+          signerName: signer.name,
+          issuerName: signer.issuerName,
+          serialNumber: signer.serialNumber,
+          signedAt: signer.signedAt,
+        };
+  return Result.ok({ content, seal });
 };
 
 const isIsdsElement = (element: Element, localName: string) =>

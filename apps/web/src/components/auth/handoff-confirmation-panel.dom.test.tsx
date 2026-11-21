@@ -51,8 +51,8 @@ test("a submitting handoff keeps both actions unavailable", () => {
 
   expect(ui.getByText("zofie@example.test")).toBeDefined();
   expect(ui.getByText("Žofie Nováková")).toBeDefined();
-  expect(confirm.hasAttribute("disabled")).toBe(true);
-  expect(cancel.hasAttribute("disabled")).toBe(true);
+  expect(confirm.getAttribute("aria-disabled")).toBe("true");
+  expect(cancel.getAttribute("aria-disabled")).toBe("true");
   expect(onConfirm).not.toHaveBeenCalled();
   expect(onCancel).not.toHaveBeenCalled();
 

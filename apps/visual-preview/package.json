@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "install:browser": "playwright-core install chromium",
+    "install:browser": "bun --bun playwright-core install chromium",
     "test": "bun test src",
     "test:browser": "bun test browser ../../scripts/browser/visual-preview-composition.spec.ts",
     "typecheck": "bun check --no-pretty --all --project=tsconfig.json",
@@ -14,7 +14,7 @@
     "@sparticuz/chromium-min": "153.0.0",
     "@stll/api-contract": "workspace:*",
     "better-result": "catalog:",
-    "playwright-core": "1.65.0",
+    "playwright-core": "1.65.1",
     "valibot": "catalog:"
   },
   "devDependencies": {

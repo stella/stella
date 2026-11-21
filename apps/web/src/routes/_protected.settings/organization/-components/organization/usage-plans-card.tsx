@@ -1,15 +1,15 @@
 import { useState } from "react";
 
 import { useMutation, useQuery } from "@tanstack/react-query";
+import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 
 import { toMajorUnits } from "@stll/money";
 import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
-import { Frame, FramePanel } from "@stll/ui/frame";
 import { Label } from "@stll/ui/label";
 import { NumberInput } from "@stll/ui/number-input";
-import { Skeleton } from "@stll/ui/skeleton";
+import { SettingsPanel, SettingsSection } from "@stll/ui/settings";
 
 import { useFormatter } from "@/i18n/formatting-context";
 import type { TranslationKey } from "@/i18n/types";
@@ -21,35 +21,38 @@ import { notifyUserError } from "@/lib/errors/user-toast";
 import { usagePoliciesOptions } from "@/routes/_protected.settings/organization/-queries/usage-policies";
 import type { UsagePolicyEntry } from "@/routes/_protected.settings/organization/-queries/usage-policies";
 
+import {
+  UsagePlanRowFace,
+  UsagePlanSection,
+  UsagePlansPending,
+} from "./usage-plans-card.pending";
+
 /**
  * Catalog of subscription plans and one-time packs with hosted checkout.
  * Rendered only behind the usage feature flag; on deployments without a
  * seeded catalog the empty list renders nothing at all.
  */
 export function UsagePlansCard({
-  packsPurchasable,
+  packCheckoutDisabledReason,
 }: {
   /**
-   * Whether the organisation can buy add-on packs right now (a
-   * consumable hosted entitlement exists). The server enforces this
-   * on setup; the flag keeps the button honest instead of letting a
-   * click round-trip into a rejection.
+   * Add-on checkout requires a consumable hosted entitlement.
    */
-  packsPurchasable: boolean;
+  packCheckoutDisabledReason: string | undefined;
 }) {
   const t = useTranslations();
   const { data, isLoading, isError, refetch } = useQuery(usagePoliciesOptions);
 
   if (isLoading) {
-    return <PlansSkeleton />;
+    return <UsagePlansPending />;
   }
   // A failed catalog read must not masquerade as an empty catalog:
   // purchasing silently vanishing is indistinguishable from "nothing
   // for sale" and would hide real outages.
   if (isError) {
     return (
-      <Frame>
-        <FramePanel>
+      <SettingsSection>
+        <SettingsPanel>
           <p className="text-muted-foreground text-sm">
             {t("errors.actionFailed")}
           </p>
@@ -62,8 +65,8 @@ export function UsagePlansCard({
           >
             {t("common.retry")}
           </Button>
-        </FramePanel>
-      </Frame>
+        </SettingsPanel>
+      </SettingsSection>
     );
   }
   // Unseeded deployment: nothing to sell, render nothing.
@@ -81,78 +84,73 @@ export function UsagePlansCard({
   return (
     <>
       {subscriptions.length > 0 && (
-        <Frame>
-          <FramePanel>
-            <h2 className="text-lg font-medium">
-              {t("settings.organization.usagePlansTitle")}
-            </h2>
-            <p className="text-muted-foreground mt-1 text-sm">
-              {t("settings.organization.usagePlansDescription")}
-            </p>
-            <ul className="mt-4 space-y-3">
-              {subscriptions.map((policy) => (
-                <PolicyRow
-                  key={policy.id}
-                  policy={policy}
-                  purchasable
-                  withSeats
-                />
-              ))}
-            </ul>
-          </FramePanel>
-        </Frame>
+        <UsagePlanSection kind="subscription">
+          {subscriptions.map((policy) => (
+            <PolicyRow key={policy.id} policy={policy} withSeats />
+          ))}
+        </UsagePlanSection>
       )}
       {packs.length > 0 && (
-        <Frame>
-          <FramePanel>
-            <h2 className="text-lg font-medium">
-              {t("settings.organization.usagePacksTitle")}
-            </h2>
-            <p className="text-muted-foreground mt-1 text-sm">
-              {t("settings.organization.usagePacksDescription")}
-            </p>
-            <ul className="mt-4 space-y-3">
-              {packs.map((policy) => (
-                <PolicyRow
-                  key={policy.id}
-                  policy={policy}
-                  purchasable={packsPurchasable}
-                  withSeats={false}
-                />
-              ))}
-            </ul>
-          </FramePanel>
-        </Frame>
+        <UsagePlanSection kind="addon">
+          {packs.map((policy) => (
+            <PolicyRow
+              key={policy.id}
+              policy={policy}
+              entitlementBlocker={packCheckoutDisabledReason}
+              withSeats={false}
+            />
+          ))}
+        </UsagePlanSection>
       )}
     </>
-  );
-}
-
-function PlansSkeleton() {
-  return (
-    <Frame>
-      <FramePanel>
-        <Skeleton className="h-6 w-32" />
-        <Skeleton className="mt-2 h-4 w-64 max-w-full" />
-        <div className="mt-4 space-y-3">
-          <Skeleton className="h-14 w-full rounded-md" />
-          <Skeleton className="h-14 w-full rounded-md" />
-        </div>
-      </FramePanel>
-    </Frame>
   );
 }
 
 const MIN_SEATS = 1;
 const MAX_SEATS = 1000;
 
+type CheckoutBlockerOptions = {
+  pending: boolean;
+  entitlementBlocker: string | undefined;
+  checkout: UsagePolicyEntry["hostedCheckout"];
+};
+
+const checkoutBlocker = (
+  { pending, entitlementBlocker, checkout }: CheckoutBlockerOptions,
+  t: (
+    key:
+      | "common.preparing"
+      | "settings.organization.usageCheckoutProviderUnavailable"
+      | "settings.organization.usagePlanCheckoutUnavailable",
+  ) => string,
+) => {
+  if (pending) {
+    return t("common.preparing");
+  }
+  if (entitlementBlocker !== undefined) {
+    return entitlementBlocker;
+  }
+  if (checkout.status === "available") {
+    return undefined;
+  }
+  switch (checkout.reason) {
+    case "provider_unavailable":
+      return t("settings.organization.usageCheckoutProviderUnavailable");
+    case "policy_unavailable":
+      return t("settings.organization.usagePlanCheckoutUnavailable");
+    default:
+      checkout.reason satisfies never;
+      return panic("Unhandled checkout blocker");
+  }
+};
+
 function PolicyRow({
   policy,
-  purchasable,
+  entitlementBlocker,
   withSeats,
 }: {
   policy: UsagePolicyEntry;
-  purchasable: boolean;
+  entitlementBlocker?: string | undefined;
   withSeats: boolean;
 }) {
   const t = useTranslations();
@@ -161,6 +159,10 @@ function PolicyRow({
   const [pending, setPending] = useState(false);
   const perSeat = policy.price?.basis === "per_seat";
   const seatsInputId = `usage-plan-seats-${policy.id}`;
+  const disabledReason = checkoutBlocker(
+    { pending, entitlementBlocker, checkout: policy.hostedCheckout },
+    t,
+  );
 
   const checkout = useMutation({
     mutationFn: async () => {
@@ -185,19 +187,47 @@ function PolicyRow({
   });
 
   return (
-    <li className="border-border flex flex-wrap items-center justify-between gap-3 rounded-md border p-3">
-      <div className="min-w-0 space-y-0.5">
-        <div className="font-medium">
-          <BidiText>{policy.displayName}</BidiText>
-        </div>
-        {policy.description && (
-          <p className="text-muted-foreground text-sm">
-            <BidiText>{policy.description}</BidiText>
-          </p>
-        )}
-        {policy.price && (
-          <p className="text-sm">
-            {t(PRICE_TEMPLATE_KEYS[priceShapeOf(policy.price)], {
+    <UsagePlanRowFace
+      actions={
+        <>
+          {withSeats && perSeat && (
+            <>
+              <Label htmlFor={seatsInputId} variant="muted">
+                {t("settings.organization.usagePlanSeats")}
+              </Label>
+              <NumberInput
+                className="w-20"
+                id={seatsInputId}
+                max={MAX_SEATS}
+                min={MIN_SEATS}
+                onValueChange={(next) => {
+                  if (next !== null && Number.isInteger(next)) {
+                    setSeats(Math.min(Math.max(next, MIN_SEATS), MAX_SEATS));
+                  }
+                }}
+                size="sm"
+                step={1}
+                value={seats}
+              />
+            </>
+          )}
+          <Button
+            disabled={disabledReason !== undefined}
+            disabledReason={disabledReason}
+            onClick={() => checkout.mutate()}
+          >
+            {t("settings.organization.usagePlanCheckout")}
+          </Button>
+        </>
+      }
+      description={
+        policy.description ? (
+          <BidiText>{policy.description}</BidiText>
+        ) : undefined
+      }
+      offerLine={
+        policy.price
+          ? t(PRICE_TEMPLATE_KEYS[priceShapeOf(policy.price)], {
               price: format.number(
                 toMajorUnits({
                   amountCents: policy.price.amountCents,
@@ -205,44 +235,11 @@ function PolicyRow({
                 }),
                 { style: "currency", currency: policy.price.currency },
               ),
-            })}
-          </p>
-        )}
-      </div>
-      <div className="flex items-center gap-2">
-        {withSeats && perSeat && (
-          <>
-            <Label htmlFor={seatsInputId} variant="muted">
-              {t("settings.organization.usagePlanSeats")}
-            </Label>
-            <NumberInput
-              className="w-20"
-              id={seatsInputId}
-              max={MAX_SEATS}
-              min={MIN_SEATS}
-              onValueChange={(next) => {
-                if (next !== null && Number.isInteger(next)) {
-                  setSeats(Math.min(Math.max(next, MIN_SEATS), MAX_SEATS));
-                }
-              }}
-              size="sm"
-              step={1}
-              value={seats}
-            />
-          </>
-        )}
-        <Button
-          disabled={
-            pending ||
-            !purchasable ||
-            policy.hostedCheckout.status !== "available"
-          }
-          onClick={() => checkout.mutate()}
-        >
-          {t("settings.organization.usagePlanCheckout")}
-        </Button>
-      </div>
-    </li>
+            })
+          : undefined
+      }
+      title={<BidiText>{policy.displayName}</BidiText>}
+    />
   );
 }
 

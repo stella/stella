@@ -4,8 +4,9 @@
 //! The choice is stored by the device's stable id (the CoreAudio device UID
 //! on a Mac, the endpoint id on Windows), never by its place in the list,
 //! with its name beside it so a missing device can still be named. Absent:
-//! the system default. A chosen device that is not connected at the press
-//! falls back to the system default, and the dictation notice says so.
+//! the system default, except that a Bluetooth default gives way to the
+//! built-in microphone. A chosen device that is not connected at the press
+//! falls back to the same, and the dictation notice says so.
 //!
 //! The test opens the selected device and reports only levels: the audio
 //! stays in memory for the meter and is never stored, sent or transcribed.
@@ -34,6 +35,26 @@ pub struct InputDevice {
   /// Bluetooth headsets switch profile before their microphone records,
   /// and record at lower quality.
   pub bluetooth: bool,
+  /// Part of the computer itself, such as a laptop's microphone.
+  #[serde(skip)]
+  pub built_in: bool,
+}
+
+/// What dictation records from without a choice: the system default, unless
+/// that is a Bluetooth headset and a built-in microphone is connected. A
+/// headset's microphone switches it to its call profile, which records at
+/// lower quality and lowers the sound it plays while dictation listens.
+pub fn without_choice<'a>(
+  system_default: &'a InputDevice,
+  devices: &'a [InputDevice],
+) -> &'a InputDevice {
+  if !system_default.bluetooth {
+    return system_default;
+  }
+  devices
+    .iter()
+    .find(|device| device.built_in)
+    .unwrap_or(system_default)
 }
 
 /// The stored choice of microphone.
@@ -312,7 +333,8 @@ struct LevelEvent {
   device: Option<String>,
 }
 
-/// Sent to the Settings window about 25 times a second while a test runs.
+/// Sent to the window that started the test (Settings or setup) about 25
+/// times a second while it runs.
 const LEVEL_EVENT: &str = "dictation-microphone-level";
 /// Payload-free: the test stopped, on its own or when asked.
 const ENDED_EVENT: &str = "dictation-microphone-test-ended";
@@ -328,6 +350,7 @@ pub fn stop_test(app: &tauri::AppHandle) {
 #[cfg(dictation)]
 fn run_test(
   app: &tauri::AppHandle,
+  target: &str,
   choice: Option<Choice>,
   stopped: &std::sync::mpsc::Receiver<()>,
 ) {
@@ -335,12 +358,11 @@ fn run_test(
 
   use tauri::Emitter;
 
-  let settings = crate::SETTINGS_WINDOW_LABEL;
   let Some(recorder) = crate::dictation_engine::Recorder::start(choice) else {
     let reading = LevelMeter::default().push(&[], SILENCE_LIMIT);
     crate::logging::best_effort(
       app.emit_to(
-        settings,
+        target,
         LEVEL_EVENT,
         LevelEvent {
           reading,
@@ -350,7 +372,7 @@ fn run_test(
       "microphone level was not sent",
     );
     crate::logging::best_effort(
-      app.emit_to(settings, ENDED_EVENT, ()),
+      app.emit_to(target, ENDED_EVENT, ()),
       "test end was not sent",
     );
     return;
@@ -363,7 +385,7 @@ fn run_test(
     let reading = meter.push(&mono, started.elapsed());
     crate::logging::best_effort(
       app.emit_to(
-        settings,
+        target,
         LEVEL_EVENT,
         LevelEvent {
           reading,
@@ -378,17 +400,18 @@ fn run_test(
   }
   drop(recorder);
   crate::logging::best_effort(
-    app.emit_to(settings, ENDED_EVENT, ()),
+    app.emit_to(target, ENDED_EVENT, ()),
     "test end was not sent",
   );
 }
 
-/// Listens to `id`, or the system default, and sends its level to Settings
-/// until it is stopped or `TEST_LIMIT` passes. Refused while a dictation
-/// records.
+/// Listens to `id`, or the system default, and sends its level to the
+/// window that asked until it is stopped or `TEST_LIMIT` passes. Refused
+/// while a dictation records.
 #[tauri::command]
 pub async fn dictation_test_microphone_start(
   app: tauri::AppHandle,
+  window: tauri::WebviewWindow,
   id: Option<String>,
 ) -> Result<(), String> {
   use tauri::Manager;
@@ -404,9 +427,10 @@ pub async fn dictation_test_microphone_start(
     let (stop, stopped) = std::sync::mpsc::channel();
     app.state::<MicrophoneTest>().replace(Some(stop));
     let test_app = app.clone();
+    let target = window.label().to_string();
     std::thread::Builder::new()
       .name("dictation-microphone-test".to_string())
-      .spawn(move || run_test(&test_app, choice, &stopped))
+      .spawn(move || run_test(&test_app, &target, choice, &stopped))
       .map(|_| ())
       .map_err(crate::logging::with_cause_logged(
         "the microphone test could not start",
@@ -414,7 +438,7 @@ pub async fn dictation_test_microphone_start(
   }
   #[cfg(not(dictation))]
   {
-    let _ = (app.state::<MicrophoneTest>(), id);
+    let _ = (app.state::<MicrophoneTest>(), window, id);
     Err("dictation is not available on this computer".to_string())
   }
 }
@@ -436,7 +460,28 @@ mod tests {
       id: id.to_string(),
       name: name.to_string(),
       bluetooth: false,
+      built_in: false,
     }
+  }
+
+  #[test]
+  fn a_bluetooth_default_gives_way_to_the_built_in_microphone() {
+    let headset = InputDevice {
+      bluetooth: true,
+      ..device("coreaudio:headset", "Headset")
+    };
+    let built_in = InputDevice {
+      built_in: true,
+      ..device("coreaudio:built-in", "Built-in Microphone")
+    };
+    let usb = device("coreaudio:usb", "USB Microphone");
+    let devices = [headset.clone(), usb.clone(), built_in.clone()];
+
+    assert_eq!(without_choice(&headset, &devices), &built_in);
+    // Any other default records as it is.
+    assert_eq!(without_choice(&usb, &devices), &usb);
+    // Without a built-in microphone, the headset still records.
+    assert_eq!(without_choice(&headset, &devices[..2]), &headset);
   }
 
   fn tone(amplitude: f32, count: usize) -> Vec<f32> {

@@ -39,6 +39,8 @@ import {
   documentWriteRefusal,
   DocumentWriteRefusedError,
 } from "@/api/lib/entities/authorize-document-write";
+import { authorizeBufferWrite } from "@/api/lib/entities/buffer-write-authority";
+import type { BufferWriteAuthority } from "@/api/lib/entities/buffer-write-authority";
 import {
   insertNamedEntity,
   resolveSiblingNameForInsert,
@@ -104,6 +106,8 @@ type CreateEntityFromBufferInput = {
         sourceWorkspaceId: SafeId<"workspace">;
       }
     | undefined;
+  /** Required: a delayed member action rechecks its authority before any lock. */
+  authority: BufferWriteAuthority;
   /** Provenance of the first version's bytes; recorded on the audit event too. */
   source?: DocumentSource | undefined;
   afterCreate?:
@@ -187,6 +191,7 @@ export const createEntityFromBuffer = async ({
   parentId,
   scanWarnings,
   provenance,
+  authority,
   source,
   afterCreate,
   dependencies = defaultCreateEntityFromBufferDependencies,
@@ -389,6 +394,10 @@ export const createEntityFromBuffer = async ({
     const transactionState = { durableReferencePrepared: false };
     try {
       await scopedDb(async (tx) => {
+        // Delayed actors must lock their current authority before the
+        // workspace cap/lifecycle row. This preserves the canonical member →
+        // assignment → workspace lock order used by role and access changes.
+        await authorizeBufferWrite(authority, tx);
         // See `lockWorkspacesForEntityCap` for the canonical lock
         // order every entity-creating path follows (issue #1139).
         const workspaceStatus = await lockWorkspaceForEntityCreate(

@@ -241,6 +241,9 @@ export const TemplatePrefillPanel = ({
           <Button
             className="self-end"
             disabled={!hasSource || loading}
+            disabledReason={
+              loading ? t("common.loading") : t("templates.choosePrefillSource")
+            }
             onClick={() =>
               detached(runPrefill(), "template-prefill-panel.run-prefill")
             }

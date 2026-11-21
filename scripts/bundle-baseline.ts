@@ -10,8 +10,9 @@
 //
 // --check blocks on the startup gates (scripts/bundle-startup-gates.ts): the
 // gzip of the initial chunks against the committed `initial` budget, the size
-// of the eager pending views, page code in the initial chunks, and pages a
-// route loads outside its manifest preloads. Worker-only groups appearing in
+// of the eager pending views against the committed `pending` total, page
+// code in the initial chunks, and pages a route loads outside its manifest
+// preloads. Worker-only groups appearing in
 // the main bundle block too, because their budget is exactly zero. The
 // duplicate-content guard (--check-duplicates) is a separate, blocking check:
 // a chunk that carries the same large block twice is a build defect, not
@@ -24,7 +25,7 @@
 //
 // Modes:
 //   bun scripts/bundle-baseline.ts                    report groups + gzip sizes
-//   bun scripts/bundle-baseline.ts --write-baseline    regenerate the groups and the initial budget
+//   bun scripts/bundle-baseline.ts --write-baseline    regenerate the groups, `initial` and `pending`
 //   bun --preload ./scripts/offline-network-preload.ts scripts/bundle-baseline.ts --check
 //                                                     startup gates + worker-only groups (blocking)
 //   bun scripts/bundle-baseline.ts --check-duplicates  duplicate-content guard (blocking)
@@ -50,7 +51,7 @@ import { readStartupGraph } from "./bundle-startup-build";
 import {
   evaluateStartup,
   initialGzipBytes,
-  StartupLedgerSchema,
+  pendingLayer,
   startupSummary,
 } from "./bundle-startup-gates";
 import { assertOfflineCheckPreload } from "./offline-check-startup";
@@ -63,8 +64,6 @@ const DIST_REL = "apps/web/dist";
 const DIST_DIR = path.resolve(REPO_ROOT, DIST_REL);
 const ASSETS_REL = `${DIST_REL}/client/assets`;
 const ASSETS_DIR = path.resolve(REPO_ROOT, ASSETS_REL);
-const LEDGER_REL = "scripts/bundle-startup-ledger.json";
-const LEDGER_PATH = path.resolve(REPO_ROOT, LEDGER_REL);
 const SCAN_ENGINE_WASM = path.resolve(
   REPO_ROOT,
   "packages/scan-engine/generated/scan_engine_bg.wasm",
@@ -302,6 +301,12 @@ const readInitialBudget = (): number | undefined =>
     readBaselineJson(),
   ).initial;
 
+const readPendingTotal = (): number | undefined =>
+  v.parse(
+    v.object({ pending: v.optional(v.pipe(v.number(), v.integer())) }),
+    readBaselineJson(),
+  ).pending;
+
 // Copies every GROUP_KEYS value onto emptySizes' (alphabetical) literal, so
 // the written file's key set and order come from the one compiler-guarded
 // copy. A second spelled-out literal here once silently dropped keys the
@@ -314,13 +319,18 @@ const sortedSizes = (sizes: Sizes): Sizes => {
   return sorted;
 };
 
-const writeBaseline = (sizes: Sizes, initial: number): void => {
+const writeBaseline = (
+  sizes: Sizes,
+  initial: number,
+  pending: number,
+): void => {
   const mcpApps = readMcpAppsBudgets();
   writeFileSync(
     BASELINE_PATH,
     `${JSON.stringify(
       {
         initial,
+        pending,
         ...sortedSizes(sizes),
         ...(mcpApps === undefined ? {} : { mcpApps }),
       },
@@ -424,9 +434,11 @@ const runWrite = (): number => {
     return 1;
   }
   const initial = initialGzipBytes(startup.graph);
-  writeBaseline(measured.sizes, initial);
+  const pending = pendingLayer(startup.graph).totalBytes;
+  writeBaseline(measured.sizes, initial, pending);
   console.log(`Wrote bundle baseline to ${BASELINE_REL}:`);
   console.log(`  ${"initial".padEnd(20)} ${kib(initial).padStart(12)}`);
+  console.log(`  ${"pending".padEnd(20)} ${kib(pending).padStart(12)}`);
   for (const key of GROUP_KEYS) {
     console.log(`  ${key.padEnd(20)} ${kib(measured.sizes[key]).padStart(12)}`);
   }
@@ -446,17 +458,24 @@ const runCheck = (): number => {
     );
     return 1;
   }
+  const pending = readPendingTotal();
+  if (pending === undefined) {
+    console.error(
+      `${BASELINE_REL} has no pending total. Seed it with \`${WRITE_HINT}\` and commit it.`,
+    );
+    return 1;
+  }
   const startup = readStartupGraph(DIST_DIR);
   if (!startup.ok) {
     console.error(startup.error);
     return 1;
   }
-  const ledger = v.parse(
-    StartupLedgerSchema,
-    JSON.parse(readFileSync(LEDGER_PATH, "utf-8")),
-  );
   const workerOnly = checkWorkerOnlyGroups(measured.sizes, console.log);
-  const evaluation = evaluateStartup(startup.graph, budget, ledger, WRITE_HINT);
+  const evaluation = evaluateStartup(
+    startup.graph,
+    { initial: budget, pending },
+    WRITE_HINT,
+  );
   const summary = startupSummary(evaluation);
   console.log(summary);
   const summaryPath = process.env["GITHUB_STEP_SUMMARY"];
@@ -464,7 +483,7 @@ const runCheck = (): number => {
     appendFileSync(summaryPath, summary);
   }
   for (const notice of evaluation.notices) {
-    console.log(`::notice title=Initial JS shrank::${notice}`);
+    console.log(`::notice title=Startup bundle::${notice}`);
   }
   for (const { title, message } of evaluation.failures) {
     console.log(`::error title=${title}::${message}`);

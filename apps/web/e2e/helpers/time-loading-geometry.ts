@@ -1,11 +1,12 @@
 import { expect } from "@playwright/test";
-import type { Browser, Page } from "@playwright/test";
+import type { Browser } from "@playwright/test";
 import * as v from "valibot";
 
 import cs from "../../src/i18n/langs/cs.json" with { type: "json" };
 import en from "../../src/i18n/langs/en.json" with { type: "json" };
-import { E2E_API_ORIGIN } from "./api";
+import { apiDelete, apiPost, apiPut, E2E_API_ORIGIN } from "./api";
 import { setPresentationPrefs } from "./presentation-prefs";
+import { captureLandmarks } from "./stable-geometry";
 import { createBrowserErrorCollector } from "./test";
 
 const VIEWPORT = { width: 1440, height: 900 };
@@ -13,8 +14,30 @@ const LANGUAGES = [
   { locale: "en", browserLocale: "en-US", messages: en },
   { locale: "cs", browserLocale: "cs-CZ", messages: cs },
 ] as const;
+type CommonSurface = {
+  path: string;
+  busy: string;
+  landmarks: Readonly<Record<string, string>>;
+};
+
+type LoadingSurface = CommonSurface &
+  (
+    | { type: "steady" }
+    | {
+        type: "date";
+        apiPath: string;
+        nextLabel: (messages: typeof en | typeof cs) => string;
+      }
+    | {
+        type: "filter";
+        apiPath: string;
+        filter: (messages: typeof en | typeof cs) => string;
+      }
+  );
+
 const SURFACES = [
   {
+    type: "date",
     path: "/time?date=2026-11-04",
     apiPath: "/v1/time-entries/me",
     busy: "main section:has(#my-week-day-title) ul[aria-busy=true]",
@@ -28,6 +51,7 @@ const SURFACES = [
     },
   },
   {
+    type: "date",
     path: "/time/report?period=week&from=2026-11-02&to=2026-11-08",
     apiPath: "/v1/time-entries/report",
     busy: "main section[aria-busy=true]:has(table)",
@@ -40,44 +64,144 @@ const SURFACES = [
       firstRow: "tbody tr",
     },
   },
-] as const;
+  {
+    type: "steady",
+    path: "/settings/organization/members",
+    busy: "table:first-of-type tbody[aria-busy=true]",
+    landmarks: {
+      heading: "h1",
+      section: "h2",
+      table: "table",
+      firstRow: "tbody tr",
+    },
+  },
+  {
+    type: "filter",
+    path: "/settings/organization/audit-logs",
+    apiPath: "/v1/audit-logs",
+    busy: "tbody[aria-busy=true]",
+    filter: (messages) =>
+      messages.settings.organization.auditLogsResourceTypePlaceholder,
+    landmarks: {
+      heading: "h1",
+      filters: "[data-slot=settings-panel] .grid.items-end",
+      table: "table",
+      firstRow: "tbody tr",
+    },
+  },
+] as const satisfies readonly LoadingSurface[];
 
-const captureLandmarks = async (
-  page: Page,
-  landmarks: Readonly<Record<string, string>>,
-) =>
-  await page.evaluate(
-    (selectors) =>
-      Object.fromEntries(
-        Object.entries(selectors).map(([name, selector]) => {
-          const box = document.querySelector(selector)?.getBoundingClientRect();
-          return [
-            name,
-            box === undefined
-              ? null
-              : {
-                  top: box.top,
-                  left: box.left,
-                  width: box.width,
-                  height: box.height,
-                },
-          ];
-        }),
-      ),
-    landmarks,
-  );
+/**
+ * The inbox and contact surfaces, recorded as evidence beside the others: the
+ * contacts list, one contact (a fixture the measurement creates) and the
+ * inbox, whose body the cold paint leaves to the layout this browser keeps.
+ */
+const contactSurfaces = (contactId: string): readonly LoadingSurface[] => [
+  {
+    type: "steady",
+    path: "/contacts",
+    busy: "tbody tr[aria-hidden=true]",
+    landmarks: {
+      heading: "thead",
+      table: "table",
+      firstRow: "tbody tr",
+    },
+  },
+  {
+    type: "steady",
+    path: `/contacts/${contactId}`,
+    busy: "h1 [data-slot=face-label-skeleton]",
+    landmarks: {
+      heading: "h1",
+      firstSection: "section",
+      secondSection: "section ~ section",
+    },
+  },
+  {
+    type: "steady",
+    path: "/inbox",
+    busy: "[data-slot=entity-view-kanban-pending], [data-slot=entity-view-table-pending]",
+    landmarks: {
+      heading: "fieldset",
+      body: "[data-kanban-column-header], [data-slot=workspace-grid-head]",
+    },
+  },
+];
 
-type MeasureTimeLoadingOptions = {
+/**
+ * An organization skill's page, recorded as evidence beside the others: the
+ * editor's identity block, how the skill runs and its files, on a skill the
+ * measurement creates.
+ */
+const skillSurfaces = (skillId: string): readonly LoadingSurface[] => [
+  {
+    type: "steady",
+    path: `/knowledge/tools/skills/${skillId}`,
+    busy: "[data-slot=file-tree-row-pending]",
+    landmarks: {
+      heading: "[data-slot=skill-editor-identity]",
+      runs: "[data-slot=skill-editor-identity] .grid",
+      files: "[data-slot=skill-editor-files]",
+    },
+  },
+];
+
+/**
+ * The Knowledge sections, recorded as evidence beside the others: the
+ * landing, whose cold paint leaves its cards to the sections this browser
+ * last saw, the clause library and the house styles.
+ */
+const KNOWLEDGE_SURFACES = [
+  {
+    type: "steady",
+    path: "/knowledge",
+    busy: "[data-slot=knowledge-section-card-pending]",
+    landmarks: {
+      heading: "[data-slot=knowledge-landing]",
+      firstCard: "[data-slot=knowledge-landing] > div > *",
+    },
+  },
+  {
+    type: "steady",
+    path: "/knowledge/clauses",
+    busy: "[data-slot=knowledge-rows-pending]",
+    landmarks: {
+      heading: "[data-slot=clause-list-toolbar]",
+      sidebar: "[data-slot=category-sidebar]",
+      body: "[data-slot=clause-list-body]",
+    },
+  },
+  {
+    type: "steady",
+    path: "/knowledge/styles",
+    busy: "[data-slot=style-set-list] > li[aria-hidden=true]",
+    landmarks: {
+      heading: "h1",
+      header: "div:has(> div > h1)",
+      firstRow: "[data-slot=style-set-list] > li",
+    },
+  },
+] as const satisfies readonly LoadingSurface[];
+
+/** The fixed surfaces a set measures (the contacts set builds its own). */
+const surfaceSet = (set: "time-admin" | "knowledge") =>
+  set === "knowledge" ? KNOWLEDGE_SURFACES : SURFACES;
+
+type MeasureLoadingGeometryOptions = {
   browser: Browser;
   baseURL: string;
   storageState: string;
+  /** Which surfaces to measure: time and admin, inbox and contacts, the
+   *  Knowledge sections, or a Knowledge skill's page. */
+  set?: "time-admin" | "contacts" | "knowledge" | "knowledge-skill" | undefined;
 };
 
-export const measureTimeLoadingGeometry = async ({
+export const measureLoadingGeometry = async ({
   browser,
   baseURL,
   storageState,
-}: MeasureTimeLoadingOptions) => {
+  set = "time-admin",
+}: MeasureLoadingGeometryOptions) => {
   const account = await browser.newContext({ baseURL, storageState });
   try {
     const session = await account.request.get(
@@ -99,6 +223,42 @@ export const measureTimeLoadingGeometry = async ({
       await expect(response).toBeOK();
     };
 
+    const contact =
+      set === "contacts"
+        ? v.parse(
+            v.object({ id: v.string() }),
+            await apiPut(account.request, "/contacts", {
+              type: "organization",
+              displayName: "Geometry fixture s.r.o.",
+              organizationName: "Geometry fixture s.r.o.",
+            }),
+          )
+        : null;
+    const skill =
+      set === "knowledge-skill"
+        ? v.parse(
+            v.object({ id: v.string() }),
+            await apiPost(account.request, "/skills", {
+              scope: "private",
+              name: "Geometry fixture skill",
+              description: "Geometry fixture",
+              body: "Fixture instructions.",
+            }),
+          )
+        : null;
+    // The fixture's own surfaces, where the set made one.
+    const fixtureSurfaces = (): readonly LoadingSurface[] | null => {
+      if (contact !== null) {
+        return contactSurfaces(contact.id);
+      }
+      if (skill !== null) {
+        return skillSurfaces(skill.id);
+      }
+      return null;
+    };
+    const surfaces =
+      fixtureSurfaces() ??
+      surfaceSet(set === "knowledge" ? "knowledge" : "time-admin");
     const evidence = [];
     try {
       for (const { locale, browserLocale, messages } of LANGUAGES) {
@@ -130,12 +290,15 @@ export const measureTimeLoadingGeometry = async ({
           const errors = createBrowserErrorCollector();
           const detach = errors.trackPage(page);
           try {
-            for (const surface of SURFACES) {
+            for (const surface of surfaces) {
               await serverPage.goto(surface.path);
-              // Protected routes render a shared cold shell before locale hydration.
+              // The server paints every page in the presentation the cookie
+              // names, a member page's cold shell (whose root does not load
+              // there) included, so hydration never flips its language.
               const serverDocumentLanguage = await serverPage
                 .locator("html")
                 .getAttribute("lang");
+              expect(serverDocumentLanguage).toBe(locale);
               await expect(
                 serverPage.locator(surface.landmarks.heading),
               ).toBeVisible();
@@ -148,15 +311,34 @@ export const measureTimeLoadingGeometry = async ({
                 "lang",
                 locale,
               );
-              const next = page.getByRole("button", {
-                name: surface.nextLabel(messages),
-                exact: true,
-              });
-              await expect(next).toBeEnabled();
               const busy = page.locator(surface.busy);
+              await expect(busy).toHaveCount(0);
+              const rowSelector =
+                "firstRow" in surface.landmarks
+                  ? surface.landmarks.firstRow
+                  : surface.landmarks.heading;
+              await expect(page.locator(rowSelector).first()).toBeVisible();
               await expect(busy).toHaveCount(0);
               const loaded = await captureLandmarks(page, surface.landmarks);
 
+              if (surface.type === "steady") {
+                evidence.push({
+                  locale,
+                  route: surface.path,
+                  serverDocumentLanguage,
+                  server,
+                  loaded,
+                });
+                continue;
+              }
+              const next =
+                surface.type === "date"
+                  ? page.getByRole("button", {
+                      name: surface.nextLabel(messages),
+                      exact: true,
+                    })
+                  : page.getByPlaceholder(surface.filter(messages));
+              await expect(next).toBeEnabled();
               const isDataRequest = (url: URL) =>
                 url.pathname === surface.apiPath;
               const gate = Promise.withResolvers<undefined>();
@@ -165,7 +347,11 @@ export const measureTimeLoadingGeometry = async ({
                 await route.continue();
               });
               try {
-                await next.click();
+                if (surface.type === "date") {
+                  await next.click();
+                } else {
+                  await next.fill("workspace");
+                }
                 await expect(busy).toBeVisible();
                 await expect(next).toBeEnabled();
                 const pending = await captureLandmarks(page, surface.landmarks);
@@ -187,7 +373,7 @@ export const measureTimeLoadingGeometry = async ({
               }
             }
             errors.assertEmpty(
-              `unexpected browser errors with ${locale} time loading views`,
+              `unexpected browser errors with ${locale} loading views`,
             );
           } finally {
             detach();
@@ -199,6 +385,12 @@ export const measureTimeLoadingGeometry = async ({
       return { viewport: VIEWPORT, evidence };
     } finally {
       await setLocale(original.user.locale);
+      if (contact !== null) {
+        await apiDelete(account.request, `/contacts/${contact.id}`);
+      }
+      if (skill !== null) {
+        await apiDelete(account.request, `/skills/${skill.id}`);
+      }
     }
   } finally {
     await account.close();

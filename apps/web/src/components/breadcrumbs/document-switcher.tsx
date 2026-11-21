@@ -208,6 +208,7 @@ export const DocumentSwitcher = ({
                 <Button
                   className="w-full"
                   disabled={filesQuery.isFetchingNextPage}
+                  disabledReason={t("caseLaw.loadingMore")}
                   onClick={() =>
                     detached(
                       filesQuery.fetchNextPage(),
@@ -230,6 +231,11 @@ export const DocumentSwitcher = ({
           <div className="border-t p-1">
             <Button
               disabled={renditionsView.type !== "items"}
+              disabledReason={
+                renditionsView.type === "error"
+                  ? t("workspaces.documentSwitcher.renditionsFailed")
+                  : t("common.loading")
+              }
               onClick={downloadCurrent}
               size="row"
               variant="ghost"

@@ -44,6 +44,9 @@ export const SETUP_PERMISSIONS = {
 export const DICTATION_READY = {
   available: true,
   cleanup: true,
+  cloudAvailable: true,
+  cloudModel: null,
+  customWords: [],
   destination: "local",
   enabled: true,
   failure: null,
@@ -52,7 +55,10 @@ export const DICTATION_READY = {
   model: { status: "ready" },
   modelBytes: 740_363_168,
   phase: "idle",
+  shareTextBeforeCursor: false,
+  shareWindowTitle: false,
   shortcutTaken: false,
+  textBeforeCursorAvailable: true,
 } as const satisfies DictationSnapshot;
 
 /** Dictation in Settings at its tallest: stella AI with a model whose
@@ -84,6 +90,7 @@ export const SETTINGS_DICTATION = {
   shareTextBeforeCursor: false,
   shareWindowTitle: false,
   shortcutTaken: false,
+  sounds: true,
   textBeforeCursorAvailable: true,
 } as const satisfies DictationSettingSnapshot;
 

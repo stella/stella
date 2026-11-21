@@ -230,6 +230,8 @@ const yearUrl = (series: FinancniSpravaSeries, year: string) =>
 /**
  * Validity as the row's note states it. A repeal that takes effect after
  * `today` leaves the pokyn in force, so it is not yet stated as repealed.
+ * "NEAKTUÁLNÍ" says the pokyn no longer states current law, not that it was
+ * repealed: it may still govern periods it covered.
  */
 const listingValidity = (note: string, today: Temporal.PlainDate) => {
   const effective = isoDate(EFFECTIVE_FROM.exec(note));
@@ -239,8 +241,11 @@ const listingValidity = (note: string, today: Temporal.PlainDate) => {
   if (/nahrazen/iu.test(note)) {
     return "superseded" as const;
   }
-  return /zrušen|neaktuáln/iu.test(note)
-    ? ("withdrawn" as const)
+  if (/zrušen/iu.test(note)) {
+    return "withdrawn" as const;
+  }
+  return /neaktuáln/iu.test(note)
+    ? ("historical_repealed_basis" as const)
     : ("not_stated" as const);
 };
 

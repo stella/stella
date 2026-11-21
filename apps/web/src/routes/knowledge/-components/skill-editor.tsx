@@ -72,8 +72,9 @@ import { catalogueKeys } from "@/lib/knowledge/queries/catalogue";
 import type { NonEmptyPatch } from "@/lib/mutation-command";
 import { toSafeId } from "@/lib/safe-id";
 
-import { SkillArchiveDownloadButton } from "./skill-archive-download";
 import { SkillAvailabilitySummary } from "./skill-availability-field";
+import { SkillFilesPending } from "./skill-detail.pending";
+import { SkillExportMenu } from "./skill-export-menu";
 import {
   rebaseSkillMetadataDraft,
   skillMetadataDraft,
@@ -662,7 +663,7 @@ export function SkillEditor({ skillId }: SkillEditorProps) {
       )}
       {/* Identity, status, and how the skill runs. The files below are the main
           surface; editing happens in the inspector. */}
-      <div className="border-b p-4">
+      <div className="border-b p-4" data-slot="skill-editor-identity">
         {/* Name + description read as a title/summary; the status controls sit
             in the top-right corner, the identity stays a readable width. */}
         <div className="flex items-start gap-4">
@@ -718,7 +719,7 @@ export function SkillEditor({ skillId }: SkillEditorProps) {
                 <NewChatIcon className="size-4" />
               </Button>
             )}
-            <SkillArchiveDownloadButton skillId={skillId} />
+            <SkillExportMenu skillId={skillId} />
             {detail.data && (
               <span className="text-muted-foreground rounded-md border px-1.5 py-0.5 text-xs">
                 {detail.data.scope === "team"
@@ -734,6 +735,7 @@ export function SkillEditor({ skillId }: SkillEditorProps) {
                 <Button
                   aria-label={tSkills("disableSkill")}
                   disabled={patchMetadata.isPending}
+                  disabledReason={t("common.saving")}
                   onClick={toggleEnabled}
                   size="icon-sm"
                   variant="secondary"
@@ -743,6 +745,7 @@ export function SkillEditor({ skillId }: SkillEditorProps) {
               ) : (
                 <Button
                   disabled={patchMetadata.isPending}
+                  disabledReason={t("common.saving")}
                   onClick={toggleEnabled}
                   size="sm"
                 >
@@ -827,7 +830,10 @@ export function SkillEditor({ skillId }: SkillEditorProps) {
         }}
       >
         <div className="mb-2 flex items-center gap-1 px-1">
-          <p className="text-muted-foreground me-auto text-xs font-semibold tracking-wider uppercase">
+          <p
+            className="text-muted-foreground me-auto text-xs font-semibold tracking-wider uppercase"
+            data-slot="skill-editor-files"
+          >
             {t("common.files")}
           </p>
           {allFolderIds.size > 0 && (
@@ -838,11 +844,7 @@ export function SkillEditor({ skillId }: SkillEditorProps) {
             />
           )}
         </div>
-        {detail.isLoading && (
-          <p className="text-muted-foreground px-1 text-xs">
-            {t("common.loading")}
-          </p>
-        )}
+        {detail.isLoading && <SkillFilesPending />}
         {detail.error && (
           <p className="text-destructive px-1 text-sm">
             {userErrorFromThrown(detail.error, t("common.unexpectedError"))}
@@ -1220,6 +1222,7 @@ function FolderCreateActions({
   onCreateFile,
   onCreateFolder,
 }: FolderCreateActionsProps) {
+  const tCommon = useTranslations("common");
   const tSkills = useTranslations("knowledge.agentSkills");
   const [newFileOpen, setNewFileOpen] = useState(false);
   const [filename, setFilename] = useState("");
@@ -1277,6 +1280,9 @@ function FolderCreateActions({
             />
             <Button
               disabled={createPending || filename.trim().length === 0}
+              disabledReason={
+                createPending ? tCommon("creating") : tSkills("enterFileName")
+              }
               onClick={submitNewFile}
               size="sm"
             >
@@ -1313,6 +1319,7 @@ function FileRowActions({
       <Button
         aria-label={tSkills("renameFile")}
         disabled={renamePending}
+        disabledReason={t("common.saving")}
         onClick={() => onStartRename(entry)}
         size="icon-sm"
         variant="ghost"
@@ -1325,6 +1332,7 @@ function FileRowActions({
             <Button
               aria-label={tSkills("deleteFile")}
               disabled={deletePending}
+              disabledReason={t("common.deleting")}
               size="icon-sm"
               variant="ghost"
             >
@@ -1347,6 +1355,7 @@ function FileRowActions({
             </Button>
             <Button
               disabled={deletePending}
+              disabledReason={t("common.deleting")}
               onClick={() => {
                 setConfirmingDelete(false);
                 onDeleteFile(entry);
@@ -1458,6 +1467,9 @@ function RootAddMenu({
             />
             <Button
               disabled={createPending || path.trim().length === 0}
+              disabledReason={
+                createPending ? t("common.creating") : tSkills("enterFileName")
+              }
               onClick={submitNewFile}
               size="sm"
             >

@@ -5,7 +5,7 @@ import {
   type QueryClient,
   type QueryKey,
 } from "@tanstack/react-query";
-import type { updateUser } from "better-auth/api";
+import type { revokeOtherSessions, updateUser } from "better-auth/api";
 import type { OrganizationCreator } from "better-auth/plugins";
 import { panic, Result } from "better-result";
 
@@ -18,12 +18,17 @@ import {
   type ResourceType,
   type WorkspaceRealtimeEvent,
 } from "@stll/api-contract";
+import type { SESSION_SIGN_IN_REVIEW_PATH } from "@stll/api-contract/session-sign-ins";
 
 import {
   captureSessionQueryOwner,
   hasCurrentAuthQueryOwner,
   isObservedSessionQueryOwner,
 } from "@/lib/account/auth-query-owner";
+import type {
+  REVOKE_SESSION_BY_ID_PATH,
+  SessionSignInsWriteRoute,
+} from "@/lib/account/session-sign-ins-client";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { detached } from "@/lib/detached";
 import {
@@ -113,6 +118,22 @@ type AuthPluginEndpointWrite<
   endpoint: TEndpoint;
   method: ReturnType<OrganizationCreator>["endpoints"][TEndpoint]["options"]["method"];
   route: ReturnType<OrganizationCreator>["endpoints"][TEndpoint]["path"];
+};
+
+type AuthCoreRevokeOtherSessionsWrite = {
+  type: "auth-core-endpoint";
+  endpoint: "revokeOtherSessions";
+  method: (typeof revokeOtherSessions)["options"]["method"];
+  route: (typeof revokeOtherSessions)["path"];
+};
+
+/** A write to one of the API's own account session endpoints
+ *  (`sessionSignInsClient`). */
+type SessionSignInsWrite<TRoute extends SessionSignInsWriteRoute> = {
+  type: "auth-plugin-endpoint";
+  plugin: "session-sign-ins";
+  method: "POST";
+  route: TRoute;
 };
 
 type AuthCoreUserUpdateWrite = {
@@ -391,6 +412,42 @@ export const RESOURCE_MUTATION_CONTRACTS = {
         method: "PUT",
         route: "/chat/local-runners/:desktopId/folders/:linkId/approval",
       },
+    ],
+    resources: [RESOURCE_TYPE.USER],
+  },
+  // The account holder signs one of their devices out, signs out every
+  // device but this one, or answers whether a sign-in was theirs; the
+  // account's session and sign-in lists refresh.
+  revokeSession: {
+    writes: [
+      {
+        type: "auth-plugin-endpoint",
+        plugin: "session-sign-ins",
+        method: "POST",
+        route: "/revoke-session-by-id",
+      } satisfies SessionSignInsWrite<typeof REVOKE_SESSION_BY_ID_PATH>,
+    ],
+    resources: [RESOURCE_TYPE.USER],
+  },
+  revokeOtherSessions: {
+    writes: [
+      {
+        type: "auth-core-endpoint",
+        endpoint: "revokeOtherSessions",
+        method: "POST",
+        route: "/revoke-other-sessions",
+      } satisfies AuthCoreRevokeOtherSessionsWrite,
+    ],
+    resources: [RESOURCE_TYPE.USER],
+  },
+  reviewSessionSignIn: {
+    writes: [
+      {
+        type: "auth-plugin-endpoint",
+        plugin: "session-sign-ins",
+        method: "POST",
+        route: "/session-sign-ins/review",
+      } satisfies SessionSignInsWrite<typeof SESSION_SIGN_IN_REVIEW_PATH>,
     ],
     resources: [RESOURCE_TYPE.USER],
   },

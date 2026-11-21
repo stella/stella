@@ -37,8 +37,99 @@ const DEFAULT_MATTERS: MattersConfig = {
   filters: {},
 };
 
+const isStringArray = (value: unknown): value is string[] =>
+  Array.isArray(value) && value.every((item) => typeof item === "string");
+
+/**
+ * What the inbox's body was laid out from when this browser last drew it:
+ * its view's layout, as far as the body's shape depends on it. A cold load,
+ * which has no saved views to read yet, draws its loading body from this, so
+ * the body it paints is the one the member left, never a guess.
+ */
+export type InboxLastLayout =
+  | {
+      type: "kanban";
+      groupByPropertyId: string | null;
+      subgroupByPropertyId: string | null;
+    }
+  | {
+      type: "table";
+      groupByPropertyId: string | null;
+      hiddenProperties: string[];
+      columnOrder: string[];
+      columnPinning: string[];
+    };
+
+/** The inbox view this browser last drew, and whose it was. */
+export type InboxLastView = {
+  organizationId: string;
+  viewId: string;
+  layout: InboxLastLayout;
+};
+
+const optionalString = (value: unknown): string | null =>
+  typeof value === "string" ? value : null;
+
+const readInboxLastLayout = (value: unknown): InboxLastLayout | null => {
+  if (!isRecord(value)) {
+    return null;
+  }
+  if (value["type"] === "kanban") {
+    return {
+      type: "kanban",
+      groupByPropertyId: optionalString(value["groupByPropertyId"]),
+      subgroupByPropertyId: optionalString(value["subgroupByPropertyId"]),
+    };
+  }
+  const { columnOrder, columnPinning, hiddenProperties } = value;
+  if (
+    value["type"] !== "table" ||
+    !isStringArray(columnOrder) ||
+    !isStringArray(columnPinning) ||
+    !isStringArray(hiddenProperties)
+  ) {
+    return null;
+  }
+  return {
+    type: "table",
+    groupByPropertyId: optionalString(value["groupByPropertyId"]),
+    hiddenProperties,
+    columnOrder,
+    columnPinning,
+  };
+};
+
+const readInboxLastView = (persisted: unknown): InboxLastView | null => {
+  if (!isRecord(persisted)) {
+    return null;
+  }
+  const { organizationId, viewId } = persisted;
+  const layout = readInboxLastLayout(persisted["layout"]);
+  return typeof organizationId === "string" &&
+    typeof viewId === "string" &&
+    layout !== null
+    ? { organizationId, viewId, layout }
+    : null;
+};
+
+/**
+ * The Knowledge sections a member's landing last showed in this browser, in
+ * the landing's order: which cards the role and the deployment open. A cold
+ * load, which has not read the role yet, draws its loading cards from this,
+ * so the grid it paints is the one the member left, never a guess.
+ */
+const readKnowledgeLanding = (persisted: unknown): string[] | null =>
+  isStringArray(persisted) ? persisted : null;
+
 type ConfigState = {
   matters: MattersConfig;
+  inbox: InboxLastView | null;
+  knowledgeLanding: string[] | null;
+  /** Keeps the inbox view just drawn, for the next cold load's body. */
+  rememberInboxView: (view: InboxLastView) => void;
+  /** Keeps the Knowledge landing's sections just drawn, for the next cold
+   *  load's cards. */
+  rememberKnowledgeLanding: (sections: string[]) => void;
   updateMatters: (patch: Partial<MattersConfig>) => void;
   setMattersFilter: <K extends keyof MattersFilters>(
     key: K,
@@ -92,11 +183,17 @@ const readPersistedMatters = (persisted: unknown): MattersConfig => {
 
 export const toPersistedConfigState = (state: ConfigState) => ({
   matters: readPersistedMatters(state.matters),
+  inbox: readInboxLastView(state.inbox),
+  knowledgeLanding: readKnowledgeLanding(state.knowledgeLanding),
 });
 
 export const migratePersistedConfigState = (persisted: unknown) => ({
   matters: readPersistedMatters(
     isRecord(persisted) ? persisted["matters"] : null,
+  ),
+  inbox: readInboxLastView(isRecord(persisted) ? persisted["inbox"] : null),
+  knowledgeLanding: readKnowledgeLanding(
+    isRecord(persisted) ? persisted["knowledgeLanding"] : null,
   ),
 });
 
@@ -104,6 +201,16 @@ export const useConfigStore = create<ConfigState>()(
   persist(
     (set) => ({
       matters: DEFAULT_MATTERS,
+      inbox: null,
+      knowledgeLanding: null,
+
+      rememberInboxView: (view) => {
+        set({ inbox: view });
+      },
+
+      rememberKnowledgeLanding: (sections) => {
+        set({ knowledgeLanding: sections });
+      },
 
       updateMatters: (patch) => {
         set((s) => ({
@@ -167,9 +274,12 @@ export const useConfigStore = create<ConfigState>()(
       migrate: migratePersistedConfigState,
       partialize: toPersistedConfigState,
       merge: (persisted, current) => {
-        const { matters } = migratePersistedConfigState(persisted);
+        const { inbox, knowledgeLanding, matters } =
+          migratePersistedConfigState(persisted);
         return {
           ...current,
+          inbox,
+          knowledgeLanding,
           matters,
         };
       },

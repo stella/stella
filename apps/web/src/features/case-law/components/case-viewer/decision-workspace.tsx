@@ -50,11 +50,8 @@ import { OrphanedAnnotationsNotice } from "@/components/legal-reader/annotations
 import type { ReaderAnnotationTarget } from "@/components/legal-reader/annotations/reader-annotation-target";
 import type { SelectionAnchor } from "@/components/legal-reader/annotations/selection-anchor";
 import { LegalReaderAIChat } from "@/components/legal-reader/legal-reader-ai-chat";
-import {
-  LEGAL_READER_CONTENT_CLEARANCE_CLASS_NAME,
-  LEGAL_READER_LAYOUT_CLASS_NAME,
-  LegalReaderControls,
-} from "@/components/legal-reader/legal-reader-controls";
+import { LegalReaderControls } from "@/components/legal-reader/legal-reader-controls";
+import { ReaderScrollViewport } from "@/components/legal-reader/legal-reader-controls.pending";
 import { MarginNotes } from "@/components/legal-reader/margin-notes";
 import type {
   AnalysisMarginItem,
@@ -86,7 +83,7 @@ import {
   getHeadingDisplayAnchorId,
 } from "@/features/case-law/components/case-viewer/analysis/types";
 import { useLazyDecisionAnalysis } from "@/features/case-law/components/case-viewer/analysis/use-lazy-decision-analysis";
-import type { DECISION_AI_MODE } from "@/features/case-law/components/case-viewer/decision-ai-mode";
+import { DECISION_AI_MODE } from "@/features/case-law/components/case-viewer/decision-ai-mode";
 import type { ReaderMarksFilter } from "@/features/case-law/components/case-viewer/decision-annotation-surface.logic";
 import { annotationsForMarksFilter } from "@/features/case-law/components/case-viewer/decision-annotation-surface.logic";
 import { judgePortraitSrc } from "@/features/case-law/components/case-viewer/decision-judges";
@@ -101,6 +98,14 @@ import {
   resolveVisitorOffer,
 } from "@/features/case-law/components/case-viewer/decision-workspace.logic";
 import type { NotesFilter } from "@/features/case-law/components/case-viewer/decision-workspace.logic";
+import {
+  DECISION_NOTES_COLUMN_CLASS_NAME,
+  DECISION_NOTES_COLUMN_DEFAULT_WIDTH,
+  DECISION_PAPER_CLASS_NAME,
+  DECISION_READER_GRID_CLASS_NAME,
+  DECISION_READER_GRID_TEMPLATE,
+  DECISION_READER_LAYOUT_CLASS_NAME,
+} from "@/features/case-law/components/case-viewer/decision-workspace.pending";
 import {
   MarginCitationFilterBar,
   useMarginCitationFilter,
@@ -469,8 +474,31 @@ const provisionMarginItems = (
       }))
     : [];
 
+type AnswerLanguageBlockerOptions = {
+  mode: DecisionWorkspaceProps["aiMode"];
+  signedIn: boolean;
+  savingLanguage: boolean;
+  busy: boolean;
+};
+
+const answerLanguageBlockerKey = ({
+  mode,
+  signedIn,
+  savingLanguage,
+  busy,
+}: AnswerLanguageBlockerOptions) => {
+  if (mode === DECISION_AI_MODE.gated) {
+    return signedIn ? "common.loading" : "chat.toolCall.signInToContinue";
+  }
+  if (savingLanguage) {
+    return "common.saving";
+  }
+  return busy ? "readerAnswers.waitForCurrentAction" : undefined;
+};
+
 const DecisionWorkspaceContent = (props: DecisionWorkspaceProps) => {
   const { decision, decisionId, initialAnchorId, landingSessionId } = props;
+  const signedIn = useMaybeAuthenticatedUser() !== null;
   // The citation strip's own summary, already cached for this decision: a
   // later-treatment note is drawn only once it shows a later citing decision.
   // The strip reports a failed read; here it only keeps the note hidden.
@@ -624,86 +652,95 @@ const DecisionWorkspaceContent = (props: DecisionWorkspaceProps) => {
       })),
     source: decisionId,
   });
-  const answerNotes: AnswerMarginItem[] = visibleAnswers.map((answer) => ({
-    kind: "answer",
-    id: answer.id,
-    startAnchorId: heldAnchors.answerStartAnchor(
-      answer.anchor.spans[0].paragraphId,
-    ),
-    answer,
-    languagePicker: answer.mine ? (
-      <ReaderAnswerLanguagePicker
-        documentLanguage={decision.language}
-        value={answers.languagePreference}
-        disabled={
-          props.aiMode !== "enabled" ||
-          answers.isSavingLanguage ||
-          answers.busyAnswerIds.has(answer.id)
-        }
-        onChange={(language) =>
-          detachedUserAction(answers.setAnswerLanguage(language, answer.id), {
-            context: "reader-answer.regenerate",
-            failureMessage: t("errors.actionFailed"),
-          })
-        }
-      />
-    ) : undefined,
-    generationMode: props.aiMode,
-    active: answers.activeAnswerId === answer.id,
-    openRevision: answers.openRevision,
-    busy:
-      answers.busyAnswerIds.has(answer.id) ||
-      answer.messages.some((message) => message.status === "streaming"),
-    onOpen: () => openAnswer(answer.id),
-    onFollowUp: (question) =>
-      detached(
-        answers.followUp(answer.id, question),
-        "reader-answer.follow-up",
+  const answerNotes: AnswerMarginItem[] = visibleAnswers.map((answer) => {
+    const busy = answers.busyAnswerIds.has(answer.id);
+    const languageBlockerKey = answerLanguageBlockerKey({
+      mode: props.aiMode,
+      signedIn,
+      savingLanguage: answers.isSavingLanguage,
+      busy,
+    });
+    return {
+      kind: "answer",
+      id: answer.id,
+      startAnchorId: heldAnchors.answerStartAnchor(
+        answer.anchor.spans[0].paragraphId,
       ),
-    onRegenerate: () =>
-      detached(answers.regenerate(answer.id), "reader-answer.regenerate"),
-    onDelete: () => detached(answers.remove(answer.id), "reader-answer.delete"),
-    onVisibility: (visibility) =>
-      detached(
-        answers.setVisibility(answer.id, visibility),
-        "reader-answer.visibility",
-      ),
-    citationTarget: (citation) =>
-      resolveReaderAnswerCitation({
-        citation,
-        decisionId,
-        blocks: astBlocks,
-        formatNumber: format.number,
-        readCitedDecision: (id) =>
-          citedDecisionReads.get(id) ??
-          panic("Every cited decision must have a read"),
-      }),
-    language: decision.language,
-    onCitation: (citation) =>
-      detachedUserAction(
-        jumpReaderAnswerCitation({
+      answer,
+      languagePicker: answer.mine ? (
+        <ReaderAnswerLanguagePicker
+          documentLanguage={decision.language}
+          value={answers.languagePreference}
+          disabled={languageBlockerKey !== undefined}
+          disabledReason={
+            languageBlockerKey === undefined ? undefined : t(languageBlockerKey)
+          }
+          onChange={(language) =>
+            detachedUserAction(answers.setAnswerLanguage(language, answer.id), {
+              context: "reader-answer.regenerate",
+              failureMessage: t("errors.actionFailed"),
+            })
+          }
+        />
+      ) : undefined,
+      generationMode: props.aiMode,
+      active: answers.activeAnswerId === answer.id,
+      openRevision: answers.openRevision,
+      busy:
+        busy ||
+        answer.messages.some((message) => message.status === "streaming"),
+      onOpen: () => openAnswer(answer.id),
+      onFollowUp: (question) =>
+        detached(
+          answers.followUp(answer.id, question),
+          "reader-answer.follow-up",
+        ),
+      onRegenerate: () =>
+        detached(answers.regenerate(answer.id), "reader-answer.regenerate"),
+      onDelete: () =>
+        detached(answers.remove(answer.id), "reader-answer.delete"),
+      onVisibility: (visibility) =>
+        detached(
+          answers.setVisibility(answer.id, visibility),
+          "reader-answer.visibility",
+        ),
+      citationTarget: (citation) =>
+        resolveReaderAnswerCitation({
           citation,
           decisionId,
-          root: mainRef.current,
-          openDecision: async (id, paragraphId) => {
-            const cited = await queryClient.query({
-              ...decisionOptions(id),
-              staleTime: "static",
-            });
-            const tab = createCaseDecisionViewTab({
-              ...cited,
-              decisionId: id,
-              anchorId: paragraphId,
-            });
-            await navigateToCaseDecisionMain(navigate, tab.payload);
-          },
+          blocks: astBlocks,
+          formatNumber: format.number,
+          readCitedDecision: (id) =>
+            citedDecisionReads.get(id) ??
+            panic("Every cited decision must have a read"),
         }),
-        {
-          context: "reader-answer.citation",
-          failureMessage: t("errors.actionFailed"),
-        },
-      ),
-  }));
+      language: decision.language,
+      onCitation: (citation) =>
+        detachedUserAction(
+          jumpReaderAnswerCitation({
+            citation,
+            decisionId,
+            root: mainRef.current,
+            openDecision: async (id, paragraphId) => {
+              const cited = await queryClient.query({
+                ...decisionOptions(id),
+                staleTime: "static",
+              });
+              const tab = createCaseDecisionViewTab({
+                ...cited,
+                decisionId: id,
+                anchorId: paragraphId,
+              });
+              await navigateToCaseDecisionMain(navigate, tab.payload);
+            },
+          }),
+          {
+            context: "reader-answer.citation",
+            failureMessage: t("errors.actionFailed"),
+          },
+        ),
+    };
+  });
   // A selection over any number of paragraphs is explained as a whole. The
   // server checks it against the same visible pieces, so Explain is offered
   // exactly where the server accepts it.
@@ -744,7 +781,9 @@ const DecisionWorkspaceContent = (props: DecisionWorkspaceProps) => {
   const ensureAIAvailable =
     props.aiMode === "enabled" ? props.ensureAIAvailable : null;
 
-  const [panelWidth, setPanelWidth] = useState(220);
+  const [panelWidth, setPanelWidth] = useState(
+    DECISION_NOTES_COLUMN_DEFAULT_WIDTH,
+  );
   // The same per-browser size the inspector's readers step, so a size chosen
   // in either place holds in both.
   const textScale = useWebReaderTextScale();
@@ -1054,10 +1093,7 @@ const DecisionWorkspaceContent = (props: DecisionWorkspaceProps) => {
           docked composer start past it; below `lg` the grid is one column
           and the margin is zero. */}
       <div
-        className={cn(
-          LEGAL_READER_LAYOUT_CLASS_NAME,
-          "relative min-h-0 flex-1 lg:[--reader-margin-width:var(--reader-aside-width)]",
-        )}
+        className={DECISION_READER_LAYOUT_CLASS_NAME}
         style={{ "--reader-aside-width": `${panelWidth}px` }}
       >
         <LegalReaderControls
@@ -1149,10 +1185,7 @@ const DecisionWorkspaceContent = (props: DecisionWorkspaceProps) => {
                 scrollContainerRef={mainRef}
               />
             )}
-            <div
-              className="reader-scroll h-full overflow-y-auto"
-              ref={attachViewport}
-            >
+            <ReaderScrollViewport ref={attachViewport}>
               <ReaderStatusNotices
                 answerFailures={answers.failureNotices}
                 foreignDecisionError={foreignDecisionError}
@@ -1160,12 +1193,11 @@ const DecisionWorkspaceContent = (props: DecisionWorkspaceProps) => {
                 paragraphLanding={paragraphLanding}
               />
               <div
-                className="grid max-lg:!grid-cols-[1fr]"
+                className={DECISION_READER_GRID_CLASS_NAME}
                 {...textScale.rootProps}
                 style={{
                   ...textScale.rootProps.style,
-                  gridTemplateColumns:
-                    "var(--reader-aside-width) minmax(0, 1fr)",
+                  gridTemplateColumns: DECISION_READER_GRID_TEMPLATE,
                 }}
               >
                 {/* Before a visitor has an account, the notes column is the
@@ -1176,7 +1208,7 @@ const DecisionWorkspaceContent = (props: DecisionWorkspaceProps) => {
                 <aside
                   data-reader-notes-column=""
                   className={cn(
-                    "relative flex flex-col max-lg:hidden",
+                    DECISION_NOTES_COLUMN_CLASS_NAME,
                     visitorOffer !== undefined && "cursor-pointer",
                   )}
                   onClick={
@@ -1289,10 +1321,7 @@ const DecisionWorkspaceContent = (props: DecisionWorkspaceProps) => {
 
                 {/* oxlint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-noninteractive-element-interactions -- a click in a paragraph focuses it for the margin; the keyboard path is the paragraph's permalink, whose Enter click bubbles here */}
                 <main
-                  className={cn(
-                    "reader-paper min-w-0 pb-8",
-                    LEGAL_READER_CONTENT_CLEARANCE_CLASS_NAME,
-                  )}
+                  className={DECISION_PAPER_CLASS_NAME}
                   onClick={containedEventHandler((event) =>
                     marginCitations.focusParagraphAt(event.target),
                   )}
@@ -1355,7 +1384,7 @@ const DecisionWorkspaceContent = (props: DecisionWorkspaceProps) => {
                   />
                 </main>
               </div>
-            </div>
+            </ReaderScrollViewport>
           </LegalReaderAIChat>
         </div>
         <AnnotationToolbar

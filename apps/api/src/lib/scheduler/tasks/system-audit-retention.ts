@@ -4,6 +4,7 @@ import type { Temporal } from "@stll/time";
 import { DAY_IN_MS } from "@stll/time";
 
 import { systemAuditRuns } from "@/api/db/schema";
+import { withAggregateTransaction } from "@/api/lib/db/aggregate-lock";
 import type { SchedulerDb, SchedulerTask } from "@/api/lib/scheduler/types";
 import { recordSystemAudit } from "@/api/lib/system-audit/record";
 
@@ -12,7 +13,6 @@ export const PURGE_SYSTEM_AUDIT_RUNS_TASK = "audit.purgeSystemRuns" as const;
 /** How long a system audit run is kept. */
 export const SYSTEM_AUDIT_RETENTION_DAYS = 400;
 export const SYSTEM_AUDIT_PURGE_BATCH_SIZE = 1000;
-const MAX_PURGE_BATCHES_PER_RUN = 50;
 
 /**
  * The oldest rows past `cutoff`, one bounded batch, along the created-at
@@ -41,33 +41,9 @@ const purgeBatch = async (
 
 type PurgeOutcome = { deletedRuns: number; hasMore: boolean };
 
-type PurgeProgress = {
-  db: Pick<SchedulerDb, "execute">;
-  cutoff: Date;
-  signal: AbortSignal;
-  batch: number;
-  deletedSoFar: number;
-};
-
-const purgeFrom = async (progress: PurgeProgress): Promise<PurgeOutcome> => {
-  const { db, cutoff, signal, batch, deletedSoFar } = progress;
-  if (batch >= MAX_PURGE_BATCHES_PER_RUN || signal.aborted) {
-    return { deletedRuns: deletedSoFar, hasMore: true };
-  }
-  const deleted = await purgeBatch(db, cutoff);
-  if (deleted < SYSTEM_AUDIT_PURGE_BATCH_SIZE) {
-    return { deletedRuns: deletedSoFar + deleted, hasMore: false };
-  }
-  return await purgeFrom({
-    ...progress,
-    batch: batch + 1,
-    deletedSoFar: deletedSoFar + deleted,
-  });
-};
-
 /**
- * Delete system audit runs older than the retention window in bounded
- * batches, and record the purge itself as a system run.
+ * Delete one bounded batch of system audit runs older than the retention
+ * window. A saturated batch requests an immediate continuation.
  */
 export const purgeSystemAuditRuns = async ({
   db,
@@ -77,16 +53,19 @@ export const purgeSystemAuditRuns = async ({
   db: Pick<SchedulerDb, "execute">;
   now: Temporal.Instant;
   signal: AbortSignal;
-}): Promise<PurgeOutcome> =>
-  await purgeFrom({
+}): Promise<PurgeOutcome> => {
+  if (signal.aborted) {
+    return { deletedRuns: 0, hasMore: false };
+  }
+  const deletedRuns = await purgeBatch(
     db,
-    cutoff: new Date(
-      now.epochMilliseconds - SYSTEM_AUDIT_RETENTION_DAYS * DAY_IN_MS,
-    ),
-    signal,
-    batch: 0,
-    deletedSoFar: 0,
-  });
+    new Date(now.epochMilliseconds - SYSTEM_AUDIT_RETENTION_DAYS * DAY_IN_MS),
+  );
+  return {
+    deletedRuns,
+    hasMore: deletedRuns === SYSTEM_AUDIT_PURGE_BATCH_SIZE,
+  };
+};
 
 export const purgeSystemAuditRunsTask: SchedulerTask = async ({
   db,
@@ -96,14 +75,17 @@ export const purgeSystemAuditRunsTask: SchedulerTask = async ({
   signal,
 }) => {
   signal.throwIfAborted();
-  const { deletedRuns, hasMore } = await purgeSystemAuditRuns({
-    db,
-    now: dueAt.instant,
-    signal,
-  });
-  await recordSystemAudit(db, "system:audit-retention", {
-    subject: runId,
-    counts: { deletedRuns },
+  const { hasMore } = await withAggregateTransaction(db, async (tx) => {
+    const outcome = await purgeSystemAuditRuns({
+      db: tx,
+      now: dueAt.instant,
+      signal,
+    });
+    await recordSystemAudit(tx, "system:audit-retention", {
+      subject: runId,
+      counts: { deletedRuns: outcome.deletedRuns },
+    });
+    return outcome;
   });
   if (hasMore && !signal.aborted) {
     // The claim instant is already past, so the continuation is due at once.

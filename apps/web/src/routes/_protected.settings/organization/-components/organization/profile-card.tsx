@@ -16,7 +16,6 @@ import type { DestructiveConfirmOutcome } from "@stll/ui/destructive-confirm-dia
 import { Field, FieldError, FieldLabel } from "@stll/ui/field";
 import { openFilePicker } from "@stll/ui/file-picker";
 import { Form } from "@stll/ui/form";
-import { Frame, FramePanel } from "@stll/ui/frame";
 import { Input } from "@stll/ui/input";
 import { stellaToast } from "@stll/ui/toast";
 
@@ -37,6 +36,11 @@ import { organizationOptions } from "@/lib/organization/queries";
 import { getOrganizationSchema } from "@/lib/organization/utils";
 import { schemaFormOptions, toFormErrors } from "@/lib/schema";
 import { resourceMutation } from "@/lib/workspace-realtime";
+import {
+  ORGANIZATION_LOGO_CLASS,
+  OrganizationProfileCardFrame,
+  OrganizationProfileLogoRow,
+} from "@/routes/_protected.settings/organization/-components/organization/profile-card.pending";
 
 const getNameOnlySchema = () => v.pick(getOrganizationSchema(), ["name"]);
 
@@ -147,98 +151,106 @@ export const OrganizationProfileCard = () => {
 
   return (
     <>
-      <Frame>
-        <FramePanel>
-          <Form
-            className="gap-4 p-1"
-            errors={formErrors}
-            onSubmit={(e) => {
-              e.preventDefault();
-              detached(form.handleSubmit(), "profile-card.submit");
-            }}
-          >
-            <div className="flex items-center gap-3">
-              <UserIdentityAvatar
-                className="size-12 text-sm"
-                image={data.logo}
-                name={data.name}
-              />
-              {canChange ? (
-                <>
+      <OrganizationProfileCardFrame>
+        <Form
+          className="gap-4"
+          errors={formErrors}
+          onSubmit={(e) => {
+            e.preventDefault();
+            detached(form.handleSubmit(), "profile-card.submit");
+          }}
+        >
+          <OrganizationProfileLogoRow>
+            <UserIdentityAvatar
+              className={ORGANIZATION_LOGO_CLASS}
+              image={data.logo}
+              name={data.name}
+            />
+            {canChange ? (
+              <>
+                <Button
+                  loading={updateMutation.isPending}
+                  onClick={() => {
+                    openFilePicker({
+                      accept: ORGANIZATION_LOGO_ACCEPT,
+                      onPick: ([file]) => {
+                        detached(uploadLogo(file), "profile-card.upload-logo");
+                      },
+                    });
+                  }}
+                  size="sm"
+                  type="button"
+                  variant="outline"
+                >
+                  {t("settings.organization.uploadLogo")}
+                </Button>
+                {data.logo ? (
                   <Button
-                    loading={updateMutation.isPending}
+                    disabled={updateMutation.isPending}
+                    disabledReason={t("common.saving")}
                     onClick={() => {
-                      openFilePicker({
-                        accept: ORGANIZATION_LOGO_ACCEPT,
-                        onPick: ([file]) => {
-                          detached(
-                            uploadLogo(file),
-                            "profile-card.upload-logo",
-                          );
-                        },
+                      updateMutation.mutate({
+                        organizationId: data.id,
+                        fields: { logo: null },
                       });
                     }}
                     size="sm"
                     type="button"
-                    variant="outline"
+                    variant="ghost"
                   >
-                    {t("settings.organization.uploadLogo")}
+                    {t("common.remove")}
                   </Button>
-                  {data.logo ? (
-                    <Button
-                      disabled={updateMutation.isPending}
-                      onClick={() => {
-                        updateMutation.mutate({
-                          organizationId: data.id,
-                          fields: { logo: null },
-                        });
-                      }}
-                      size="sm"
-                      type="button"
-                      variant="ghost"
-                    >
-                      {t("common.remove")}
-                    </Button>
-                  ) : null}
-                </>
-              ) : null}
-            </div>
-            <form.Field name="name">
-              {(field) => (
-                <Field name={field.name}>
-                  <FieldLabel>{t("common.organizationName")}</FieldLabel>
-                  <Input
-                    onBlur={field.handleBlur}
-                    onChange={(e) => field.handleChange(e.target.value)}
-                    placeholder={t("auth.organizationNamePlaceholder")}
-                    required
-                    value={field.state.value}
-                  />
-                  <FieldError />
-                </Field>
-              )}
-            </form.Field>
-            <form.Subscribe
-              selector={(s) => ({
-                isSubmitting: s.isSubmitting,
-                isDirty: s.isDirty,
-                canSubmit: s.canSubmit,
-              })}
-            >
-              {({ isSubmitting, isDirty, canSubmit }) => (
+                ) : null}
+              </>
+            ) : null}
+          </OrganizationProfileLogoRow>
+          <form.Field name="name">
+            {(field) => (
+              <Field name={field.name}>
+                <FieldLabel>{t("common.organizationName")}</FieldLabel>
+                <Input
+                  onBlur={field.handleBlur}
+                  onChange={(e) => field.handleChange(e.target.value)}
+                  placeholder={t("auth.organizationNamePlaceholder")}
+                  required
+                  value={field.state.value}
+                />
+                <FieldError />
+              </Field>
+            )}
+          </form.Field>
+          <form.Subscribe
+            selector={(s) => ({
+              isSubmitting: s.isSubmitting,
+              isDirty: s.isDirty,
+              canSubmit: s.canSubmit,
+            })}
+          >
+            {({ isSubmitting, isDirty, canSubmit }) => {
+              const resolveProfileSaveDisabledReason = () => {
+                if (isSubmitting) {
+                  return t("common.saving");
+                }
+                if (!isDirty) {
+                  return t("common.noChangesToSave");
+                }
+                return t("templates.validationErrors");
+              };
+              return (
                 <Button
                   className="self-start"
                   disabled={!isDirty || !canSubmit}
+                  disabledReason={resolveProfileSaveDisabledReason()}
                   loading={isSubmitting}
                   type="submit"
                 >
                   {t("common.saveChanges")}
                 </Button>
-              )}
-            </form.Subscribe>
-          </Form>
-        </FramePanel>
-      </Frame>
+              );
+            }}
+          </form.Subscribe>
+        </Form>
+      </OrganizationProfileCardFrame>
       <DestructiveConfirmDialog
         cancelLabel={t("common.cancel")}
         confirmation={pendingName ?? ""}

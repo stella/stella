@@ -13,9 +13,12 @@ import {
   List,
   LIST_ITEM_ROW_CLASS,
   ListGroup,
+  ListGroupAction,
+  ListGroupDescription,
   ListGroupHeader,
   ListGroupHeading,
   ListGroupTitle,
+  ListItemMedia,
 } from "./list-shell";
 import { TruncatedText } from "./truncated-text";
 import type { TruncatedTextLines } from "./truncated-text";
@@ -26,8 +29,8 @@ import type { TruncatedTextLines } from "./truncated-text";
  * sessions, members, keys) where each row is icon + name + one quiet line +
  * trailing status or action. Rows never scroll sideways: the content column
  * truncates and the trailing column keeps its width, so actions stay on
- * screen at any viewport. The group, its header and title and the surface
- * live in ./list-shell.tsx, beside the rows' loading placeholder.
+ * screen at any viewport. The group, its header, title and description and
+ * the surface live in ./list-shell.tsx, beside the rows' loading placeholder.
  */
 
 /**
@@ -47,29 +50,6 @@ const ListGroupCount = ({
   >
     <AnimatedCount value={count} />
   </span>
-);
-
-const ListGroupDescription = ({
-  className,
-  ...props
-}: React.ComponentProps<"p">) => (
-  <p
-    className={cn("text-muted-foreground text-xs text-pretty", className)}
-    data-slot="list-group-description"
-    {...props}
-  />
-);
-
-/** Quiet trailing affordance on the header row (a link or ghost button). */
-const ListGroupAction = ({
-  className,
-  ...props
-}: React.ComponentProps<"div">) => (
-  <div
-    className={cn("flex shrink-0 items-center gap-1", className)}
-    data-slot="list-group-action"
-    {...props}
-  />
 );
 
 /**
@@ -101,36 +81,6 @@ const ListItem = ({
   // The `li` carries the divider; the row inside it carries layout and focus.
   return <li className="flex">{row}</li>;
 };
-
-const listItemMediaVariants = cva(
-  "bg-muted grid size-8 shrink-0 place-items-center overflow-hidden rounded-lg outline-1 -outline-offset-1 outline-black/5 dark:outline-white/10",
-  {
-    defaultVariants: { variant: "icon" },
-    variants: {
-      variant: {
-        /** A glyph or logo, drawn quietly. */
-        icon: "text-muted-foreground [&_svg:not([class*='size-'])]:size-4",
-        /** A letter standing in for a name that has no logo. */
-        initial: "text-foreground text-xs font-medium",
-      },
-    },
-  },
-);
-
-/** Fixed 32px tile for an icon, logo or initial. */
-const ListItemMedia = ({
-  className,
-  variant,
-  ...props
-}: React.ComponentProps<"div"> &
-  VariantProps<typeof listItemMediaVariants>) => (
-  <div
-    aria-hidden="true"
-    className={cn(listItemMediaVariants({ variant }), className)}
-    data-slot="list-item-media"
-    {...props}
-  />
-);
 
 const ListItemContent = ({
   className,

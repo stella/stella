@@ -15,6 +15,7 @@ import {
   aiAvailableResponse,
   aiUnavailableResponse,
 } from "@/__fixtures__/ai-availability";
+import { isDisabledControl } from "@/__fixtures__/disabled-control";
 
 GlobalRegistrator.register({ url: "http://localhost:3000/law/cz/cases/1" });
 
@@ -72,6 +73,7 @@ globalThis.fetch = Object.assign(
           fast: { provider: "google", modelId: "gemini-3.8-flash" },
           reasoning: { provider: "google", modelId: "gemini-3.8-flash" },
           pdf: { provider: "google", modelId: "gemini-3.8-flash" },
+          browse: { provider: "google", modelId: "gemini-3.8-flash" },
         },
         providerDefaultModels: [
           {
@@ -81,6 +83,7 @@ globalThis.fetch = Object.assign(
               fast: { provider: "google", modelId: "gemini-3.8-flash" },
               reasoning: { provider: "google", modelId: "gemini-3.8-flash" },
               pdf: { provider: "google", modelId: "gemini-3.8-flash" },
+              browse: { provider: "google", modelId: "gemini-3.8-flash" },
             },
           },
         ],
@@ -100,6 +103,7 @@ globalThis.fetch = Object.assign(
               fast: null,
               reasoning: null,
               pdf: null,
+              browse: null,
             },
           })
         : Response.json({ error: "Forbidden" }, { status: configStatus });
@@ -109,8 +113,16 @@ globalThis.fetch = Object.assign(
   { preconnect: originalFetch.preconnect },
 );
 
-const { act, cleanup, render, screen, waitFor, fireEvent, within } =
-  await import("@testing-library/react");
+const {
+  act,
+  cleanup,
+  render,
+  screen,
+  waitFor,
+  fireEvent,
+  within,
+  isInaccessible,
+} = await import("@testing-library/react");
 const { QueryClient, QueryClientProvider } =
   await import("@tanstack/react-query");
 const { IntlProvider } = await import("use-intl");
@@ -396,8 +408,17 @@ test("a provider under another provider reuses the outer gate", async () => {
   queryClient.clear();
 });
 
-const { AIProviderSettingsBoundary } =
+const { AIProviderSettingsBoundary: AIProviderSettingsAdmission } =
   await import("@/routes/_protected.settings/organization/-components/organization/ai-provider-settings-boundary");
+
+/** The settings boundary with a stand-in for the settings' pending phase. */
+const AIProviderSettingsBoundary = ({ children }: PropsWithChildren) => (
+  <AIProviderSettingsAdmission
+    pending={<p role="status">{messages.common.loading}</p>}
+  >
+    {children}
+  </AIProviderSettingsAdmission>
+);
 
 const surfaceBoundaries = {
   panel: ({ children }: PropsWithChildren) => (
@@ -776,11 +797,12 @@ test.each(composerAvailabilityCases)(
         ?.setContent(composerText("Which clauses need revision?"));
     });
     const send = screen.getByRole("button", { name: messages.chat.sendPrompt });
-    expect(send.hasAttribute("disabled")).toBe(state.type !== "available");
+    expect(isDisabledControl(send)).toBe(state.type !== "available");
     fireEvent.keyDown(textbox, { key: "Enter" });
     await settle();
     expect(sends.length).toBe(state.type === "available" ? 1 : 0);
     if (state.type !== "available") {
+      expect(send.getAttribute("aria-disabled")).toBe("true");
       expect(textbox.textContent).toContain("Which clauses need revision?");
       unavailableReason = "provider_not_configured";
       availabilityStatus = 200;
@@ -789,7 +811,7 @@ test.each(composerAvailabilityCases)(
         screen.getByRole("button", { name: messages.common.retry }),
       );
       await waitFor(() => {
-        expect(send.hasAttribute("disabled")).toBe(false);
+        expect(isDisabledControl(send)).toBe(false);
       });
       expect(
         screen.getByRole("textbox", { name: messages.chat.placeholder }),
@@ -818,13 +840,19 @@ test("the real chat textbox mounts during a pending availability read", async ()
   });
   expect(
     screen
-      .getByRole("button", { name: messages.chat.sendPrompt })
-      .hasAttribute("disabled"),
-  ).toBe(true);
+      .getByRole("button", {
+        name: messages.chat.sendPrompt,
+        description: messages.common.loading,
+      })
+      .getAttribute("aria-disabled"),
+  ).toBe("true");
   expect(textbox.getAttribute("contenteditable")).toBe("true");
-  // The wait shows in the composer row (send unavailable), not as a line
-  // added above the page that moves it when it goes.
-  expect(screen.queryByText(messages.common.loading)).toBeNull();
+  // A visible loading line would shift the editor when admission resolves.
+  expect(
+    screen
+      .getAllByText(messages.common.loading)
+      .every((label) => isInaccessible(label)),
+  ).toBe(true);
   expect(sends.length).toBe(0);
   instanceProvisioned = true;
   await act(async () => {
@@ -832,9 +860,9 @@ test("the real chat textbox mounts during a pending availability read", async ()
   });
   await waitFor(() => {
     expect(
-      screen
-        .getByRole("button", { name: messages.chat.sendPrompt })
-        .hasAttribute("disabled"),
+      isDisabledControl(
+        screen.getByRole("button", { name: messages.chat.sendPrompt }),
+      ),
     ).toBe(false);
   });
   expect(screen.getByRole("textbox", { name: messages.chat.placeholder })).toBe(

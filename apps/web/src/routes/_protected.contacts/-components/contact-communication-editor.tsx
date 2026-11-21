@@ -270,6 +270,7 @@ const ContactMethodRow = ({
         aria-label={t("common.delete")}
         className="opacity-0 transition-opacity group-hover:opacity-100 focus-visible:opacity-100 pointer-coarse:opacity-100"
         disabled={disabled}
+        disabledReason={t("common.saving")}
         onClick={onRemove}
         size="icon-xs"
         type="button"

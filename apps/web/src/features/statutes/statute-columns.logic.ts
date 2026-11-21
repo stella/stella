@@ -4,6 +4,8 @@ import type { StatuteListSortKey } from "@stll/api-contract/statute-list-sort";
 
 import type { TranslationKey } from "@/i18n/types";
 
+export { STATUTE_COLUMN_IDS } from "@stll/api-contract/public-law-table";
+
 /**
  * The statute column model as data: which columns exist, what they are
  * called, how wide they start and which of them a reader may hide. The same

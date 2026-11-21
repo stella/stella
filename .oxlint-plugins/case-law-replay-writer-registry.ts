@@ -9,62 +9,47 @@ export type ReplayWriterOwner = {
 export const REPLAY_WRITER_REGISTRY = [
   {
     file: "apps/api/src/db/root.ts",
-    line: 787,
+    line: 812,
     kind: "pending",
   },
   {
     file: "apps/api/src/handlers/case-law/citation-resolution.ts",
-    line: 1037,
+    line: 1052,
     kind: "pending",
   },
   {
     file: "apps/api/src/handlers/case-law/citation-resolution.ts",
-    line: 1369,
+    line: 1384,
     kind: "pending",
   },
   {
     file: "apps/api/src/handlers/case-law/citation-resolution.ts",
-    line: 1448,
+    line: 1463,
     kind: "pending",
   },
   {
     file: "apps/api/src/handlers/case-law/citation-resolution.ts",
-    line: 1541,
+    line: 1562,
     kind: "pending",
   },
   {
     file: "apps/api/src/handlers/case-law/citation-resolution.ts",
-    line: 1587,
+    line: 1608,
     kind: "pending",
   },
   {
     file: "apps/api/src/handlers/case-law/citation-resolution.ts",
-    line: 1626,
+    line: 1647,
     kind: "pending",
   },
   {
     file: "apps/api/src/handlers/case-law/citation-resolution.ts",
-    line: 1661,
+    line: 1682,
     kind: "pending",
   },
   {
     file: "apps/api/src/handlers/case-law/citation-resolution.ts",
-    line: 1711,
-    kind: "pending",
-  },
-  {
-    file: "apps/api/src/handlers/case-law/erasure.ts",
-    line: 444,
-    kind: "pending",
-  },
-  {
-    file: "apps/api/src/handlers/case-law/erasure.ts",
-    line: 757,
-    kind: "pending",
-  },
-  {
-    file: "apps/api/src/handlers/case-law/erasure.ts",
-    line: 767,
+    line: 1732,
     kind: "pending",
   },
   {
@@ -189,32 +174,32 @@ export const REPLAY_WRITER_REGISTRY = [
   },
   {
     file: "apps/api/src/handlers/case-law/ingestion/pipeline/decision-identity.ts",
-    line: 688,
+    line: 711,
     kind: "pending",
   },
   {
     file: "apps/api/src/handlers/case-law/ingestion/pipeline/decision-identity.ts",
-    line: 959,
+    line: 982,
     kind: "pending",
   },
   {
     file: "apps/api/src/handlers/case-law/ingestion/pipeline/decision-row-context.ts",
-    line: 188,
+    line: 197,
     kind: "pending",
   },
   {
     file: "apps/api/src/handlers/case-law/ingestion/pipeline/decision-row-update.ts",
-    line: 523,
+    line: 524,
     kind: "pending",
   },
   {
     file: "apps/api/src/handlers/case-law/ingestion/pipeline/decision-row.ts",
-    line: 385,
+    line: 401,
     kind: "pending",
   },
   {
     file: "apps/api/src/handlers/case-law/ingestion/pipeline/decision-row.ts",
-    line: 451,
+    line: 467,
     kind: "pending",
   },
   {
@@ -229,11 +214,6 @@ export const REPLAY_WRITER_REGISTRY = [
   {
     file: "apps/api/src/handlers/case-law/ingestion/pipeline/unread-items.ts",
     line: 235,
-    kind: "pending",
-  },
-  {
-    file: "apps/api/src/handlers/case-law/ingestion/supplement-erasure.ts",
-    line: 156,
     kind: "pending",
   },
   {
@@ -390,6 +370,24 @@ export const REPLAY_WRITER_REGISTRY = [
     invariant: {
       file: "apps/api/src/lib/legal-search/corpus-index-generation-retire.db.test.ts",
       test: "retire moves a building generation to retired with its receipt, and from that commit no writer projects it",
+    },
+  },
+  {
+    file: "apps/api/src/lib/legal-search/removal-reconciliation-store.ts",
+    line: 170,
+    kind: "transition",
+    invariant: {
+      file: "apps/api/src/handlers/case-law/ingestion/removal-retry-lane.postgres.test.ts",
+      test: "a claimed retry classifies a restored decision without a publisher probe",
+    },
+  },
+  {
+    file: "apps/api/src/lib/legal-search/removal-reconciliation-store.ts",
+    line: 367,
+    kind: "transition",
+    invariant: {
+      file: "apps/api/src/handlers/case-law/ingestion/removal-retry-lane.postgres.test.ts",
+      test: "bounded retries leave the remainder due for the next run",
     },
   },
 ] as const satisfies readonly ReplayWriterOwner[];

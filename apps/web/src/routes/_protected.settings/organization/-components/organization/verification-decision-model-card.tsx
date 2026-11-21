@@ -3,7 +3,6 @@ import { useId } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useTranslations } from "use-intl";
 
-import { Frame, FramePanel } from "@stll/ui/frame";
 import { Label } from "@stll/ui/label";
 import { Switch } from "@stll/ui/switch";
 import { stellaToast } from "@stll/ui/toast";
@@ -16,6 +15,7 @@ import { userErrorFromThrown } from "@/lib/errors/user-safe";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import type { OrganizationAIConfig } from "@/lib/organization/ai-config-queries";
 import { resourceMutation } from "@/lib/workspace-realtime";
+import { VerificationDecisionModelFrame } from "@/routes/_protected.settings/organization/-components/organization/verification-decision-model-card.pending";
 
 import { verificationDecisionModelSwitch } from "./verification-decision-model.logic";
 
@@ -99,34 +99,30 @@ export const VerificationDecisionModelControl = ({
   const switchId = useId();
   const view = verificationDecisionModelSwitch({ setting, canEdit, pending });
   return (
-    <Frame>
-      <FramePanel>
-        <div className="flex flex-col gap-3 p-1">
-          <div className="flex items-start justify-between gap-4">
-            <div className="flex min-w-0 flex-col gap-1">
-              <Label className="text-sm font-medium" htmlFor={switchId}>
-                {t("settings.organization.verificationDecisionModel.title")}
-              </Label>
-              <p className="text-muted-foreground text-xs text-pretty">
-                {t(
-                  "settings.organization.verificationDecisionModel.description",
-                )}
-              </p>
-            </div>
-            <Switch
-              id={switchId}
-              checked={view.checked}
-              disabled={view.disabled}
-              onCheckedChange={onChange}
-            />
-          </div>
-          {view.unavailable && (
-            <p className="text-muted-foreground text-2xs text-pretty">
-              {t("settings.organization.verificationDecisionModel.unavailable")}
-            </p>
-          )}
-        </div>
-      </FramePanel>
-    </Frame>
+    <VerificationDecisionModelFrame
+      control={
+        <Switch
+          id={switchId}
+          checked={view.checked}
+          disabled={view.disabled}
+          onCheckedChange={onChange}
+        />
+      }
+      description={t(
+        "settings.organization.verificationDecisionModel.description",
+      )}
+      label={
+        <Label className="text-sm font-medium" htmlFor={switchId}>
+          {t("settings.organization.verificationDecisionModel.title")}
+        </Label>
+      }
+      notice={
+        view.unavailable ? (
+          <p className="text-muted-foreground text-2xs text-pretty">
+            {t("settings.organization.verificationDecisionModel.unavailable")}
+          </p>
+        ) : undefined
+      }
+    />
   );
 };

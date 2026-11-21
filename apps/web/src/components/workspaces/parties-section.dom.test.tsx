@@ -389,7 +389,11 @@ test("creating a client from a personal matter sends a replay key and no contact
 
   const promoteButton = screen
     .getAllByRole("button", { name: messages.workspaces.parties.promoteCta })
-    .find((button) => !button.hasAttribute("disabled"));
+    .find(
+      (button) =>
+        !button.hasAttribute("disabled") &&
+        button.getAttribute("aria-disabled") !== "true",
+    );
   expect(promoteButton).toBeDefined();
   if (!promoteButton) {
     throw new Error("expected a selected client to enable promotion");

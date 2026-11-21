@@ -159,6 +159,15 @@ export const legalResolveResponseSchema = v.variant("status", [
   v.strictObject({
     status: v.literal("ambiguous"),
     candidates: v.array(legalResolveCandidateSchema),
+    /** More candidates exist than this bounded response can enumerate. */
+    candidateSet: v.optional(
+      v.pipe(
+        v.literal("truncated"),
+        v.description(
+          "More candidates exist. Refine the identifier with a court, ECLI or full published reference.",
+        ),
+      ),
+    ),
     otherCourtCandidates: otherCourtCandidatesSchema,
   }),
   v.strictObject({

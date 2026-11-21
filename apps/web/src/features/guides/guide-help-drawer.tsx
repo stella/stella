@@ -186,6 +186,7 @@ export const GuideHelpDrawer = ({
               actions={
                 <Button
                   disabled={availabilityRetrying}
+                  disabledReason={t("common.retrying")}
                   onClick={() => {
                     if (workspaceList.status === "failed") {
                       workspaceList.retry();

@@ -871,7 +871,7 @@ for (const response of ["error", "null", "empty"] as const) {
         toggle.click();
       });
       expect(requests).toHaveLength(1);
-      expect(toggle.disabled).toBe(true);
+      expect(toggle.getAttribute("aria-disabled")).toBe("true");
       expect(toggle.getAttribute("aria-expanded")).toBe("false");
       expect(container.textContent).toContain("Cited wording.");
       await act(async () => {
@@ -890,7 +890,7 @@ for (const response of ["error", "null", "empty"] as const) {
             response satisfies never;
         }
       });
-      expect(toggle.disabled).toBe(false);
+      expect(toggle.hasAttribute("aria-disabled")).toBe(false);
       expect(toggle.textContent).toBe("Show full provision");
       expect(toggle.getAttribute("aria-expanded")).toBe("false");
       expect(
@@ -906,13 +906,13 @@ for (const response of ["error", "null", "empty"] as const) {
         ),
       ).toBeNull();
       expect(container.textContent).toContain("Cited wording.");
-      expect(toggle.disabled).toBe(false);
+      expect(toggle.hasAttribute("aria-disabled")).toBe(false);
       expect(requests).toHaveLength(1);
       await act(async () => {
         toggle.click();
       });
       expect(requests).toHaveLength(2);
-      expect(toggle.disabled).toBe(true);
+      expect(toggle.getAttribute("aria-disabled")).toBe("true");
       await act(async () => {
         const retry = requests.at(1) ?? panic("Missing retry read");
         retry.resolve({
@@ -927,7 +927,7 @@ for (const response of ["error", "null", "empty"] as const) {
           ],
         });
       });
-      expect(toggle.disabled).toBe(false);
+      expect(toggle.hasAttribute("aria-disabled")).toBe(false);
       expect(toggle.textContent).toBe("Show cited part only");
       expect(toggle.getAttribute("aria-expanded")).toBe("true");
       expect(container.textContent).toContain("Rest of provision.");

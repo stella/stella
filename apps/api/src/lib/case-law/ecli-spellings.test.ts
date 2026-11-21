@@ -63,3 +63,26 @@ describe("Czech ECLI publisher spellings", () => {
     ]);
   });
 });
+
+test.each(["ECLI:EU:C:2024:9", "EU:C:2024:9"])(
+  "European full and printed short ECLIs share lookup spellings: %s",
+  (value) => {
+    const variants = ecliPublisherSpellings("EU", value);
+    expect(variants.at(0)).toBe(value);
+    expect(new Set(variants)).toEqual(
+      new Set(["ECLI:EU:C:2024:9", "EU:C:2024:9"]),
+    );
+  },
+);
+
+test("European aliases preserve decision identity and reject embedded or unsupported short forms", () => {
+  expect(
+    ecliPublisherSpellings("EU", "See ECLI:EU:C:2024:9 in context"),
+  ).toEqual(["See ECLI:EU:C:2024:9 in context"]);
+  expect(ecliPublisherSpellings("EU", "ECLI:EU:OTHER:2024:9")).toEqual([
+    "ECLI:EU:OTHER:2024:9",
+  ]);
+  expect(ecliPublisherSpellings("EU", "ECLI:EU:C:2024:9")).not.toContain(
+    "EU:C:2024:10",
+  );
+});

@@ -2,6 +2,8 @@ import { describe, expect, test } from "bun:test";
 
 import {
   CYCLE_HALT_REASON,
+  CYCLE_OUTCOME,
+  INGESTION_PAUSE_REASON,
   INGESTION_STOP_KIND,
   type IngestionPipelineResult,
   type IngestionStopKind,
@@ -24,6 +26,7 @@ const pipelineStop = (
   s3UploadFailures: 0,
   pagesProcessed: 0,
   nextCursor: "cursor-1",
+  outcome: CYCLE_OUTCOME.FAILED,
   haltReason: "Page fetch failed",
   stopKind,
 });
@@ -80,6 +83,51 @@ describe("runner cycle and loop wiring", () => {
     expect(recovered.stalledAdapterCount).toBe(0);
   });
 
+  test("an allowance pause preserves its typed reason and cursor without a health failure", async () => {
+    const execution = await executeIngestionCycle({
+      runPipeline: async () => ({
+        outcome: CYCLE_OUTCOME.PAUSED,
+        pauseReason: INGESTION_PAUSE_REASON.DECISION_ALLOWANCE_EXHAUSTED,
+        inserted: 1,
+        skipped: 0,
+        searchVectorFailures: 0,
+        s3UploadFailures: 0,
+        pagesProcessed: 0,
+        nextCursor: "cursor-1",
+        haltReason: "An operator-facing allowance message",
+      }),
+      cursorBefore: "cursor-1",
+      recordPages: () => undefined,
+      describeFailure: () => {
+        throw new Error("A pause must not classify a failure");
+      },
+    });
+    expect(execution.errorMessage).toBeNull();
+    expect(execution.cycle).toEqual({
+      outcome: CYCLE_OUTCOME.PAUSED,
+      pauseReason: INGESTION_PAUSE_REASON.DECISION_ALLOWANCE_EXHAUSTED,
+      inserted: 1,
+      skipped: 0,
+      pagesProcessed: 0,
+      cursorAdvanced: false,
+    });
+    const stalledAdapters = new Map([
+      ["test-source", INGESTION_STOP_KIND.ADAPTER_ERROR],
+    ]);
+    const step = stepAdapterCycleHealth({
+      adapterKey: "test-source",
+      cycle: execution.cycle,
+      stallAlert: { noProgressStreak: 4, captured: true },
+      stalledAdapters,
+      threshold: 5,
+    });
+    expect(step.stopKind).toBeNull();
+    expect(step.stall.capture).toBe(false);
+    expect(step.stall.sustained).toBeNull();
+    expect(step.madeProgress).toBe(false);
+    expect(stalledAdapters.size).toBe(0);
+  });
+
   test("a classified thrown pipeline error reaches the same loop health transition", async () => {
     const failure = new Error("Publisher unavailable");
     const classified: unknown[] = [];
@@ -132,7 +180,14 @@ describe("runner cycle and loop wiring", () => {
     expect(internal.cycle.stopKind).toBe(INGESTION_STOP_KIND.INTERNAL_ERROR);
     const deadline = await executeIngestionCycle({
       runPipeline: async () => ({
-        ...pipelineStop(INGESTION_STOP_KIND.SOURCE_UNREACHABLE),
+        inserted: 0,
+        skipped: 0,
+        searchVectorFailures: 0,
+        s3UploadFailures: 0,
+        pagesProcessed: 0,
+        nextCursor: "cursor-1",
+        outcome: CYCLE_OUTCOME.TIMEOUT,
+        stopKind: INGESTION_STOP_KIND.DEADLINE,
         haltReason: CYCLE_HALT_REASON.TIMEOUT,
       }),
       cursorBefore: "cursor-1",

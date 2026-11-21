@@ -1,14 +1,8 @@
 import { lazy, Suspense } from "react";
-import type { ComponentType, ReactElement, ReactNode } from "react";
+import type { ComponentType, ReactElement } from "react";
 
 import { panic } from "better-result";
-import * as v from "valibot";
 
-import { cn } from "@stll/ui/utils";
-
-import { routeSearchSchema } from "@/route-search-params";
-
-import { visualRegistry } from "./-visual-metadata";
 import type { VisualName } from "./-visual-metadata";
 
 type VisualLoader = {
@@ -121,6 +115,13 @@ const visualLoaders = {
       return { default: ButtonLabelPlayground };
     },
   },
+  "sortable-head": {
+    load: async () => {
+      const { SortableHeadPlayground } =
+        await import("./-components/sortable-head-playground");
+      return { default: SortableHeadPlayground };
+    },
+  },
   "menu-commits": {
     load: async () => {
       const { MenuCommitsPlayground } =
@@ -196,6 +197,13 @@ const visualLoaders = {
           <ChatCitationsPlayground cassette={CHAT_ANSWER_FOOTER_CASSETTE} />
         ),
       };
+    },
+  },
+  "chat-matter-reads": {
+    load: async () => {
+      const { ChatMatterReadsPlayground } =
+        await import("./-components/chat-matter-reads-playground");
+      return { default: ChatMatterReadsPlayground };
     },
   },
   "chat-answer-typography": {
@@ -288,6 +296,13 @@ const visualLoaders = {
       return { default: InspectorPanePlayground };
     },
   },
+  "inspector-phone-header": {
+    load: async () => {
+      const { InspectorPhoneHeaderPlayground } =
+        await import("./-components/inspector-phone-header-playground");
+      return { default: InspectorPhoneHeaderPlayground };
+    },
+  },
   "playbook-editor": {
     load: async () => {
       const { PlaybookEditorPlayground } =
@@ -325,13 +340,6 @@ const visualLoaders = {
   },
 } as const satisfies Record<VisualName, VisualLoader>;
 
-const isVisualName = (input: unknown): input is VisualName =>
-  typeof input === "string" && Object.hasOwn(visualRegistry, input);
-
-export const visualSearchSchema = routeSearchSchema({
-  visual: v.optional(v.custom<VisualName>(isVisualName)),
-});
-
 const lazyVisual = ({ load }: VisualLoader) => {
   const Component = lazy(load);
   return <Component />;
@@ -343,27 +351,6 @@ const visualElements = Object.freeze(
       ([name, entry]) => [name, lazyVisual(entry)] as const,
     ),
   ),
-);
-
-type FixtureSectionProps = {
-  visual: VisualName;
-  children: ReactNode;
-};
-
-export const FixtureSection = ({ visual, children }: FixtureSectionProps) => (
-  <section
-    className={cn(
-      "bg-background flex flex-1 flex-col",
-      // Plain fixtures grow in the page; pane layouts own bounded scroll areas.
-      visualRegistry[visual].layout !== "plain" && "min-h-0",
-    )}
-    data-playground-section={`fixture:${visual}`}
-  >
-    <header className="text-muted-foreground shrink-0 px-4 py-2 text-xs">
-      Fixture: {visualRegistry[visual].label}
-    </header>
-    {children}
-  </section>
 );
 
 type VisualPlaygroundProps = {
@@ -381,10 +368,8 @@ export const VisualPlayground = ({
   }
 
   return (
-    <FixtureSection visual={visual}>
-      <Suspense fallback={null}>
-        <Layout>{element}</Layout>
-      </Suspense>
-    </FixtureSection>
+    <Suspense fallback={null}>
+      <Layout>{element}</Layout>
+    </Suspense>
   );
 };

@@ -131,12 +131,14 @@ const DOCUMENT_FORMATS: readonly FormatEntry[] = [
     mimeTypes: ["image/webp"],
     extensions: [".webp"],
   },
-  ...LEGAL_FILE_FORMATS.map(({ kind, label, mimeType, extension }) => ({
-    kind,
-    label,
-    mimeTypes: [mimeType],
-    extensions: [extension],
-  })),
+  ...LEGAL_FILE_FORMATS.map(
+    ({ kind, label, mimeType, mimeAliases, extensions }) => ({
+      kind,
+      label,
+      mimeTypes: [mimeType, ...mimeAliases],
+      extensions,
+    }),
+  ),
   {
     kind: "email",
     label: "EML",

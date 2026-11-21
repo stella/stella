@@ -63,6 +63,7 @@ export const REPLAY_ENROLMENT = {
   [ADAPTER_KEYS.PL_UOKIK]: { mode: "off" },
   [ADAPTER_KEYS.BR_TJDFT]: { mode: "off" },
   [ADAPTER_KEYS.CZ_NS_SBIRKA]: { mode: "off" },
+  [ADAPTER_KEYS.CZ_ISIR]: { mode: "off" },
   [ADAPTER_KEYS.CZ_UOHS]: { mode: "off" },
   [ADAPTER_KEYS.BR_TST]: { mode: "off" },
 } as const satisfies Record<AdapterKey, ReplayEnrolment>;

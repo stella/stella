@@ -82,6 +82,7 @@ const dependenciesFor = (reason?: ApiKeyRefusalReason) => {
       userDeleted: false,
       enrolledFeatureIds: [],
       professionalUse: { status: "required" },
+      ssoAccess: { status: "not_evaluated" },
     }),
   );
   switch (reason) {

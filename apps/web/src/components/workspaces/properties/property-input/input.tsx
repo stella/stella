@@ -57,6 +57,7 @@ type PropertyPromptInputProps = {
   onSubmit?: () => void;
   aiEditAction?: {
     disabled: boolean;
+    disabledReason?: string | undefined;
     isPending: boolean;
     label: string;
     onClick: (instruction: string) => void;

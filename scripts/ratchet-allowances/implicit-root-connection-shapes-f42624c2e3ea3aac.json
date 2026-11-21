@@ -1,0 +1,6 @@
+{
+  "metric": "implicit-root-connection-shapes",
+  "file": "apps/api/src/lib/auth/session-history.ts",
+  "delta": 1,
+  "reason": "Sign-in rows are Better Auth session data outside row security, read beside the session history this module already serves on the owner connection; every query of the store scopes itself to the authenticated user's own live sessions."
+}

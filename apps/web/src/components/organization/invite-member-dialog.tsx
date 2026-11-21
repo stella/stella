@@ -5,6 +5,7 @@ import { useForm, useSelector } from "@tanstack/react-form";
 import { useQuery } from "@tanstack/react-query";
 import { Result } from "better-result";
 import { useTranslations } from "use-intl";
+import * as v from "valibot";
 
 import { assignableRoles } from "@stll/permissions";
 import { Button } from "@stll/ui/button";
@@ -21,7 +22,6 @@ import {
 } from "@stll/ui/dialog";
 import { Field, FieldError, FieldLabel } from "@stll/ui/field";
 import { Form } from "@stll/ui/form";
-import { UserPlusIcon } from "@stll/ui/icons";
 import { Input } from "@stll/ui/input";
 import {
   Select,
@@ -32,6 +32,11 @@ import {
 } from "@stll/ui/select";
 import { stellaToast } from "@stll/ui/toast";
 
+import {
+  INVITE_MEMBER_BUTTON_SIZE,
+  INVITE_MEMBER_BUTTON_VARIANT,
+  InviteMemberTriggerContent,
+} from "@/components/organization/invite-member-trigger.pending";
 import { QueryViewFeedback } from "@/components/query-view-feedback";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
 import type { Role } from "@/lib/auth-client";
@@ -56,6 +61,11 @@ type InviteMemberDialogProps = {
   description?: string;
   onInvited?: () => void;
   showIcon?: boolean;
+  /**
+   * Text the dialog opens with in its address field (what the reader typed
+   * into a search), used only when it is an email address.
+   */
+  suggestedEmail?: string | undefined;
 };
 
 export const InviteMemberDialog = (props: InviteMemberDialogProps) => {
@@ -96,13 +106,14 @@ type InviteMemberFormProps = InviteMemberDialogProps & {
 
 const InviteMemberForm = ({
   buttonLabel,
-  buttonSize = "sm",
-  buttonVariant = "outline",
+  buttonSize = INVITE_MEMBER_BUTTON_SIZE,
+  buttonVariant = INVITE_MEMBER_BUTTON_VARIANT,
   description,
   currentUserRole,
   defaultRole,
   onInvited,
   showIcon = true,
+  suggestedEmail,
 }: InviteMemberFormProps) => {
   const t = useTranslations();
   const [isOpen, setIsOpen] = useState(false);
@@ -112,7 +123,10 @@ const InviteMemberForm = ({
     currentUserRole,
     t("validation.invalidEmail"),
   );
-  const defaultValues = { email: "", role: defaultRole };
+  // The address the dialog opened with; it is the form's default, so a
+  // prefilled address is not an unsaved change.
+  const [openingEmail, setOpeningEmail] = useState("");
+  const defaultValues = { email: openingEmail, role: defaultRole };
   const roles = roleAssignmentOptions(currentUserRole).map(({ value }) => ({
     description: t(roleTranslationKeys[value].descriptionKey),
     label: t(roleTranslationKeys[value].labelKey),
@@ -166,15 +180,22 @@ const InviteMemberForm = ({
         setIsOpen(open);
         if (!open) {
           form.reset();
+          return;
         }
+        const suggested = v.safeParse(schema.entries.email, suggestedEmail);
+        const email = suggested.success ? suggested.output : "";
+        setOpeningEmail(email);
+        form.reset({ email, role: defaultRole });
       }}
       open={isOpen}
     >
       <DialogTrigger
         render={<Button size={buttonSize} variant={buttonVariant} />}
       >
-        {showIcon ? <UserPlusIcon className="size-4" /> : null}
-        {buttonLabel ?? t("common.invite")}
+        <InviteMemberTriggerContent
+          label={buttonLabel ?? t("common.invite")}
+          showIcon={showIcon}
+        />
       </DialogTrigger>
       <DialogPopup>
         <Form

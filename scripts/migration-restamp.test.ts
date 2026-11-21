@@ -17,6 +17,9 @@ import {
   checkMigrationStamps,
   findMigrationTimestampViolations,
   MigrationRestampBinaryReferenceError,
+  MigrationRestampScopeError,
+  MigrationRestampUsageError,
+  parseRestampArguments,
   readMigrationBaseSnapshot,
   restampMigrations,
   StaleMigrationStampError,
@@ -454,5 +457,233 @@ test("never touches a base migration and leaves newer branches unchanged", () =>
     expect(git(root, "status", "--short")).toBe("");
   } finally {
     rmSync(root, { recursive: true, force: true });
+  }
+});
+
+const writeRepoFile = (root: string, file: string, contents: string) => {
+  mkdirSync(path.dirname(path.join(root, file)), { recursive: true });
+  writeFileSync(path.join(root, file), contents);
+};
+
+const readRepoFile = (root: string, file: string) =>
+  readFileSync(path.join(root, file), "utf-8");
+
+test("refuses test references without --update-tests and names the flag", () => {
+  const root = fixture();
+  try {
+    migration(root, "20260101010000_feature");
+    writeRepoFile(
+      root,
+      "apps/api/src/tests/pglite-schema.ts",
+      'export const names = ["20260101010000_feature"];\n',
+    );
+    commitFeature(root);
+    advanceBase(root);
+    expect(() => restampMigrations({ baseRef: "base", cwd: root })).toThrow(
+      "re-run with --update-tests to rewrite these test references: apps/api/src/tests/pglite-schema.ts",
+    );
+    expect(
+      existsSync(
+        path.join(
+          root,
+          "apps/api/drizzle/20260101010000_feature/migration.sql",
+        ),
+      ),
+    ).toBe(true);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("re-stamps a migration with its lock allowance and test references", () => {
+  const root = fixture();
+  try {
+    const oldName = "20260101010000_feature";
+    migration(root, oldName);
+    lockAllowance(root, oldName, '{"create-trigger":"catalog only"}\n');
+    writeRepoFile(
+      root,
+      "apps/api/src/tests/pglite-schema.ts",
+      `export const names = [\n  "${oldName}",\n  "${oldName}_backfill",\n];\n`,
+    );
+    writeRepoFile(
+      root,
+      "apps/api/src/db/feature-migration.db.test.ts",
+      `const file = "drizzle/${oldName}/migration.sql";\n`,
+    );
+    commitFeature(root);
+    advanceBase(root);
+    expect(
+      restampMigrations({ baseRef: "base", cwd: root, updateTests: true }),
+    ).toEqual([{ oldName, newName: "20260101020100_feature" }]);
+    expect(lockAllowanceExists(root, oldName)).toBe(false);
+    expect(readLockAllowance(root, "20260101020100_feature")).toBe(
+      '{"create-trigger":"catalog only"}\n',
+    );
+    expect(readRepoFile(root, "apps/api/src/tests/pglite-schema.ts")).toBe(
+      `export const names = [\n  "20260101020100_feature",\n  "${oldName}_backfill",\n];\n`,
+    );
+    expect(
+      readRepoFile(root, "apps/api/src/db/feature-migration.db.test.ts"),
+    ).toBe('const file = "drizzle/20260101020100_feature/migration.sql";\n');
+    expect(() =>
+      checkMigrationStamps({ baseRef: "base", cwd: root }),
+    ).not.toThrow();
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("--update-tests still refuses a non-test reference outside the outputs", () => {
+  const root = fixture();
+  try {
+    migration(root, "20260101010000_feature");
+    writeRepoFile(
+      root,
+      "apps/api/src/db/online-entry.ts",
+      'export const migration = "20260101010000_feature";\n',
+    );
+    commitFeature(root);
+    advanceBase(root);
+    expect(() =>
+      restampMigrations({ baseRef: "base", cwd: root, updateTests: true }),
+    ).toThrow(MigrationRestampScopeError);
+    expect(() =>
+      restampMigrations({ baseRef: "base", cwd: root, updateTests: true }),
+    ).toThrow("re-stamp by hand: apps/api/src/db/online-entry.ts");
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("--forward stamps added migrations the given hours ahead of now", () => {
+  const root = fixture();
+  try {
+    migration(root, "20260101010000_first");
+    migration(root, "20260101010100_second");
+    commitFeature(root);
+    advanceBase(root);
+    expect(
+      restampMigrations({
+        baseRef: "base",
+        cwd: root,
+        forwardHours: 6,
+        now: new Date("2026-01-01T03:04:59.900Z"),
+      }),
+    ).toEqual([
+      { oldName: "20260101010000_first", newName: "20260101090400_first" },
+      { oldName: "20260101010100_second", newName: "20260101090500_second" },
+    ]);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("--forward moves a migration that is not stale yet", () => {
+  const root = fixture();
+  try {
+    migration(root, "20260101030000_feature");
+    commitFeature(root);
+    advanceBase(root);
+    expect(
+      restampMigrations({
+        baseRef: "base",
+        cwd: root,
+        forwardHours: 2,
+        now: new Date("2026-01-01T02:30:00Z"),
+      }),
+    ).toEqual([
+      { oldName: "20260101030000_feature", newName: "20260101043000_feature" },
+    ]);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("--forward keeps a stamp already past the target and follows a newer base", () => {
+  const root = fixture();
+  try {
+    migration(root, "20260105000000_far");
+    commitFeature(root);
+    advanceBase(root);
+    expect(
+      restampMigrations({
+        baseRef: "base",
+        cwd: root,
+        forwardHours: 1,
+        now: new Date("2026-01-01T00:00:00Z"),
+      }),
+    ).toEqual([]);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+  const behind = fixture();
+  try {
+    migration(behind, "20260101010000_feature");
+    commitFeature(behind);
+    advanceBase(behind, "20260101120000_base_ahead");
+    expect(
+      restampMigrations({
+        baseRef: "base",
+        cwd: behind,
+        forwardHours: 1,
+        now: new Date("2026-01-01T00:00:00Z"),
+      }),
+    ).toEqual([
+      { oldName: "20260101010000_feature", newName: "20260101120100_feature" },
+    ]);
+  } finally {
+    rmSync(behind, { recursive: true, force: true });
+  }
+});
+
+test("rejects a forward offset that is not a positive whole number of hours", () => {
+  for (const forwardHours of [0, -1, 1.5, Number.NaN]) {
+    expect(() =>
+      restampMigrations({ baseRef: "base", cwd: tmpdir(), forwardHours }),
+    ).toThrow(MigrationRestampUsageError);
+  }
+});
+
+test("parses re-stamp arguments", () => {
+  expect(parseRestampArguments(["--write", "--base", "origin/main"])).toEqual({
+    mode: "--write",
+    baseRef: "origin/main",
+    updateTests: false,
+    forwardHours: undefined,
+  });
+  expect(
+    parseRestampArguments([
+      "--write",
+      "--base",
+      "origin/main",
+      "--forward",
+      "12",
+      "--update-tests",
+    ]),
+  ).toEqual({
+    mode: "--write",
+    baseRef: "origin/main",
+    updateTests: true,
+    forwardHours: 12,
+  });
+  for (const arguments_ of [
+    [],
+    ["--write"],
+    ["--write", "--base"],
+    ["--write", "--base", "--forward"],
+    ["--write", "--base", "origin/main", "--forward"],
+    ["--write", "--base", "origin/main", "--forward", "0"],
+    ["--write", "--base", "origin/main", "--forward", "1.5"],
+    ["--write", "--base", "origin/main", "--forward", "-2"],
+    ["--write", "--base", "origin/main", "--forward", "2", "--forward", "3"],
+    ["--write", "--base", "origin/main", "--update-tests", "--update-tests"],
+    ["--write", "--base", "origin/main", "--unknown"],
+    ["--check", "--base", "origin/main", "--update-tests"],
+    ["--check", "--base", "origin/main", "--forward", "2"],
+  ]) {
+    expect(() => parseRestampArguments(arguments_)).toThrow(
+      MigrationRestampUsageError,
+    );
   }
 });

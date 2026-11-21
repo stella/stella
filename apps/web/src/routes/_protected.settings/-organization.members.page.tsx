@@ -9,7 +9,7 @@ import { compareByLocale } from "@stll/collation";
 import { Button } from "@stll/ui/button";
 import { EllipsisVerticalIcon } from "@stll/ui/icons";
 import { Menu, MenuItem, MenuPopup, MenuTrigger } from "@stll/ui/menu";
-import { TableCell, TableRow } from "@stll/ui/table";
+import { SortableHead, TableCell, TableRow } from "@stll/ui/table";
 import { stellaToast } from "@stll/ui/toast";
 
 import Tooltip from "@/components/tooltip";
@@ -31,8 +31,9 @@ import { filterOrganizationLists } from "@/routes/_protected.settings/organizati
 
 import {
   INITIAL_MEMBERS_SORT,
+  MEMBER_COLUMN_COUNT,
   MembersShell,
-  MemberTableCell,
+  MembersTableRow,
 } from "./-organization.members.pending";
 import type { Sort, SortKey } from "./-organization.members.pending";
 
@@ -122,43 +123,49 @@ export const MembersPage = () => {
           }
         />
       }
-      onSort={toggleSort}
-      sort={sort}
+      renderSortableHead={({ className, label, sortKey }) => (
+        <SortableHead
+          className={className}
+          key={sortKey}
+          onSort={() => toggleSort(sortKey)}
+          sortDirection={sort.key === sortKey ? sort.dir : null}
+        >
+          {label}
+        </SortableHead>
+      )}
       toolbar={<OrganizationListToolbar />}
     >
       {filteredMembers.map((member) => {
         const isSelf = member.userId === userId;
         return (
-          <TableRow className="group" key={member.id}>
-            <TableCell>
-              <UserIdentity
-                avatarClassName="size-8 shrink-0 text-3xs"
-                image={member.user.image}
-                name={member.user.name}
-                secondaryText={member.user.email}
-              />
-            </TableCell>
-            <TableCell>
-              <RoleCell
-                currentUserRole={currentUserRole}
-                isSelf={isSelf}
-                memberEmail={member.user.email}
-                memberId={member.id}
-                memberRole={member.role}
-              />
-            </TableCell>
-            <TableCell>
-              <MemberBillingAccessCell
-                memberId={member.id}
-                role={member.role}
-                billingAccess={member.billingAccess}
-              />
-            </TableCell>
-            <MemberTableCell columnId="joined">
-              {formatMemberDate(member.createdAt)}
-            </MemberTableCell>
-            <TableCell align="end">
-              {!isSelf && (
+          <MembersTableRow
+            cells={{
+              user: (
+                <UserIdentity
+                  avatarClassName="size-8 shrink-0 text-3xs"
+                  image={member.user.image}
+                  name={member.user.name}
+                  secondaryText={member.user.email}
+                />
+              ),
+              role: (
+                <RoleCell
+                  currentUserRole={currentUserRole}
+                  isSelf={isSelf}
+                  memberEmail={member.user.email}
+                  memberId={member.id}
+                  memberRole={member.role}
+                />
+              ),
+              billing: (
+                <MemberBillingAccessCell
+                  memberId={member.id}
+                  role={member.role}
+                  billingAccess={member.billingAccess}
+                />
+              ),
+              joined: formatMemberDate(member.createdAt),
+              actions: !isSelf && (
                 <Menu>
                   <Tooltip
                     content={t("common.actions")}
@@ -181,14 +188,15 @@ export const MembersPage = () => {
                     </MenuItem>
                   </MenuPopup>
                 </Menu>
-              )}
-            </TableCell>
-          </TableRow>
+              ),
+            }}
+            key={member.id}
+          />
         );
       })}
       {filteredMembers.length === 0 && (
         <TableRow>
-          <TableCell className="text-muted-foreground text-center" colSpan={4}>
+          <TableCell align="center" colSpan={MEMBER_COLUMN_COUNT} tone="muted">
             {t("organization.members.noMembersFound")}
           </TableCell>
         </TableRow>

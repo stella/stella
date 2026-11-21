@@ -36,6 +36,7 @@ export const useWebReaderMessages = (): ReaderMessages => {
     "inspector.external.openOriginal": t("inspector.external.openOriginal"),
     "caseLaw.citation.notInStella": t("caseLaw.citation.notInStella"),
     "statutes.provisionTextUnavailable": t("statutes.provisionTextUnavailable"),
+    "common.loading": t("common.loading"),
     "statutes.showCitedPartOnly": t("statutes.showCitedPartOnly"),
     "statutes.showFullProvision": t("statutes.showFullProvision"),
     "aiDisclosure.caseLaw": t("aiDisclosure.caseLaw"),

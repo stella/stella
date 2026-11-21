@@ -30,6 +30,7 @@ const messages = {
   "inspector.external.openOriginal": "Open original",
   "caseLaw.citation.notInStella": "Not in stella yet",
   "statutes.provisionTextUnavailable": "Text not available",
+  "common.loading": "Loading",
   "statutes.showCitedPartOnly": "Show cited part only",
   "statutes.showFullProvision": "Show full provision",
   "aiDisclosure.caseLaw": "Generated disclosure",

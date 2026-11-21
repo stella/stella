@@ -146,6 +146,7 @@ export const OutdatedChanges = ({
         <Button
           aria-label={t("common.summarizeChanges")}
           disabled={summary.status === "loading"}
+          disabledReason={t("common.loading")}
           onClick={() => {
             detached(handleSummarize(), "template-clauses-tab.summarize");
           }}
@@ -243,6 +244,7 @@ export const UnlinkButton = ({
           </AlertDialogClose>
           <Button
             disabled={unlinking}
+            disabledReason={t("common.removing")}
             onClick={() => {
               detached(handleUnlink(), "template-clauses-tab.unlink");
             }}

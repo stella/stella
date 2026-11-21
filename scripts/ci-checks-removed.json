@@ -130,5 +130,9 @@
   {
     "name": "Fetch and scan engine published export map guard",
     "reason": "Folded unchanged into the standalone package published export map guard, which runs the same commands for packages/fetch and packages/scan-engine under the same condition; one step per package pushed the workflow past its size limit."
+  },
+  {
+    "name": "Startup bundle ledger",
+    "reason": "The startup bundle ledger it guarded is deleted: page code at startup and extra cold-load hops now fail the web-build startup gates outright, so no exception list is left to keep from growing."
   }
 ]

@@ -136,6 +136,7 @@ export const SearchSummaryItem = ({
             layout="wrap"
             className="mb-2 w-full gap-3 rounded-md px-2.5 py-2.5"
             disabled={isPending}
+            disabledReason={t("search.summaryLoading")}
             onClick={onClick}
             variant={isError ? "destructive-outline" : "outline"}
             {...capabilityProps}
@@ -190,6 +191,7 @@ export const SearchSummaryItem = ({
               aria-busy={isOpeningChat || undefined}
               className="h-auto gap-2 px-1.5 py-1"
               disabled={isOpeningChat}
+              disabledReason={t("chat.openingChat")}
               onClick={onOpenChat}
               size="sm"
               variant="ghost"
