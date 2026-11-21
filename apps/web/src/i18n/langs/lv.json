@@ -4604,6 +4604,10 @@
       "lastUpdatedBy": "Pēdējoreiz atjaunināja",
       "matterColumnsHeading": "Lietas dati",
       "noMatterColumns": "Par šo dokumentu vēl nekas nav ierakstīts",
+      "similarDocuments": {
+        "heading": "Līdzīgi dokumenti",
+        "similarity": "{percent} līdzība"
+      },
       "stellaHeading": "Saglabāts lietotnē stella",
       "versionCurrent": "v{version} (pašreizējā)"
     },

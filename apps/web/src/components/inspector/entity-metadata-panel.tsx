@@ -23,6 +23,7 @@ import { cn } from "@stll/ui/utils";
 import { useCopyControl } from "@/components/copy-control";
 import { DocumentPropertiesSection } from "@/components/inspector/document-properties-section";
 import { MetadataPanelSkeleton } from "@/components/inspector/file-facets";
+import { SimilarDocumentsSection } from "@/components/inspector/similar-documents-section";
 import { QuerySuspenseBoundary } from "@/components/query-suspense-boundary";
 import { QueryViewFeedback } from "@/components/query-view-feedback";
 import Tooltip from "@/components/tooltip";
@@ -568,6 +569,11 @@ const EntityMetadataContent = ({
             </SectionHeading>
             <DocumentPropertiesSection
               fileFieldId={fileFieldId}
+              workspaceId={workspaceId}
+            />
+            <SimilarDocumentsSection
+              entityId={entity.entityId}
+              heading={(title) => <SectionHeading>{title}</SectionHeading>}
               workspaceId={workspaceId}
             />
           </>

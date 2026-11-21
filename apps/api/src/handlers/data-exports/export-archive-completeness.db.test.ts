@@ -310,6 +310,8 @@ const TABLE_CLASSIFICATIONS = {
   entityDeletionEffectChunks: FORMAT_SCOPE_EXCLUSION,
   entityLinks: FORMAT_SCOPE_EXCLUSION,
   entityVersionAiSummaries: FORMAT_SCOPE_EXCLUSION,
+  entityVersionMinhashBands: FORMAT_SCOPE_EXCLUSION,
+  entityVersionMinhashSignatures: FORMAT_SCOPE_EXCLUSION,
   entityVersions: "included",
   entityViews: FORMAT_SCOPE_EXCLUSION,
   euCompletionApprovals: RESEARCH_CORPUS_EXCLUSION,

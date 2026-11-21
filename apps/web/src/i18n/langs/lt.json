@@ -4604,6 +4604,10 @@
       "lastUpdatedBy": "Paskutinį kartą atnaujino",
       "matterColumnsHeading": "Bylos duomenys",
       "noMatterColumns": "Apie šį dokumentą dar nieko neįrašyta",
+      "similarDocuments": {
+        "heading": "Panašūs dokumentai",
+        "similarity": "{percent} panašumas"
+      },
       "stellaHeading": "Saugoma programoje stella",
       "versionCurrent": "v{version} (dabartinė)"
     },

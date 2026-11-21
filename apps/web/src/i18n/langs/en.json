@@ -4604,6 +4604,10 @@
       "lastUpdatedBy": "Last updated by",
       "matterColumnsHeading": "Matter information",
       "noMatterColumns": "Nothing recorded about this document yet",
+      "similarDocuments": {
+        "heading": "Similar documents",
+        "similarity": "{percent} similar"
+      },
       "stellaHeading": "Stored in stella",
       "versionCurrent": "v{version} (current)"
     },
