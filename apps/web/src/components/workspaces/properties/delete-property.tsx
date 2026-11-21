@@ -24,6 +24,37 @@ type DeletePropertyProps = {
   workspaceId: string;
   property: WorkspaceProperty;
 };
+type ColumnWorkflowDisabledReasonOptions = {
+  workflowDisabled: boolean;
+  workflowView: ReturnType<typeof useIsWorkflowRunning>;
+  t: (
+    key:
+      | "flows.loading"
+      | "workspaces.properties.waitForWorkflow"
+      | "flows.loadFailed",
+  ) => string;
+};
+
+const columnWorkflowDisabledReason = ({
+  workflowDisabled,
+  workflowView,
+  t,
+}: ColumnWorkflowDisabledReasonOptions) => {
+  if (!workflowDisabled) {
+    return undefined;
+  }
+  if (workflowView.type === "pending") {
+    return t("flows.loading");
+  }
+  if (
+    workflowView.type === "items" &&
+    workflowView.refetchError === undefined
+  ) {
+    return t("workspaces.properties.waitForWorkflow");
+  }
+  return t("flows.loadFailed");
+};
+
 export const DeleteProperty = ({
   workspaceId,
   property,
@@ -31,6 +62,11 @@ export const DeleteProperty = ({
   const t = useTranslations();
   const workflowView = useIsWorkflowRunning(workspaceId);
   const workflowDisabled = workflowActionsDisabled(workflowView);
+  const workflowDisabledReason = columnWorkflowDisabledReason({
+    workflowDisabled,
+    workflowView,
+    t,
+  });
   const deleteProperty = useDeleteProperty();
   const canDelete = property.content.type !== "file";
 
@@ -45,6 +81,12 @@ export const DeleteProperty = ({
               className="text-destructive-foreground justify-start font-normal"
               disabled={
                 workflowDisabled || !canDelete || deleteProperty.isPending
+              }
+              disabledReason={
+                workflowDisabledReason ??
+                (!canDelete
+                  ? t("workspaces.properties.fileColumnCannotBeDeleted")
+                  : t("common.deleting"))
               }
               size="sm"
               variant="ghost"
@@ -72,6 +114,9 @@ export const DeleteProperty = ({
               render={
                 <Button
                   disabled={workflowDisabled || deleteProperty.isPending}
+                  disabledReason={
+                    workflowDisabledReason ?? t("common.deleting")
+                  }
                   onClick={() => {
                     deleteProperty.mutate(
                       {

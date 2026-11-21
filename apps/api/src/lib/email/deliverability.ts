@@ -58,6 +58,8 @@ const bouncedRecipientsSchema = v.pipe(
 const providerEventSchema = v.variant("eventType", [
   v.object({
     eventType: v.literal("Bounce"),
+    // The provider's id for the bounced message, as its send returned it.
+    mail: v.object({ messageId: v.string() }),
     bounce: v.object({
       bounceType: v.string(),
       bounceSubType: v.string(),
@@ -155,11 +157,15 @@ type AccountRefusal =
 /**
  * What a provider event means for the addresses it names: the accounts at
  * them may stop receiving mail (`refusal`), and why mail failed to reach each
- * address is recorded (`failures`).
+ * address is recorded (`failures`). A bounce also names the message that
+ * failed (`bouncedMessage`), so the sign-in attempt that sent it can learn
+ * why; a complaint names none.
  */
 export type DeliverabilityTransition = {
   refusal: AccountRefusal;
   failures: EmailDeliveryFailure[];
+  bouncedMessage:
+    { type: "message"; providerMessageId: string } | { type: "none" };
   at: Date;
 };
 
@@ -262,8 +268,17 @@ export const readDeliverabilityTransition = (
               recipients: failures.map(({ email }) => email),
             }
           : { type: "none" };
+      const bouncedMessage = {
+        type: "message",
+        providerMessageId: providerEvent.mail.messageId,
+      } as const;
       return parseEventTime(bounce.timestamp).map(
-        (at): DeliverabilityTransition => ({ refusal, failures, at }),
+        (at): DeliverabilityTransition => ({
+          refusal,
+          failures,
+          bouncedMessage,
+          at,
+        }),
       );
     }
     case "Complaint": {
@@ -278,6 +293,7 @@ export const readDeliverabilityTransition = (
             recipients: toRecipients(complaint.complainedRecipients),
           },
           failures: [],
+          bouncedMessage: { type: "none" },
           at,
         }),
       );
@@ -311,6 +327,14 @@ type DrainDeliverabilityEventsOptions = {
     failures: readonly EmailDeliveryFailure[],
     at: Date,
   ) => Promise<number>;
+  /**
+   * Tells the sign-in attempt that sent a bounced message why it failed, if
+   * one did. Best effort: it never fails the event.
+   */
+  reportBouncedMessage: (
+    providerMessageId: string,
+    reason: EmailDeliveryFailureReason,
+  ) => Promise<void>;
   signal: AbortSignal;
   logger: typeof appLogger;
 };
@@ -328,6 +352,7 @@ export const drainDeliverabilityEvents = async ({
   topicArn,
   markUndeliverable,
   recordFailures,
+  reportBouncedMessage,
   signal,
   logger,
 }: DrainDeliverabilityEventsOptions) => {
@@ -342,9 +367,19 @@ export const drainDeliverabilityEvents = async ({
   const apply = async ({
     refusal,
     failures,
+    bouncedMessage,
     at,
   }: DeliverabilityTransition): Promise<AppliedTransition> => {
     const recorded = await recordFailures(failures, at);
+    // A sign-in code goes to one address, so its message's first failure is
+    // the one that matters.
+    const firstFailure = failures.at(0);
+    if (bouncedMessage.type === "message" && firstFailure !== undefined) {
+      await reportBouncedMessage(
+        bouncedMessage.providerMessageId,
+        firstFailure.reason,
+      );
+    }
     switch (refusal.type) {
       case "none":
         return { recorded, marked: 0 };

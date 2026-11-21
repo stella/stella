@@ -194,6 +194,7 @@ export const SavedTimeNarratives = ({
                   })}
                   className="size-11 shrink-0"
                   disabled={remove.isPending}
+                  disabledReason={t("common.removing")}
                   onClick={() => {
                     setIsOpen(false);
                     setDeleting(item);
@@ -211,6 +212,7 @@ export const SavedTimeNarratives = ({
               <Button
                 className="w-full"
                 disabled={savedQuery.isFetchingNextPage}
+                disabledReason={t("caseLaw.loadingMore")}
                 onClick={() =>
                   detached(
                     savedQuery.fetchNextPage(),
@@ -233,6 +235,9 @@ export const SavedTimeNarratives = ({
       <Button
         aria-label={t("billing.savedNarratives.save")}
         disabled={narrative.trim().length === 0 || create.isPending}
+        disabledReason={
+          create.isPending ? t("common.saving") : t("billing.enterNarrative")
+        }
         onClick={() => setName("")}
         size="icon-sm"
         title={t("billing.savedNarratives.save")}
@@ -293,6 +298,11 @@ export const SavedTimeNarratives = ({
               </Button>
               <Button
                 disabled={!name?.trim() || create.isPending}
+                disabledReason={
+                  create.isPending
+                    ? t("common.saving")
+                    : t("billing.enterNarrativeName")
+                }
                 type="submit"
               >
                 {t("common.save")}
@@ -325,6 +335,11 @@ export const SavedTimeNarratives = ({
             </AlertDialogClose>
             <Button
               disabled={!deleting || remove.isPending}
+              disabledReason={
+                remove.isPending
+                  ? t("common.removing")
+                  : t("billing.chooseNarrativeToRemove")
+              }
               onClick={() => {
                 if (deleting) {
                   remove.mutate(deleting.id);

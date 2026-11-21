@@ -548,6 +548,7 @@ const ConditionFieldEditor = ({
           <Button
             className="self-start"
             disabled={!canPersistRuleGroup(group)}
+            disabledReason={t("templates.studio.completeCondition")}
             onClick={applyRule}
             size="sm"
           >
@@ -917,6 +918,7 @@ const ConditionRuleBuilder = ({
       <div className="flex items-center gap-2">
         <Button
           disabled={!canPersistRuleGroup(group)}
+          disabledReason={t("templates.studio.completeCondition")}
           onClick={apply}
           size="sm"
         >
@@ -1024,6 +1026,7 @@ const ConditionAiBuilder = ({
       <Button
         className="self-start"
         disabled={trimmedLabel === "" || trimmedPrompt === ""}
+        disabledReason={t("templates.studio.enterConditionNameAndPrompt")}
         onClick={apply}
         size="sm"
       >

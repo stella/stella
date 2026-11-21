@@ -1453,6 +1453,11 @@ const OpenDesktopAndResendButton = ({
     <>
       <Button
         disabled={disabled || opening}
+        disabledReason={
+          opening
+            ? t("settings.account.desktopCardOpeningTitle")
+            : t("chat.answerEdit.waitForAnswer")
+        }
         onClick={() => {
           const superseded = holdResend();
           detached(
@@ -1585,6 +1590,7 @@ export const ChatErrorMessage = ({
           {canSendWithoutAnonymization && (
             <Button
               disabled={isGenerating}
+              disabledReason={t("chat.answerEdit.waitForAnswer")}
               onClick={() => {
                 detached(
                   onSendWithoutAnonymization(),
@@ -1624,6 +1630,7 @@ export const ChatErrorMessage = ({
           {onResend && canRetryChatRequest(error) && (
             <Button
               disabled={isGenerating}
+              disabledReason={t("chat.answerEdit.waitForAnswer")}
               onClick={() => {
                 desktopResend.current?.abort();
                 detached(onResend(), "chat-thread-messages.resend");

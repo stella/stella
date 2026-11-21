@@ -1,0 +1,5 @@
+{
+  "metric": "audit-skip-directives",
+  "delta": 1,
+  "reason": "Recording where a new session signed in from is part of creating that session in Better Auth's session hook, which has no audit event of its own to join; review changes of the same row are audited through the transition owner."
+}

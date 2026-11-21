@@ -551,6 +551,7 @@ const AttentionBar = ({
       {routineCount > 0 && (
         <Button
           disabled={!canReview}
+          disabledReason={t("avt.review.permissionRequired")}
           onClick={onAcceptRoutine}
           size="sm"
           variant="outline"

@@ -80,11 +80,14 @@ export const ChatComposerActionButton = (
       aria-label={label}
       className={className}
       disabled={!enabled}
+      disabledReason={
+        mode === "stop"
+          ? t("chat.stopping")
+          : (props.disabledReason ?? t("chat.sendPromptEmpty"))
+      }
       onClick={handleClick}
       size="icon-round"
-      // A disabled `Button` with a tooltip stays hoverable and focusable
-      // (`aria-disabled`), so the reason is reachable exactly when needed.
-      tooltip={enabled ? label : (props.disabledReason ?? label)}
+      tooltip={label}
       type="button"
       variant="composer"
     >

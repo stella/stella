@@ -9,11 +9,11 @@ import {
   LabelFace,
   SwitchFace,
 } from "@stll/ui/control-face";
-import { Frame, FramePanel } from "@stll/ui/frame";
+import { SettingsPanel, SettingsSection } from "@stll/ui/settings";
 
 import { PendingText } from "@/components/pending-text";
 import type { PendingTextKey } from "@/components/pending-text";
-import { FORM_STACK_CLASS } from "@/routes/_protected.settings/-components/settings-card.pending";
+import { FORM_STACK_CLASS } from "@/routes/_protected.settings/-components/settings-section.pending";
 
 /*
  * The time policy card's frame, drawn by both phases, and the card in its
@@ -23,15 +23,13 @@ import { FORM_STACK_CLASS } from "@/routes/_protected.settings/-components/setti
 
 /** The time policy card: the panel the policy's form sits in. */
 export const TimePolicyCardFrame = ({ children }: { children: ReactNode }) => (
-  <Frame>
-    <FramePanel>
-      <div className="p-1">{children}</div>
-    </FramePanel>
-  </Frame>
+  <SettingsSection>
+    <SettingsPanel>{children}</SettingsPanel>
+  </SettingsSection>
 );
 
 /** The locked month row: the month and year pickers, then the clear button. */
-export const TIME_POLICY_MONTH_ROW_CLASS = "flex items-center gap-2";
+export const TIME_POLICY_MONTH_ROW_CLASS = "flex flex-wrap items-center gap-2";
 
 /** A field in its pending phase: caption, the control's face, help line. */
 const TimePolicyFieldPending = ({

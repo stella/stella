@@ -249,6 +249,11 @@ const BlueprintGallerySheetBody = ({
           return (
             <Button
               disabled={cannotCreate}
+              disabledReason={
+                create.isPending
+                  ? t("common.creating")
+                  : t("common.selectAMatter")
+              }
               key={card.id}
               onClick={() => createFrom(card.id)}
               variant="plain"
@@ -290,6 +295,9 @@ const BlueprintGallerySheetBody = ({
             straight in the editor and fills the skill in there. */}
         <Button
           disabled={cannotCreate}
+          disabledReason={
+            create.isPending ? t("common.creating") : t("common.selectAMatter")
+          }
           onClick={() => createFrom("blank")}
           variant="plain"
         >

@@ -100,7 +100,10 @@ import { useSuggestedFollowupPrompts } from "@/features/chat/hooks/use-suggested
 import { legalDocumentChatContext } from "@/features/chat/legal-document-chat-context";
 import { buildChatRequestMessage } from "@/features/chat/lib/build-chat-request-message";
 import { startNewThreadCommandHandoff } from "@/features/chat/lib/start-new-thread-command-handoff";
-import { chatThreadOptions } from "@/features/chat/queries";
+import {
+  chatThreadOptions,
+  chatThreadTitleOptions,
+} from "@/features/chat/queries";
 import {
   claimQueuedChatSend,
   hasQueuedChatSend,
@@ -126,6 +129,7 @@ import {
   createChatThreadId,
   getChatThreadKey,
 } from "@/lib/chat-thread-ref";
+import { isPlaceholderThreadTitle } from "@/lib/chat-thread-title";
 import { detached } from "@/lib/detached";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import { useSkillLabel } from "@/lib/knowledge/built-in-skills";
@@ -475,6 +479,39 @@ export const ChatTabPanel = ({
       updateLabel(tab.id, value);
     },
   });
+
+  // Once the thread exists on the server its title is the tab's name. A tab
+  // opened for an existing thread (moved over from the main chat, reopened from
+  // history or the rail) starts on the default label, and a title generated or
+  // renamed on another surface would otherwise never reach it. The by-id read
+  // is bounded and runs only for a persisted thread.
+  const titleView = queryView(
+    useQuery(
+      chatThreadTitleOptions({
+        activeOrganizationId,
+        key: {
+          threadId: threadRef.threadId,
+          workspaceId:
+            threadRef.scope === "workspace" ? threadRef.workspaceId : undefined,
+        },
+        persistedThread: data,
+      }),
+    ),
+  );
+  useQueryViewError(titleView, "ChatTabPanel:thread-title");
+  const persistedTitle =
+    titleView.type === "items" && !isPlaceholderThreadTitle(titleView.items)
+      ? titleView.items
+      : null;
+  const editingLabel = labelRename.state.mode === "edit";
+  useExternalSyncEffect(() => {
+    if (persistedTitle === null || editingLabel) {
+      return;
+    }
+    if (persistedTitle !== tab.label) {
+      updateLabel(tab.id, persistedTitle);
+    }
+  }, [editingLabel, persistedTitle, tab.id, tab.label, updateLabel]);
 
   // Mirrors of the label edit session, maintained at the handlers below, so
   // the async title suggestion can tell whether the user typed, cancelled,

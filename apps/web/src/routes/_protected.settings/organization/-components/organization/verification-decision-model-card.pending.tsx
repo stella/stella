@@ -1,12 +1,12 @@
 import type { ReactNode } from "react";
 
 import { SwitchFace } from "@stll/ui/control-face";
-import { Frame, FramePanel } from "@stll/ui/frame";
+import { SettingsRow, SettingsSection } from "@stll/ui/settings";
 
 import { PendingText } from "@/components/pending-text";
 
 /*
- * The verification verdicts card (`VerificationDecisionModelControl`),
+ * The verification verdicts row (`VerificationDecisionModelControl`),
  * beside its pending phase: the switch's caption and quiet line at the
  * start, the switch at the end, and why it cannot be turned on under them.
  * The live card puts its `Label` and `Switch` in; the pending phase their
@@ -23,32 +23,21 @@ type VerificationDecisionModelFrameProps = {
   notice?: ReactNode;
 };
 
-/** The verification verdicts card, in both phases. */
+/** The verification verdicts row, in both phases. */
 export const VerificationDecisionModelFrame = ({
   control,
   description,
   label,
   notice,
 }: VerificationDecisionModelFrameProps) => (
-  <Frame>
-    <FramePanel>
-      <div className="flex flex-col gap-3 p-1">
-        <div className="flex items-start justify-between gap-4">
-          <div className="flex min-w-0 flex-col gap-1">
-            {label}
-            <p className="text-muted-foreground text-xs text-pretty">
-              {description}
-            </p>
-          </div>
-          {control}
-        </div>
-        {notice}
-      </div>
-    </FramePanel>
-  </Frame>
+  <SettingsSection>
+    <SettingsRow description={description} footer={notice} title={label}>
+      {control}
+    </SettingsRow>
+  </SettingsSection>
 );
 
-/** The card while the AI configuration is read. */
+/** The row while the AI configuration is read. */
 export const VerificationDecisionModelCardPending = () => (
   <VerificationDecisionModelFrame
     control={<SwitchFace />}

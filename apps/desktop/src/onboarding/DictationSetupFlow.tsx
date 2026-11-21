@@ -196,6 +196,7 @@ export const DictationSetupFlow = ({
         primary: (
           <Button
             disabled={busy}
+            disabledReason={t("enablingDictation")}
             onClick={() => {
               void onContinue();
             }}

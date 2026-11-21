@@ -146,6 +146,9 @@ export const ContactCustomFieldsEditor = ({
           />
           <AddCustomFieldSubmitButton
             disabled={isPending || labelDraft.trim().length === 0}
+            disabledReason={
+              isPending ? t("common.saving") : t("common.enterName")
+            }
             label={t("contacts.customFields.addField")}
           />
         </Form>
@@ -156,14 +159,21 @@ export const ContactCustomFieldsEditor = ({
 
 const AddCustomFieldSubmitButton = ({
   disabled,
+  disabledReason,
   label,
 }: {
   disabled: boolean;
+  disabledReason: string;
   label: string;
 }) => {
+  const t = useTranslations();
   const { pending } = useFormStatus();
   return (
-    <Button disabled={disabled || pending} type="submit">
+    <Button
+      disabled={disabled || pending}
+      disabledReason={pending ? t("common.saving") : disabledReason}
+      type="submit"
+    >
       <PlusIcon className="size-4" />
       {label}
     </Button>
@@ -233,6 +243,7 @@ const CustomFieldRow = ({
       <Button
         aria-label={t("contacts.customFields.removeField")}
         disabled={disabled}
+        disabledReason={t("common.saving")}
         onClick={onRemove}
         size="icon-sm"
         type="button"

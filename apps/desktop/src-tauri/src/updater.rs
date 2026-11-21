@@ -9,6 +9,8 @@
 //   long-lived desktop sessions still pick up new releases.
 // - When the tray "Check for updates" item is clicked, run the same
 //   check synchronously and notify whether an update was found.
+// - Settings → About checks without installing, shows what it found,
+//   and installs through that same check when the user asks.
 // - When an update is found and no desktop edit sessions are
 //   active, download + install + relaunch. The installer handles
 //   the binary swap; `crate::relaunch` owns the hand-over to the
@@ -16,6 +18,7 @@
 // - When an administrator set `DisableUpdates`, nothing checks: the
 //   organization deploys new versions itself.
 
+use std::future::Future;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
@@ -77,10 +80,9 @@ pub fn schedule_startup_check(handle: AppHandle, manager: Arc<Mutex<SessionManag
         tokio::time::sleep(WAKE_CHECK_TICK).await;
         continue;
       }
-      let active_edit_sessions = {
-        let mgr = manager.lock().await;
-        mgr.has_active_edit_sessions()
-      };
+      let sessions = &*manager;
+      let active_edit_sessions =
+        move || async move { sessions.lock().await.has_active_edit_sessions() };
 
       match run_check(&handle, active_edit_sessions).await {
         CheckOutcome::Deferred { version } => {
@@ -154,8 +156,9 @@ pub async fn check_on_handoff(
   if cfg!(debug_assertions) {
     return false;
   }
-  let active = manager.lock().await.has_active_edit_sessions();
-  match run_check(handle, active).await {
+  let active_edit_sessions =
+    move || async move { manager.lock().await.has_active_edit_sessions() };
+  match run_check(handle, active_edit_sessions).await {
     CheckOutcome::Installed { .. } => true,
     CheckOutcome::Failed(error) => {
       tracing::warn!(%error, "handoff updater check failed");
@@ -167,24 +170,59 @@ pub async fn check_on_handoff(
   }
 }
 
-pub async fn run_check(handle: &AppHandle, active_edit_sessions: bool) -> CheckOutcome {
+/// What became of a found update before its install: deferred because a
+/// document is open for editing, failed to download, or downloaded and
+/// still clear to install.
+enum PreparedInstall<Package> {
+  Deferred,
+  DownloadFailed(String),
+  Ready(Package),
+}
+
+/// Asks whether desktop edits are active, downloads, and asks again right
+/// before the install: a document can open while the package downloads.
+async fn prepare_install<Package, Active, ActiveFuture, Download, DownloadFuture>(
+  active_edit_sessions: &Active,
+  download: Download,
+) -> PreparedInstall<Package>
+where
+  Active: Fn() -> ActiveFuture,
+  ActiveFuture: Future<Output = bool>,
+  Download: FnOnce() -> DownloadFuture,
+  DownloadFuture: Future<Output = Result<Package, String>>,
+{
+  if active_edit_sessions().await {
+    return PreparedInstall::Deferred;
+  }
+  let package = match download().await {
+    Ok(package) => package,
+    Err(err) => return PreparedInstall::DownloadFailed(err),
+  };
+  if active_edit_sessions().await {
+    return PreparedInstall::Deferred;
+  }
+  PreparedInstall::Ready(package)
+}
+
+/// `active_edit_sessions` is asked when an update is found and again right
+/// before it installs, so an edit that starts during the download defers it.
+pub async fn run_check<Active, ActiveFuture>(
+  handle: &AppHandle,
+  active_edit_sessions: Active,
+) -> CheckOutcome
+where
+  Active: Fn() -> ActiveFuture,
+  ActiveFuture: Future<Output = bool>,
+{
   if crate::managed_policy::current().updates_disabled {
     return CheckOutcome::Disabled;
   }
   // Startup, handoffs and tray actions cannot run installers concurrently.
   let _check = CHECK_LOCK.lock().await;
   record_check(unix_seconds(SystemTime::now()));
-  let exit_handle = handle.clone();
-  let updater = match handle
-    .updater_builder()
-    .on_before_exit(move || {
-      crate::desktop_crash::clean_exit(&exit_handle);
-      exit_handle.cleanup_before_exit();
-    })
-    .build()
-  {
+  let updater = match build_updater(handle) {
     Ok(u) => u,
-    Err(err) => return CheckOutcome::Failed(err.to_string()),
+    Err(err) => return CheckOutcome::Failed(err),
   };
 
   let update = match updater.check().await {
@@ -194,24 +232,26 @@ pub async fn run_check(handle: &AppHandle, active_edit_sessions: bool) -> CheckO
   };
 
   let version = update.version.clone();
-  if active_edit_sessions {
+  let prepared = prepare_install(&active_edit_sessions, || async {
     notify(
       handle,
       "Stella update available",
-      "Stella Desktop will update after active desktop edits are finished.",
+      &format!("Installing v{version}…"),
     );
-    return CheckOutcome::Deferred { version };
-  }
-
-  notify(
-    handle,
-    "Stella update available",
-    &format!("Installing v{version}…"),
-  );
-
-  let package = match download_update_package(&update).await {
-    Ok(package) => package,
-    Err(err) => {
+    download_update_package(&update).await
+  })
+  .await;
+  let package = match prepared {
+    PreparedInstall::Ready(package) => package,
+    PreparedInstall::Deferred => {
+      notify(
+        handle,
+        "Stella update available",
+        "Stella Desktop will update after active desktop edits are finished.",
+      );
+      return CheckOutcome::Deferred { version };
+    }
+    PreparedInstall::DownloadFailed(err) => {
       #[cfg(windows)]
       crate::desktop_crash::resume_after_failed_update(handle);
       notify(handle, "Stella update failed", &err);
@@ -240,6 +280,68 @@ pub async fn run_check(handle: &AppHandle, active_edit_sessions: bool) -> CheckO
   }
 
   CheckOutcome::Installed { version }
+}
+
+fn build_updater(handle: &AppHandle) -> Result<tauri_plugin_updater::Updater, String> {
+  let exit_handle = handle.clone();
+  handle
+    .updater_builder()
+    .on_before_exit(move || {
+      crate::desktop_crash::clean_exit(&exit_handle);
+      exit_handle.cleanup_before_exit();
+    })
+    .build()
+    .map_err(|err| err.to_string())
+}
+
+// What Settings → About shows after a check or an install it started; the
+// webview reads it through the generated desktop RPC contract. A failure is
+// the command's error instead.
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
+#[cfg_attr(test, derive(ts_rs::TS))]
+#[serde(tag = "status", rename_all = "snake_case")]
+pub enum SettingsCheck {
+  UpToDate,
+  Available { version: String },
+  Deferred { version: String },
+  Installing { version: String },
+  Managed,
+}
+
+/// Asks the release feed whether a newer version exists and installs
+/// nothing: Settings offers the update, then installs through `run_check`.
+pub async fn check_from_settings(handle: &AppHandle) -> Result<SettingsCheck, String> {
+  if crate::managed_policy::current().updates_disabled {
+    return Ok(SettingsCheck::Managed);
+  }
+  let found = match build_updater(handle) {
+    Ok(updater) => updater.check().await.map_err(|err| err.to_string()),
+    Err(err) => Err(err),
+  };
+  match found {
+    Ok(Some(update)) => Ok(SettingsCheck::Available {
+      version: update.version,
+    }),
+    Ok(None) => Ok(SettingsCheck::UpToDate),
+    Err(err) => {
+      tracing::warn!(error = %err, "settings updater check failed");
+      Err(err)
+    }
+  }
+}
+
+/// The Settings result of an install that went through `run_check`.
+pub fn settings_outcome(outcome: CheckOutcome) -> Result<SettingsCheck, String> {
+  match outcome {
+    CheckOutcome::Deferred { version } => Ok(SettingsCheck::Deferred { version }),
+    CheckOutcome::UpToDate => Ok(SettingsCheck::UpToDate),
+    CheckOutcome::Installed { version } => Ok(SettingsCheck::Installing { version }),
+    CheckOutcome::Failed(err) => {
+      tracing::warn!(error = %err, "settings update install failed");
+      Err(err)
+    }
+    CheckOutcome::Disabled => Ok(SettingsCheck::Managed),
+  }
 }
 
 fn updater_public_key() -> Result<String, String> {
@@ -385,6 +487,112 @@ fn notify(handle: &AppHandle, title: &str, body: &str) {
 #[cfg(test)]
 mod tests {
   use super::*;
+  use std::sync::atomic::AtomicUsize;
+
+  /// Answers each "are desktop edits active?" in turn, counting the asks.
+  fn edit_state(
+    answers: &'static [bool],
+  ) -> (Arc<AtomicUsize>, impl Fn() -> std::future::Ready<bool>) {
+    let asked = Arc::new(AtomicUsize::new(0));
+    let counter = Arc::clone(&asked);
+    let active = move || {
+      let index = counter.fetch_add(1, Ordering::SeqCst);
+      std::future::ready(answers[index])
+    };
+    (asked, active)
+  }
+
+  #[tokio::test]
+  async fn an_edit_opened_during_the_download_defers_the_install() {
+    let (asked, active) = edit_state(&[false, true]);
+    let downloads = AtomicUsize::new(0);
+    let prepared = prepare_install(&active, || async {
+      downloads.fetch_add(1, Ordering::SeqCst);
+      Ok::<_, String>("package")
+    })
+    .await;
+
+    assert!(matches!(prepared, PreparedInstall::Deferred));
+    assert_eq!(downloads.load(Ordering::SeqCst), 1);
+    assert_eq!(asked.load(Ordering::SeqCst), 2);
+  }
+
+  #[tokio::test]
+  async fn an_edit_open_when_the_update_is_found_skips_the_download() {
+    let (asked, active) = edit_state(&[true]);
+    let downloads = AtomicUsize::new(0);
+    let prepared = prepare_install(&active, || async {
+      downloads.fetch_add(1, Ordering::SeqCst);
+      Ok::<_, String>("package")
+    })
+    .await;
+
+    assert!(matches!(prepared, PreparedInstall::Deferred));
+    assert_eq!(downloads.load(Ordering::SeqCst), 0);
+    assert_eq!(asked.load(Ordering::SeqCst), 1);
+  }
+
+  #[tokio::test]
+  async fn no_edits_before_or_after_the_download_installs() {
+    let (_, active) = edit_state(&[false, false]);
+    let prepared =
+      prepare_install(&active, || async { Ok::<_, String>("package") }).await;
+
+    assert!(matches!(prepared, PreparedInstall::Ready("package")));
+  }
+
+  #[tokio::test]
+  async fn a_failed_download_is_reported_without_asking_again() {
+    let (asked, active) = edit_state(&[false]);
+    let prepared =
+      prepare_install(&active, || async { Err::<&str, _>("offline".to_string()) })
+        .await;
+
+    assert!(
+      matches!(prepared, PreparedInstall::DownloadFailed(err) if err == "offline")
+    );
+    assert_eq!(asked.load(Ordering::SeqCst), 1);
+  }
+
+  #[test]
+  fn settings_sees_each_install_outcome() {
+    let version = || "0.9.87".to_string();
+    assert_eq!(
+      settings_outcome(CheckOutcome::Deferred { version: version() }),
+      Ok(SettingsCheck::Deferred { version: version() })
+    );
+    assert_eq!(
+      settings_outcome(CheckOutcome::Installed { version: version() }),
+      Ok(SettingsCheck::Installing { version: version() })
+    );
+    assert_eq!(
+      settings_outcome(CheckOutcome::UpToDate),
+      Ok(SettingsCheck::UpToDate)
+    );
+    assert_eq!(
+      settings_outcome(CheckOutcome::Disabled),
+      Ok(SettingsCheck::Managed)
+    );
+    assert_eq!(
+      settings_outcome(CheckOutcome::Failed("offline".into())),
+      Err("offline".to_string())
+    );
+  }
+
+  #[test]
+  fn settings_check_serializes_as_a_tagged_status() {
+    assert_eq!(
+      serde_json::to_value(SettingsCheck::Available {
+        version: "0.9.87".into()
+      })
+      .expect("settings check serializes"),
+      serde_json::json!({ "status": "available", "version": "0.9.87" })
+    );
+    assert_eq!(
+      serde_json::to_value(SettingsCheck::UpToDate).expect("settings check serializes"),
+      serde_json::json!({ "status": "up_to_date" })
+    );
+  }
 
   #[test]
   fn update_package_limit_accepts_the_boundary_and_rejects_one_more_byte() {

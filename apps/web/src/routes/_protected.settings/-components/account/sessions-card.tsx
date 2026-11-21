@@ -18,15 +18,8 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@stll/ui/dialog";
-import { FramePanel } from "@stll/ui/frame";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@stll/ui/table";
+import { ListEmpty } from "@stll/ui/list";
+import { SettingsPanel, SettingsRow } from "@stll/ui/settings";
 import { stellaToast } from "@stll/ui/toast";
 import { parseUserAgent } from "@stll/user-agent";
 
@@ -66,14 +59,16 @@ const SessionsCardError = ({ onRetry }: { onRetry: () => void }) => {
   const t = useTranslations();
   return (
     <SessionsCardFrame>
-      <FramePanel className="flex flex-col items-start gap-3 p-4">
-        <p className="text-muted-foreground text-sm">
-          {t("common.somethingWentWrong")}
-        </p>
-        <Button onClick={onRetry} size="sm" variant="outline">
-          {t("common.retry")}
-        </Button>
-      </FramePanel>
+      <SettingsPanel>
+        <div className="flex flex-col items-start gap-3">
+          <p className="text-muted-foreground text-sm">
+            {t("common.somethingWentWrong")}
+          </p>
+          <Button onClick={onRetry} size="sm" variant="outline">
+            {t("common.retry")}
+          </Button>
+        </div>
+      </SettingsPanel>
     </SessionsCardFrame>
   );
 };
@@ -89,89 +84,65 @@ const SessionsCardContent = () => {
   const hasOtherSessions = sessions.some((s) => s.id !== currentSessionId);
 
   return (
-    <SessionsCardFrame>
-      {/* `p-0`: FramePanel pads by 5 for prose-style panels, which would inset
-          the table. The rows carry their own cell padding, so the panel only
-          needs to supply the card surface. */}
-      <FramePanel className="p-0">
-        {hasOtherSessions && (
-          <div className="flex justify-end p-4 pb-0">
-            <RevokeAllDialog />
-          </div>
-        )}
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>{t("account.sessions.device")}</TableHead>
-              <TableHead>{t("account.sessions.ipAddress")}</TableHead>
-              <TableHead>{t("account.sessions.lastActive")}</TableHead>
-              <TableHead />
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {sessions.map((session) => {
-              const isCurrent = session.id === currentSessionId;
-              const ua = parseUserAgent(session.userAgent);
-              const deviceLabel =
-                ua.browser && ua.os
-                  ? t("account.sessions.deviceOnOs", {
-                      browser: ua.browser,
-                      os: ua.os,
-                    })
-                  : (ua.browser ??
-                    ua.os ??
-                    t("account.sessions.unknownDevice"));
+    <SessionsCardFrame
+      action={hasOtherSessions ? <RevokeAllDialog /> : undefined}
+    >
+      {sessions.map((session) => {
+        const isCurrent = session.id === currentSessionId;
+        const ua = parseUserAgent(session.userAgent);
+        const deviceLabel =
+          ua.browser && ua.os
+            ? t("account.sessions.deviceOnOs", {
+                browser: ua.browser,
+                os: ua.os,
+              })
+            : (ua.browser ?? ua.os ?? t("account.sessions.unknownDevice"));
 
-              return (
-                <TableRow key={session.id}>
-                  <TableCell>
-                    {deviceLabel}
-                    {session.originClientName && (
-                      <p className="text-muted-foreground text-sm">
-                        {t("account.sessions.signedInFrom", {
-                          clientName: session.originClientName,
-                        })}
-                      </p>
-                    )}
-                  </TableCell>
-                  <TableCell>{session.ipAddress || MISSING_VALUE}</TableCell>
-                  <TableCell>
-                    {isCurrent ? (
-                      t("account.sessions.activeNow")
-                    ) : (
-                      <Tooltip
-                        content={formatFullTimestamp(session.updatedAt)}
-                        render={<Button variant="plain" />}
-                      >
+        return (
+          <SettingsRow
+            description={
+              <>
+                {session.originClientName && (
+                  <span className="block">
+                    {t("account.sessions.signedInFrom", {
+                      clientName: session.originClientName,
+                    })}
+                  </span>
+                )}
+                <span className="inline-flex flex-wrap items-center gap-x-1.5">
+                  <bdi>{session.ipAddress || MISSING_VALUE}</bdi>
+                  <span aria-hidden="true">·</span>
+                  {isCurrent ? (
+                    t("account.sessions.activeNow")
+                  ) : (
+                    <Tooltip
+                      content={formatFullTimestamp(session.updatedAt)}
+                      render={<Button variant="plain" />}
+                    >
+                      <span className="text-xs">
                         {formatRelativeTime(session.updatedAt)}
-                      </Tooltip>
-                    )}
-                  </TableCell>
-                  <TableCell align="end">
-                    {isCurrent ? (
-                      <span className="bg-muted inline-flex items-center rounded-md px-2 py-0.5 text-xs font-medium">
-                        {t("account.sessions.currentSession")}
                       </span>
-                    ) : (
-                      <RevokeSessionButton sessionId={session.id} />
-                    )}
-                  </TableCell>
-                </TableRow>
-              );
-            })}
-            {!hasOtherSessions && (
-              <TableRow>
-                <TableCell
-                  className="text-muted-foreground text-center"
-                  colSpan={4}
-                >
-                  {t("account.sessions.noOtherSessions")}
-                </TableCell>
-              </TableRow>
+                    </Tooltip>
+                  )}
+                </span>
+              </>
+            }
+            key={session.id}
+            title={deviceLabel}
+          >
+            {isCurrent ? (
+              <span className="bg-muted inline-flex items-center rounded-md px-2 py-0.5 text-xs font-medium">
+                {t("account.sessions.currentSession")}
+              </span>
+            ) : (
+              <RevokeSessionButton sessionId={session.id} />
             )}
-          </TableBody>
-        </Table>
-      </FramePanel>
+          </SettingsRow>
+        );
+      })}
+      {!hasOtherSessions && (
+        <ListEmpty>{t("account.sessions.noOtherSessions")}</ListEmpty>
+      )}
     </SessionsCardFrame>
   );
 };
@@ -274,6 +245,7 @@ const RevokeAllDialog = () => {
         render={
           <Button
             disabled={revokeOtherSessions.isPending}
+            disabledReason={t("settings.account.revokingSessions")}
             size="sm"
             variant="outline"
           />

@@ -28,6 +28,7 @@ import {
   timeEntries,
   workObligations,
 } from "@/api/db/schema";
+import { SESSION_SIGN_IN_REVIEW_TRANSITIONS } from "@/api/lib/auth/session-sign-in-review-transitions";
 import { DATA_EXPORT_TRANSITIONS } from "@/api/lib/db/data-export-transition-spec";
 import {
   FLOW_RUN_STEP_TRANSITIONS_V1,
@@ -592,6 +593,7 @@ export const TRANSITIONS = {
   sanctionsEditions: { unmanaged: UNMANAGED_REASONS.corpusEdition },
   schedulerJobRuns: { unmanaged: UNMANAGED_REASONS.workerRun },
   scoutRuns: { unmanaged: UNMANAGED_REASONS.workerRun },
+  sessionSignIns: SESSION_SIGN_IN_REVIEW_TRANSITIONS,
   sharepointConnections: SHAREPOINT_CONNECTION_TRANSITIONS,
   sharepointOAuthState: { unmanaged: UNMANAGED_REASONS.antiForgery },
   signals: { unmanaged: UNMANAGED_REASONS.userWorkflow },

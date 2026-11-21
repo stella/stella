@@ -606,6 +606,7 @@ const DocxCollaborationToolbarControls = ({
       <Button
         className="min-h-11 px-3"
         disabled={!canPublish}
+        disabledReason={t("folio.syncing")}
         onClick={() => {
           detached(
             onPublish(),

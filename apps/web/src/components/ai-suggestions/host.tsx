@@ -584,7 +584,9 @@ export const PromptBar = (props: PromptBarProps) => {
   });
   const sendDisabledText = resolveSendDisabledText({
     canSubmit,
+    composerSubmitDisabled,
     sendDisabledReason,
+    status,
     t,
   });
   // With queuing enabled the composer keeps accepting input while a
@@ -998,13 +1000,21 @@ export const PromptBar = (props: PromptBarProps) => {
  */
 const resolveSendDisabledText = ({
   canSubmit,
+  composerSubmitDisabled,
   sendDisabledReason,
+  status,
   t,
 }: {
   canSubmit: boolean;
+  composerSubmitDisabled: boolean;
+  status: PromptBarProps["status"];
   sendDisabledReason: PromptBarProps["sendDisabledReason"];
   t: (
-    key: "chat.editorLoading" | "chat.sendPromptEmpty" | "folio.savingDocument",
+    key:
+      | "chat.editorLoading"
+      | "chat.sendPromptEmpty"
+      | "chat.composer.waitForChat"
+      | "folio.savingDocument",
   ) => string;
 }): string | undefined => {
   switch (sendDisabledReason) {
@@ -1013,6 +1023,12 @@ const resolveSendDisabledText = ({
     case "draft-saving":
       return t("folio.savingDocument");
     case undefined:
+      if (status === "applying") {
+        return t("folio.savingDocument");
+      }
+      if (composerSubmitDisabled) {
+        return t("chat.composer.waitForChat");
+      }
       return canSubmit ? undefined : t("chat.sendPromptEmpty");
     default:
       sendDisabledReason satisfies never;
@@ -1203,6 +1219,7 @@ export const SuggestionCard = (props: SuggestionCardProps) => {
             className="rounded-md"
             onClick={() => onAccept(suggestion.id)}
             disabled={suggestion.status === "stale"}
+            disabledReason={t("docxReview.suggestionOutOfDate")}
           >
             <CheckIcon aria-hidden="true" />
             {t("common.accept")}

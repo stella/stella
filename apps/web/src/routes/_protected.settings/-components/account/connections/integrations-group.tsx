@@ -346,6 +346,7 @@ const ApproveAuthorizationButton = ({
           </DialogClose>
           <Button
             disabled={approve.isPending}
+            disabledReason={t("common.approving")}
             onClick={() => approve.mutate()}
             size="xs"
             variant="outline"

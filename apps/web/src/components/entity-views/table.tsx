@@ -364,6 +364,7 @@ export const EntityViewTable = ({
             {hasNextPage && (
               <Button
                 disabled={loadingMore}
+                disabledReason={t("caseLaw.loadingMore")}
                 onClick={onLoadMore}
                 variant="ghost"
               >

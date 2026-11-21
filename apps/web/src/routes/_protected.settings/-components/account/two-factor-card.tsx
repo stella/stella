@@ -582,6 +582,12 @@ const EnableTwoFactorDialog = ({
                 canEmailConfirmationCode === undefined ||
                 (requiresPassword && password.length === 0)
               }
+              disabledReason={
+                requiresPassword === undefined ||
+                canEmailConfirmationCode === undefined
+                  ? t("common.loading")
+                  : t("common.enterPassword")
+              }
               loading={
                 sendEnableOtpMutation.isPending || enableMutation.isPending
               }
@@ -600,6 +606,11 @@ const EnableTwoFactorDialog = ({
           {step === "code" && (
             <Button
               disabled={code.length !== TOTP_LENGTH || enableMutation.isPending}
+              disabledReason={
+                enableMutation.isPending
+                  ? t("common.verifying")
+                  : t("common.enterVerificationCode")
+              }
               loading={enableMutation.isPending}
               onClick={() => enableMutation.mutate({ code, password })}
               variant="default"
@@ -610,6 +621,7 @@ const EnableTwoFactorDialog = ({
           {step === "setup" && (
             <Button
               disabled={!qrSvg}
+              disabledReason={t("common.loading")}
               onClick={() => setStep("verify")}
               variant="default"
             >
@@ -619,6 +631,11 @@ const EnableTwoFactorDialog = ({
           {step === "verify" && (
             <Button
               disabled={code.length !== TOTP_LENGTH || verifyMutation.isPending}
+              disabledReason={
+                verifyMutation.isPending
+                  ? t("common.verifying")
+                  : t("common.enterVerificationCode")
+              }
               loading={verifyMutation.isPending}
               onClick={() => verifyMutation.mutate(code)}
             >
@@ -816,6 +833,11 @@ const DisableTwoFactorDialog = ({
                 requiresPassword === undefined ||
                 (requiresPassword && password.length === 0)
               }
+              disabledReason={
+                requiresPassword === undefined
+                  ? t("common.loading")
+                  : t("common.enterPassword")
+              }
               loading={sendDisableOtpMutation.isPending}
               onClick={() => sendDisableOtpMutation.mutate()}
               variant="destructive"
@@ -827,6 +849,11 @@ const DisableTwoFactorDialog = ({
             <Button
               disabled={
                 code.length !== TOTP_LENGTH || disableMutation.isPending
+              }
+              disabledReason={
+                disableMutation.isPending
+                  ? t("common.verifying")
+                  : t("common.enterVerificationCode")
               }
               loading={disableMutation.isPending}
               onClick={() => disableMutation.mutate({ code, password })}
@@ -1038,6 +1065,11 @@ const RegenerateBackupCodesDialog = ({
                     requiresPassword === undefined ||
                     (requiresPassword && password.length === 0)
                   }
+                  disabledReason={
+                    requiresPassword === undefined
+                      ? t("common.loading")
+                      : t("common.enterPassword")
+                  }
                   loading={sendOtpMutation.isPending}
                   onClick={() => sendOtpMutation.mutate()}
                   variant="destructive"
@@ -1049,6 +1081,11 @@ const RegenerateBackupCodesDialog = ({
                 <Button
                   disabled={
                     code.length !== TOTP_LENGTH || regenerateMutation.isPending
+                  }
+                  disabledReason={
+                    regenerateMutation.isPending
+                      ? t("common.verifying")
+                      : t("common.enterVerificationCode")
                   }
                   loading={regenerateMutation.isPending}
                   onClick={() => regenerateMutation.mutate({ code, password })}

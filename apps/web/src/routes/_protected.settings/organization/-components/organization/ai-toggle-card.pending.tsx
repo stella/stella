@@ -1,104 +1,100 @@
 import type { ReactNode } from "react";
 
-import { CheckboxFace, FieldFace, LabelFace } from "@stll/ui/control-face";
-import { Frame, FramePanel } from "@stll/ui/frame";
+import { CheckboxFace } from "@stll/ui/control-face";
+import { SettingsRow } from "@stll/ui/settings";
 
 import { PendingText } from "@/components/pending-text";
 import type { PendingTextKey } from "@/components/pending-text";
 
 /*
- * The AI page's on/off cards (prompt caching, document processing, memory
- * extraction), each beside its pending phase: a `Frame` whose panel holds
- * the card's title, its one quiet line and the checkbox with its caption.
- * The live card puts its `Field` in the toggle slot; the pending phase the
- * checkbox's face, unticked (the setting waits on data).
+ * The AI page's on/off settings (prompt caching, document processing,
+ * memory extraction), each beside its pending phase: one row of the page's
+ * on/off section (`AIConfigFormLayout`) with the setting's title and its one
+ * quiet line, the checkbox at its end. The live row puts its checkbox in the
+ * toggle slot, named by the row's title (`settingsRowIds(copy.id)`); the
+ * pending phase the checkbox's face, unticked (the setting waits on data).
  */
 
 type AIToggleCardFrameProps = {
+  /** Names the row's title and line (`settingsRowIds`). */
+  id: string;
   title: PendingTextKey;
   description: PendingTextKey;
-  /** The checkbox's field, or its face. */
+  /** The checkbox, or its face. */
   toggle: ReactNode;
-  /** A failed refetch's line, above the panel. */
+  /** A failed refetch's line, under the row; none while the read is fine. */
   notice?: ReactNode;
-  /** What follows the toggle (the section's save feedback). */
+  /** The row's save feedback, under it; none while idle. */
   children?: ReactNode;
 };
 
-/** An AI on/off card in both phases. */
+/** An AI on/off setting's row in both phases. */
 export const AIToggleCardFrame = ({
   children,
   description,
+  id,
   notice,
   title,
   toggle,
 }: AIToggleCardFrameProps) => (
-  <Frame>
-    {notice}
-    <FramePanel>
-      <div className="flex flex-col gap-3 p-1">
-        <h2 className="text-sm font-medium">
-          <PendingText barClassName="w-32" id={title} />
-        </h2>
-        <p className="text-muted-foreground text-xs">
-          <PendingText barClassName="w-80 max-w-full" id={description} />
-        </p>
-        {toggle}
-        {children}
-      </div>
-    </FramePanel>
-  </Frame>
+  <SettingsRow
+    description={
+      <PendingText barClassName="w-80 max-w-full" id={description} />
+    }
+    footer={
+      notice === undefined && children === undefined ? undefined : (
+        <>
+          {notice}
+          {children}
+        </>
+      )
+    }
+    id={id}
+    interaction="label"
+    title={<PendingText barClassName="w-32" id={title} />}
+  >
+    {toggle}
+  </SettingsRow>
 );
 
-/** An AI on/off card while its setting loads. */
+/** An AI on/off setting while its value loads. */
 export const AIToggleCardPending = ({
   description,
-  label,
+  id,
   title,
-}: {
-  title: PendingTextKey;
-  description: PendingTextKey;
-  /** The checkbox's caption. */
-  label: PendingTextKey;
-}) => (
+}: AIToggleCardCopy) => (
   <AIToggleCardFrame
     description={description}
+    id={id}
     title={title}
-    toggle={
-      <FieldFace layout="inline">
-        <CheckboxFace />
-        <LabelFace>
-          <PendingText barClassName="w-40" id={label} />
-        </LabelFace>
-      </FieldFace>
-    }
+    toggle={<CheckboxFace />}
   />
 );
 
-/** An on/off card's copy: its title, its quiet line, its toggle's caption. */
+/** An on/off setting's copy: its row id, its title, its quiet line. */
 type AIToggleCardCopy = {
+  id: string;
   title: PendingTextKey;
   description: PendingTextKey;
-  label: PendingTextKey;
 };
 
-/** Prompt caching's card copy. */
+/** Prompt caching's copy. */
 export const PROMPT_CACHING_CARD = {
+  id: "ai-prompt-caching",
   title: "settings.organization.promptCaching.title",
   description: "settings.organization.promptCaching.description",
-  label: "settings.organization.promptCaching.toggleLabel",
 } as const satisfies AIToggleCardCopy;
 
-/** Document processing's card copy. */
+/** Document processing's copy. */
 export const DOCUMENT_PROCESSING_CARD = {
+  id: "ai-document-processing",
   title: "settings.organization.documentProcessing.title",
   description: "settings.organization.documentProcessing.description",
-  label: "settings.organization.documentProcessing.toggleLabel",
 } as const satisfies AIToggleCardCopy;
 
-/** Memory extraction's card copy. */
+/** Memory extraction's copy. */
 export const MEMORY_EXTRACTION_CARD = {
+  id: "ai-memory-extraction",
   title: "settings.organization.memoryExtraction.title",
   description: "settings.organization.memoryExtraction.description",
-  label: "settings.organization.memoryExtraction.toggleLabel",
 } as const satisfies AIToggleCardCopy;

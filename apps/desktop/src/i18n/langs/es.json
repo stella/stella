@@ -183,7 +183,8 @@
     "handoffServerMismatch": "Stella Desktop está conectado a {linkedServer}, pero este documento requiere {requestedServer}. Desconecta la cuenta actual en Configuración y luego conéctate a {requestedServer} para abrir el documento.",
     "handoffAccountChanged": "La cuenta de stella desktop cambió mientras se abría el documento. Vuelve a empezar desde stella.",
     "handoffAlreadyOpen": "Ya hay otro diálogo de firma abierto. Termínalo o ciérralo e inténtalo de nuevo.",
-    "handoffExpired": "El enlace al documento caducó antes de conectar stella desktop. Vuelve a empezar desde stella."
+    "handoffExpired": "El enlace al documento caducó antes de conectar stella desktop. Vuelve a empezar desde stella.",
+    "waitingForFolderSelection": "Seleccione una carpeta o cierre el selector de archivos."
   },
   "settings": {
     "accountLinked": "Vinculada",
@@ -237,6 +238,17 @@
     "startOnLoginDescription": "Iniciar stella desktop automáticamente al iniciar sesión.",
     "stellaDesktop": "stella desktop",
     "support": "Soporte",
+    "updates": {
+      "upToDate": "stella desktop está actualizado.",
+      "available": "La versión {version} está disponible.",
+      "install": "Instalar y reiniciar",
+      "installing": "Instalando la versión {version}. stella desktop se reiniciará al terminar.",
+      "installInProgress": "Se está instalando una actualización.",
+      "deferred": "La versión {version} espera mientras se editan documentos abiertos. Cuando termine, vuelva a buscar actualizaciones para instalarla, o se instalará en la próxima comprobación automática.",
+      "checkFailed": "stella desktop no pudo buscar actualizaciones.",
+      "installFailed": "stella desktop no pudo instalar la actualización.",
+      "support": "¿Algo no funciona bien? Escriba a nuestro soporte: <email>{address}</email>"
+    },
     "title": "Configuración",
     "pages": {
       "general": "General",
@@ -280,7 +292,10 @@
     "recoveryOpenFolder": "Abrir carpeta de recuperación",
     "recoveryOpenUnassigned": "Abrir ediciones sin asignar",
     "recoveryFilePending": "Pendiente de apartar",
-    "recoveryError": "No se pudo abrir la carpeta de recuperación. Inténtalo de nuevo."
+    "recoveryError": "No se pudo abrir la carpeta de recuperación. Inténtalo de nuevo.",
+    "openingRecoveryFolder": "Abriendo la carpeta de recuperación…",
+    "refreshingRecovery": "Comprobando los cambios pendientes de recuperar…",
+    "loadingAccount": "Comprobando la conexión de su cuenta…"
   },
   "clipboard": {
     "registryUnavailable": "No hay registros habilitados para las jurisdicciones donde ejerces.",
@@ -425,7 +440,14 @@
     "welcomeShortcutTitle": "Ábrelo desde cualquier lugar.",
     "welcomeStart": "Empezar a copiar",
     "welcomeTitle": "Conoce tu portapapeles",
-    "registryIdentifierSearchHint": "Introduce {identifiers}."
+    "registryIdentifierSearchHint": "Introduce {identifiers}.",
+    "enterGroupName": "Introduzca un nombre para el grupo.",
+    "savingChanges": "Guardando los cambios…",
+    "creatingGroup": "Creando el grupo…",
+    "groupLimitReached": "Puede crear hasta {max} grupos.",
+    "loadingAutostart": "Comprobando si el portapapeles se inicia al iniciar sesión…",
+    "savingAutostart": "Guardando la preferencia de inicio al iniciar sesión…",
+    "registryFormatting": "Dando formato al resultado del registro…"
   },
   "activity": {
     "title": "Actividad",
@@ -611,7 +633,15 @@
     "aiStructureMove": "stella AI propone mover {duration} a {matter}",
     "aiStructureCreate": "{count, plural, one {Crear # registro} other {Crear # registros}}",
     "aiStructureMoveAccept": "Mover",
-    "aiFlagSplit": "Dividir registro"
+    "aiFlagSplit": "Dividir registro",
+    "creatingDrafts": "Creando borradores…",
+    "earliestDayReached": "Está viendo el primer día disponible.",
+    "latestDayReached": "Está viendo el último día disponible.",
+    "savingCapturePreference": "Guardando su preferencia de registro…",
+    "writeDescription": "Introduzca una descripción para este registro.",
+    "chooseMatterForEntry": "Elija un asunto para este registro.",
+    "entryNeedsDuration": "Elija un intervalo de tiempo con duración facturable.",
+    "enterRefinement": "Introduzca una instrucción para revisar la descripción."
   },
   "dictation": {
     "title": "Dictado",
@@ -751,7 +781,8 @@
       "label": "Lo que ha dictado hasta ahora",
       "listening": "Escuchando…",
       "finishing": "Terminando…"
-    }
+    },
+    "dictationInProgress": "Termine el dictado actual antes de eliminar el modelo."
   },
   "shortcut": {
     "title": "Atajo del portapapeles",
@@ -792,7 +823,8 @@
       "windowMenu": "Menú de ventana",
       "start": "Inicio",
       "taskManager": "Administrador de tareas"
-    }
+    },
+    "saving": "Guardando el atajo…"
   },
   "onboarding": {
     "back": "Atrás",
@@ -936,7 +968,8 @@
       "keystrokesWithoutHoldKey": "Pulsaciones de teclas, salvo que elija una tecla para mantener",
       "fullDiskAccess": "Acceso total al disco",
       "administrator": "Derechos de administrador"
-    }
+    },
+    "enablingDictation": "Activando el dictado…"
   },
   "agentSubscriptions": {
     "title": "Suscripciones de IA",
@@ -1012,7 +1045,9 @@
         "verification": "No se pudo verificar {name}, así que no se ha instalado.",
         "storage": "No se pudo guardar {name} en este ordenador. Comprueba que haya espacio libre en el disco."
       }
-    }
+    },
+    "finishingSignIn": "Finalizando el inicio de sesión…",
+    "enterCallbackAddress": "Pegue la dirección completa de la pestaña del navegador donde inició sesión."
   },
   "localSkills": {
     "title": "Habilidades locales",
@@ -1116,7 +1151,9 @@
       "localMissing": "Descarga el modelo de voz en Configuración, en Dictado, para transcribir en este ordenador.",
       "localMissingCloud": "Descarga el modelo de voz en Configuración, en Dictado, o transcribe con stella AI.",
       "retainsData": "Ten en cuenta las condiciones de tratamiento de {provider}.",
-      "modelFailed": "No se pudo leer el modelo de stella AI, así que stella AI no puede transcribir ahora. Inténtelo de nuevo o transcriba en este ordenador."
+      "modelFailed": "No se pudo leer el modelo de stella AI, así que stella AI no puede transcribir ahora. Inténtelo de nuevo o transcriba en este ordenador.",
+      "loadingModel": "Comprobando el modelo de transcripción de stella AI…",
+      "useLocal": "Elija este equipo para transcribir la grabación."
     },
     "matter": {
       "title": "Asunto",
@@ -1165,7 +1202,8 @@
       "noSpeech": "No se encontró voz en esta grabación.",
       "fileName": "{title} - transcripción.txt",
       "documentTitle": "{title} - transcripción",
-      "transcriptTitle": "Transcripción"
+      "transcriptTitle": "Transcripción",
+      "alreadySaved": "La transcripción ya se ha guardado en el asunto."
     },
     "progress": {
       "running": "Transcribiendo {done, number} de {total, number} min",
@@ -1173,7 +1211,9 @@
       "stop": "Detener",
       "stopped": "Detenido tras {done, number} min. Se conserva el texto obtenido hasta ahora.",
       "done": "{total, number} min transcritos.",
-      "another": "Transcribir otra grabación"
+      "another": "Transcribir otra grabación",
+      "transcribing": "Transcribiendo la grabación…",
+      "stopping": "Deteniendo la transcripción…"
     },
     "cleaned": {
       "title": "Texto depurado",
@@ -1196,6 +1236,7 @@
       "formatted": "Con formato",
       "plain": "Como texto sin formato",
       "hint": "Con formato se pegan títulos, negritas y listas en Word u Outlook. Se recuerda tu elección."
-    }
+    },
+    "waitingForFileSelection": "Seleccione una grabación o cierre el selector de archivos."
   }
 }

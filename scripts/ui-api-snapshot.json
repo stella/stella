@@ -1659,11 +1659,13 @@
       "LIST_ITEM_ROW_CLASS",
       "List",
       "ListGroup",
+      "ListGroupAction",
       "ListGroupDescription",
       "ListGroupHeader",
       "ListGroupHeading",
       "ListGroupTitle",
       "ListGroupTitlePending",
+      "ListItemMedia",
       "ListItemSkeleton"
     ],
     "./loader": ["Loader", "LoaderState"],
@@ -1758,6 +1760,7 @@
       "INSPECTOR_PANE_MIN_WIDTH",
       "INSPECTOR_RAIL_WIDTH",
       "clampInspectorPaneWidth",
+      "inspectorPaneWidthCss",
       "resolveInspectorDockWidth",
       "resolveInspectorPaneMaxWidth",
       "resolveInspectorPaneWidth",
@@ -1843,6 +1846,12 @@
       "SelectValue"
     ],
     "./separator": ["ResizeSeparator", "Separator", "TextSeparator"],
+    "./settings": [
+      "SettingsPanel",
+      "SettingsRow",
+      "SettingsSection",
+      "settingsRowIds"
+    ],
     "./sheet": [
       "Sheet",
       "SheetBackdrop",
@@ -2256,6 +2265,7 @@
     "LandingBoxPending.box": ["composer", "search"],
     "LandingItemText.iconTone": ["matter", "muted"],
     "LandingRowIcon.tone": ["matter", "muted"],
+    "ListGroupTitle.tone": ["default", "destructive"],
     "ListItemDescription.variant": ["code", "paragraph", "text"],
     "ListItemMedia.variant": ["icon", "initial"],
     "ListItemSkeleton.trailing": ["text"],
@@ -2329,6 +2339,10 @@
     "SegmentedIconToggle.size": ["compact", "touch"],
     "SegmentedIconToggleFace.size": ["compact", "touch"],
     "SelectTrigger.align": ["center", "start"],
+    "SettingsPanel.inset": ["flush", "padded"],
+    "SettingsRow.depth": ["nested", "top"],
+    "SettingsRow.interaction": ["label", "none"],
+    "SettingsSection.tone": ["default", "destructive"],
     "SheetContent.side": [
       "block-end",
       "block-start",

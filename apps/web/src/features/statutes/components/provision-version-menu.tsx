@@ -438,6 +438,7 @@ const VersionRow = ({
         aria-current={selected ? "true" : undefined}
         className="group/plain flex w-full"
         disabled={target.id === selectedId}
+        disabledReason={t("statutes.versionAlreadySelected")}
         onClick={() => onVersionChange(target.id)}
         variant="plain"
       >
@@ -543,6 +544,7 @@ const VersionRow = ({
                   aria-current={member.id === selectedId ? "true" : undefined}
                   className="group/plain flex w-full"
                   disabled={member.id === selectedId}
+                  disabledReason={t("statutes.versionAlreadySelected")}
                   onClick={() => onVersionChange(member.id)}
                   variant="plain"
                 >

@@ -327,6 +327,7 @@ export const DevQuickStartButton = ({ redirectTo }: { redirectTo: string }) => {
     <Button
       className="w-full uppercase"
       disabled={phase !== null}
+      disabledReason={currentPhaseLabel ?? undefined}
       loading={phase !== null}
       onClick={() => {
         detached(handleQuickStart(), "dev-quick-start.run");
@@ -438,6 +439,7 @@ export const DevQuickStartContinuation = ({
     <Button
       className="w-full max-w-md uppercase"
       disabled={phase !== null}
+      disabledReason={currentPhaseLabel ?? undefined}
       loading={phase !== null}
       onClick={() => {
         detached(handleContinuation(), "dev-quick-start.retry");

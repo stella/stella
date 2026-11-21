@@ -30,7 +30,11 @@
   // default changes and a cached pass could replay over the edit. Hashing the
   // patches globally is the honest scope: the blast radius is every dependent
   // package, not one task's declared inputs.
-  "globalDependencies": ["patches/**", "scripts/bun-toolchain.gen.json"],
+  "globalDependencies": [
+    "patches/**",
+    "scripts/bun-toolchain.gen.json",
+    "packages/scripts/src/test-event-loop-watchdog*.ts"
+  ],
   "tasks": {
     "@stll/desktop#test:browser": {
       "inputs": ["$TURBO_DEFAULT$"]

@@ -5,7 +5,7 @@ import {
   FaceLabelPending,
   FieldTriggerFace,
 } from "@stll/ui/control-face";
-import { Frame, FramePanel } from "@stll/ui/frame";
+import { SettingsPanel, SettingsRow, SettingsSection } from "@stll/ui/settings";
 
 import { PendingText } from "@/components/pending-text";
 import type { PendingTextKey } from "@/components/pending-text";
@@ -14,21 +14,22 @@ import { PersonalDataExportCardPending } from "@/routes/_protected.settings/-com
 import { SessionsCardPending } from "@/routes/_protected.settings/-components/account/sessions-card.pending";
 import { SignInMethodsPending } from "@/routes/_protected.settings/-components/account/sign-in-methods.pending";
 import { TwoFactorCardPending } from "@/routes/_protected.settings/-components/account/two-factor-card.pending";
+import { SettingsPageHeaderPending } from "@/routes/_protected.settings/-components/settings-page-header.pending";
 import {
   FORM_STACK_CLASS,
   FormFieldSkeleton,
-  SettingsCardPending,
-  SettingsSwitchCardPending,
-} from "@/routes/_protected.settings/-components/settings-card.pending";
-import { SettingsPageHeaderPending } from "@/routes/_protected.settings/-components/settings-page-header.pending";
+  SettingsSectionPending,
+  SettingsSwitchRowPending,
+} from "@/routes/_protected.settings/-components/settings-section.pending";
 import { SettingsPagePending } from "@/routes/_protected.settings/-components/settings-shell/settings-shell.pending";
 
 /*
  * The profile page's one layout, drawn by both phases: the heading, then
  * the display name, the time zone with the Word edit identity, the locale
- * preferences, the account's cards and the danger zone. The page fills its
- * slots with the live forms and cards; the pending phase with the fields'
- * and cards' faces, so each card that loads lands in its own box.
+ * preferences, the chat preferences, the account's sections and the danger
+ * zone. The page fills its slots with the live forms and rows; the pending
+ * phase with the fields' and controls' faces, so each section that loads
+ * lands in its own box.
  */
 
 /** The width of the display name and the preferred name fields. */
@@ -61,12 +62,7 @@ export const PreferenceRow = ({
   /** The caption (a `Label` bound to the picker). */
   label: ReactNode;
   children: ReactNode;
-}) => (
-  <div className="flex items-center justify-between gap-4 p-3">
-    {label}
-    {children}
-  </div>
-);
+}) => <SettingsRow title={label}>{children}</SettingsRow>;
 
 /**
  * A row caption's box: the page's `Label` (`default` variant with
@@ -84,8 +80,10 @@ type ProfilePageShellProps = {
   wordEditIdentity: ReactNode;
   /** The locale preference rows (`PreferenceRow`s). */
   localePreferences: ReactNode;
-  /** The account's own cards: notifications, sign-in, two-factor, sessions,
-   *  data export. */
+  /** The chat preference rows: notifications, technical details. */
+  chatPreferences: ReactNode;
+  /** The account's own sections: sign-in, two-factor, sessions, data
+   *  export. */
   accountCards: ReactNode;
   /** The danger zone's action. */
   deleteAccount: ReactNode;
@@ -96,6 +94,7 @@ type ProfilePageShellProps = {
 /** The profile page's layout, in both phases. */
 export const ProfilePageShell = ({
   accountCards,
+  chatPreferences,
   children,
   deleteAccount,
   displayName,
@@ -108,38 +107,38 @@ export const ProfilePageShell = ({
       description="settings.account.profileDescription"
       title="common.profile"
     />
-    <SettingsCardPending
+    <SettingsSectionPending
       description="settings.account.displayNameDescription"
       title="common.displayName"
     >
-      <FramePanel>
-        <div className="p-4">{displayName}</div>
-      </FramePanel>
-    </SettingsCardPending>
+      <SettingsPanel>{displayName}</SettingsPanel>
+    </SettingsSectionPending>
 
-    <SettingsCardPending
+    <SettingsSectionPending
       description="settings.account.timezoneDescription"
       title="settings.account.timezone"
     >
-      <FramePanel>
-        <div className="flex flex-col gap-2 p-4">{timeZone}</div>
-        <div className="border-border border-t p-4">{wordEditIdentity}</div>
-      </FramePanel>
-    </SettingsCardPending>
+      <SettingsPanel>
+        <div className="flex flex-col gap-2">{timeZone}</div>
+      </SettingsPanel>
+      <SettingsPanel>{wordEditIdentity}</SettingsPanel>
+    </SettingsSectionPending>
 
-    <Frame>
-      <div className="divide-border divide-y">{localePreferences}</div>
-    </Frame>
+    <SettingsSection>{localePreferences}</SettingsSection>
+
+    <SettingsSectionPending title="navigation.chat">
+      {chatPreferences}
+    </SettingsSectionPending>
 
     {accountCards}
 
-    <SettingsCardPending
+    <SettingsSectionPending
       description="settings.account.dangerZoneDescription"
       title="settings.account.dangerZone"
       tone="destructive"
     >
-      <FramePanel>
-        <div className="flex flex-col gap-4 p-4">
+      <SettingsPanel>
+        <div className="flex flex-col gap-4">
           <p className="text-muted-foreground text-sm">
             <PendingText
               barClassName="w-96 max-w-full"
@@ -148,8 +147,8 @@ export const ProfilePageShell = ({
           </p>
           <div>{deleteAccount}</div>
         </div>
-      </FramePanel>
-    </SettingsCardPending>
+      </SettingsPanel>
+    </SettingsSectionPending>
     {children}
   </>
 );
@@ -168,20 +167,22 @@ const ProfilePendingView = () => (
     <ProfilePageShell
       accountCards={
         <>
-          <SettingsSwitchCardPending
-            description="settings.account.chatNotificationsDescription"
-            label="settings.account.chatNotificationsToggle"
-            title="settings.account.chatNotifications"
-          />
-          <SettingsSwitchCardPending
-            description="settings.account.chatTechnicalDetailsDescription"
-            label="settings.account.chatTechnicalDetailsToggle"
-            title="settings.account.chatTechnicalDetails"
-          />
           <SignInMethodsPending />
           <TwoFactorCardPending />
           <SessionsCardPending />
           <PersonalDataExportCardPending />
+        </>
+      }
+      chatPreferences={
+        <>
+          <SettingsSwitchRowPending
+            description="settings.account.chatNotificationsDescription"
+            title="settings.account.chatNotifications"
+          />
+          <SettingsSwitchRowPending
+            description="settings.account.chatTechnicalDetailsDescription"
+            title="settings.account.chatTechnicalDetails"
+          />
         </>
       }
       deleteAccount={

@@ -140,7 +140,11 @@ export function ReportExportRecoveryPage() {
       )}
 
       {data.status === "completed" && data.downloadUrl && (
-        <Button disabled={isDownloading} onClick={handleDownloadClick}>
+        <Button
+          disabled={isDownloading}
+          disabledReason={t("common.preparing")}
+          onClick={handleDownloadClick}
+        >
           {isDownloading ? t("common.preparing") : t("common.download")}
         </Button>
       )}

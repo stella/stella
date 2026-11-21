@@ -395,9 +395,12 @@ test("a workflow conflict preserves edits and requires confirmed fresh atomic re
   expect(f.writes).toHaveLength(1);
   expect(
     f.rendered
-      .getByRole("button", { name: messages.common.save })
-      .matches(":disabled"),
-  ).toBe(true);
+      .getByRole("button", {
+        name: messages.common.save,
+        description: messages.flows.reloadToSave,
+      })
+      .getAttribute("aria-disabled"),
+  ).toBe("true");
   fireEvent.click(
     f.rendered.getByRole("button", { name: messages.common.reload }),
   );
@@ -445,9 +448,12 @@ test("editing during held reload keeps the draft, original token and persistent 
   ).toBeDefined();
   expect(
     f.rendered
-      .getByRole("button", { name: messages.common.save })
-      .matches(":disabled"),
-  ).toBe(true);
+      .getByRole("button", {
+        name: messages.common.save,
+        description: messages.flows.reloadToSave,
+      })
+      .getAttribute("aria-disabled"),
+  ).toBe("true");
   expect(f.writes).toHaveLength(1);
 });
 
@@ -645,9 +651,12 @@ test("a failed explicit workflow reload retains the edited draft and conflict", 
   ).toBeDefined();
   expect(
     f.rendered
-      .getByRole("button", { name: messages.common.save })
-      .matches(":disabled"),
-  ).toBe(true);
+      .getByRole("button", {
+        name: messages.common.save,
+        description: messages.flows.reloadToSave,
+      })
+      .getAttribute("aria-disabled"),
+  ).toBe("true");
   expect(f.writes).toHaveLength(1);
 });
 

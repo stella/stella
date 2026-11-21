@@ -239,7 +239,10 @@ const PropertyCellContent = ({
       const cell = (
         <WithOpenEntityButton
           extraction={targets.extraction}
-          retryDisabled={cellMetadata?.locked === true || entity.readOnly}
+          retryBlockerKey={cellRetryBlockerKey({
+            readOnly: entity.readOnly,
+            locked: cellMetadata?.locked === true,
+          })}
           sourceFile={targets.sourceFile}
         >
           <CellMetadataFlags
@@ -511,16 +514,28 @@ const resolveVerdictColor = (
     : resolveOptionColor(optionColor);
 };
 
+type CellRetryBlockerOptions = {
+  readOnly: boolean;
+  locked: boolean;
+};
+
+const cellRetryBlockerKey = ({ readOnly, locked }: CellRetryBlockerOptions) => {
+  if (readOnly) {
+    return "workspaces.properties.retryReadOnlyRecord";
+  }
+  return locked ? "workspaces.properties.unlockFieldToRetry" : undefined;
+};
+
 type WithOpenEntityButtonProps = {
   extraction: AIExtractionTarget;
-  retryDisabled: boolean;
+  retryBlockerKey: ReturnType<typeof cellRetryBlockerKey>;
   sourceFile: SourceFileTarget;
 };
 
 /** Shows a peek PDF preview in the inspector with the AI justification visible. */
 const WithOpenEntityButton = ({
   extraction,
-  retryDisabled,
+  retryBlockerKey,
   sourceFile,
   children,
 }: PropsWithChildren<WithOpenEntityButtonProps>) => {
@@ -532,6 +547,7 @@ const WithOpenEntityButton = ({
   );
   const retryCell = useRetryCell(workspaceId);
   const [isRetrying, setIsRetrying] = useState(false);
+  const disabledReasonKey = isRetrying ? "common.retrying" : retryBlockerKey;
 
   const handleOpenPreview = () => {
     openFile({
@@ -620,7 +636,10 @@ const WithOpenEntityButton = ({
         <Button
           aria-label={t("common.retry")}
           className={inlineActionClass}
-          disabled={retryDisabled || isRetrying}
+          disabled={disabledReasonKey !== undefined}
+          disabledReason={
+            disabledReasonKey === undefined ? undefined : t(disabledReasonKey)
+          }
           onClick={(event) => {
             event.stopPropagation();
             handleRetry();

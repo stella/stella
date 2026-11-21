@@ -435,6 +435,7 @@
       "scripts/check-workflow-shells*.ts",
       "scripts/workflow-steps.ts"
     ],
+    "Bun runtime guard": ["**"],
     "Patched dependencies apply": [
       "package.json",
       "bun.lock",

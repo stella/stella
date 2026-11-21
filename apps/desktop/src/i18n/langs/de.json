@@ -183,7 +183,8 @@
     "handoffServerMismatch": "Stella Desktop ist mit {linkedServer} verbunden, aber dieses Dokument erfordert {requestedServer}. Trennen Sie das aktuelle Konto in den Einstellungen und verbinden Sie sich anschließend mit {requestedServer}, um das Dokument zu öffnen.",
     "handoffAccountChanged": "Das Konto von stella desktop hat sich beim Öffnen des Dokuments geändert. Starten Sie erneut über stella.",
     "handoffAlreadyOpen": "Ein anderer Signaturdialog ist bereits geöffnet. Schließen Sie ihn ab oder schließen Sie ihn, und versuchen Sie es erneut.",
-    "handoffExpired": "Der Dokumentlink ist abgelaufen, bevor stella desktop verbunden war. Starten Sie erneut über stella."
+    "handoffExpired": "Der Dokumentlink ist abgelaufen, bevor stella desktop verbunden war. Starten Sie erneut über stella.",
+    "waitingForFolderSelection": "Wählen Sie einen Ordner aus oder schließen Sie die Dateiauswahl."
   },
   "settings": {
     "accountLinked": "Verknüpft",
@@ -237,6 +238,17 @@
     "startOnLoginDescription": "stella desktop automatisch beim Anmelden starten.",
     "stellaDesktop": "stella desktop",
     "support": "Support",
+    "updates": {
+      "upToDate": "stella desktop ist auf dem neuesten Stand.",
+      "available": "Version {version} ist verfügbar.",
+      "install": "Installieren und neu starten",
+      "installing": "Version {version} wird installiert. stella desktop startet danach neu.",
+      "installInProgress": "Eine Aktualisierung wird installiert.",
+      "deferred": "Version {version} wartet, solange geöffnete Dokumente bearbeitet werden. Prüfen Sie danach erneut, um sie zu installieren, oder sie wird bei der nächsten automatischen Prüfung installiert.",
+      "checkFailed": "stella desktop konnte nicht nach Aktualisierungen suchen.",
+      "installFailed": "stella desktop konnte die Aktualisierung nicht installieren.",
+      "support": "Stimmt etwas nicht? Schreiben Sie unserem Support: <email>{address}</email>"
+    },
     "title": "Einstellungen",
     "pages": {
       "general": "Allgemein",
@@ -280,7 +292,10 @@
     "recoveryOpenFolder": "Wiederherstellungsordner öffnen",
     "recoveryOpenUnassigned": "Nicht zugeordnete Änderungen öffnen",
     "recoveryFilePending": "Warten auf Zurückstellung",
-    "recoveryError": "Der Wiederherstellungsordner konnte nicht geöffnet werden. Versuchen Sie es erneut."
+    "recoveryError": "Der Wiederherstellungsordner konnte nicht geöffnet werden. Versuchen Sie es erneut.",
+    "openingRecoveryFolder": "Wiederherstellungsordner wird geöffnet…",
+    "refreshingRecovery": "Änderungen zur Wiederherstellung werden geprüft…",
+    "loadingAccount": "Ihre Kontoverbindung wird geprüft…"
   },
   "clipboard": {
     "registryUnavailable": "Für Ihre Tätigkeitsgebiete sind keine Register aktiviert.",
@@ -425,7 +440,14 @@
     "welcomeShortcutTitle": "Überall öffnen.",
     "welcomeStart": "Mit dem Kopieren beginnen",
     "welcomeTitle": "Ihre neue Zwischenablage",
-    "registryIdentifierSearchHint": "Geben Sie {identifiers} ein."
+    "registryIdentifierSearchHint": "Geben Sie {identifiers} ein.",
+    "enterGroupName": "Geben Sie einen Gruppennamen ein.",
+    "savingChanges": "Änderungen werden gespeichert…",
+    "creatingGroup": "Gruppe wird erstellt…",
+    "groupLimitReached": "Sie können bis zu {max} Gruppen erstellen.",
+    "loadingAutostart": "Es wird geprüft, ob die Zwischenablage bei der Anmeldung startet…",
+    "savingAutostart": "Die Einstellung zum Start bei der Anmeldung wird gespeichert…",
+    "registryFormatting": "Registerergebnis wird formatiert…"
   },
   "activity": {
     "title": "Aktivität",
@@ -611,7 +633,15 @@
     "aiStructureMove": "stella AI schlägt vor, {duration} auf {matter} zu verschieben",
     "aiStructureCreate": "{count, plural, one {# Eintrag anlegen} other {# Einträge anlegen}}",
     "aiStructureMoveAccept": "Verschieben",
-    "aiFlagSplit": "Eintrag aufteilen"
+    "aiFlagSplit": "Eintrag aufteilen",
+    "creatingDrafts": "Entwürfe werden erstellt…",
+    "earliestDayReached": "Sie sehen den frühesten verfügbaren Tag.",
+    "latestDayReached": "Sie sehen den letzten verfügbaren Tag.",
+    "savingCapturePreference": "Ihre Aufnahmeeinstellung wird gespeichert…",
+    "writeDescription": "Geben Sie eine Beschreibung für diesen Eintrag ein.",
+    "chooseMatterForEntry": "Wählen Sie eine Akte für diesen Eintrag aus.",
+    "entryNeedsDuration": "Wählen Sie einen Zeitraum mit abrechenbarer Dauer aus.",
+    "enterRefinement": "Geben Sie eine Anweisung zur Überarbeitung der Beschreibung ein."
   },
   "dictation": {
     "title": "Diktieren",
@@ -751,7 +781,8 @@
       "label": "Bisher Diktiertes",
       "listening": "Hört zu…",
       "finishing": "Wird abgeschlossen…"
-    }
+    },
+    "dictationInProgress": "Beenden Sie das aktuelle Diktat, bevor Sie das Modell entfernen."
   },
   "shortcut": {
     "title": "Tastenkürzel für die Zwischenablage",
@@ -792,7 +823,8 @@
       "windowMenu": "Fenstermenü",
       "start": "Start",
       "taskManager": "Task-Manager"
-    }
+    },
+    "saving": "Tastenkürzel wird gespeichert…"
   },
   "onboarding": {
     "back": "Zurück",
@@ -936,7 +968,8 @@
       "keystrokesWithoutHoldKey": "Tastatureingaben, außer Sie wählen eine Taste zum Halten",
       "fullDiskAccess": "Festplattenvollzugriff",
       "administrator": "Administratorrechte"
-    }
+    },
+    "enablingDictation": "Diktierfunktion wird aktiviert…"
   },
   "agentSubscriptions": {
     "title": "KI-Abonnements",
@@ -1012,7 +1045,9 @@
         "verification": "{name} konnte nicht verifiziert werden und wurde daher nicht installiert.",
         "storage": "{name} konnte auf diesem Computer nicht gespeichert werden. Prüfen Sie, ob auf dem Datenträger genügend Speicherplatz frei ist."
       }
-    }
+    },
+    "finishingSignIn": "Anmeldung wird abgeschlossen…",
+    "enterCallbackAddress": "Fügen Sie die vollständige Adresse aus dem Anmelde-Tab im Browser ein."
   },
   "localSkills": {
     "title": "Lokale Skills",
@@ -1116,7 +1151,9 @@
       "localMissing": "Laden Sie das Sprachmodell in den Einstellungen unter Diktieren herunter, um auf diesem Computer zu transkribieren.",
       "localMissingCloud": "Laden Sie das Sprachmodell in den Einstellungen unter Diktieren herunter, oder transkribieren Sie mit stella AI.",
       "retainsData": "Bitte beachten Sie die Verarbeitungsbedingungen von {provider}.",
-      "modelFailed": "Das Modell von stella AI konnte nicht gelesen werden, daher kann stella AI gerade nicht transkribieren. Versuchen Sie es erneut oder transkribieren Sie auf diesem Computer."
+      "modelFailed": "Das Modell von stella AI konnte nicht gelesen werden, daher kann stella AI gerade nicht transkribieren. Versuchen Sie es erneut oder transkribieren Sie auf diesem Computer.",
+      "loadingModel": "Das Transkriptionsmodell von stella AI wird geprüft…",
+      "useLocal": "Wählen Sie diesen Computer aus, um die Aufnahme zu transkribieren."
     },
     "matter": {
       "title": "Mandat",
@@ -1165,7 +1202,8 @@
       "noSpeech": "In dieser Aufnahme wurde keine Sprache gefunden.",
       "fileName": "{title} – Transkript.txt",
       "documentTitle": "{title} – Transkript",
-      "transcriptTitle": "Transkript"
+      "transcriptTitle": "Transkript",
+      "alreadySaved": "Das Transkript wurde bereits im Mandat gespeichert."
     },
     "progress": {
       "running": "Transkription: {done, number} von {total, number} Min.",
@@ -1173,7 +1211,9 @@
       "stop": "Stoppen",
       "stopped": "Nach {done, number} Min. gestoppt. Der bisherige Text bleibt erhalten.",
       "done": "{total, number} Min. transkribiert.",
-      "another": "Weitere Aufnahme transkribieren"
+      "another": "Weitere Aufnahme transkribieren",
+      "transcribing": "Aufnahme wird transkribiert…",
+      "stopping": "Transkription wird gestoppt…"
     },
     "cleaned": {
       "title": "Bereinigt",
@@ -1196,6 +1236,7 @@
       "formatted": "Mit Formatierung",
       "plain": "Als reiner Text",
       "hint": "Mit Formatierung werden Überschriften, Fettdruck und Listen in Word oder Outlook eingefügt. Ihre Wahl wird gespeichert."
-    }
+    },
+    "waitingForFileSelection": "Wählen Sie eine Aufnahme aus oder schließen Sie die Dateiauswahl."
   }
 }

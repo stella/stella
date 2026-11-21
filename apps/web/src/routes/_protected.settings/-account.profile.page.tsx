@@ -73,15 +73,15 @@ import {
   PROFILE_SHORTCUT_FIELD_CLASS,
   ProfilePageShell,
 } from "@/routes/_protected.settings/-account.profile.pending";
-import { ChatNotificationsCard } from "@/routes/_protected.settings/-components/account/chat-notifications-card";
-import { ChatTechnicalDetailsCard } from "@/routes/_protected.settings/-components/account/chat-technical-details-card";
+import { ChatNotificationsRow } from "@/routes/_protected.settings/-components/account/chat-notifications-row";
+import { ChatTechnicalDetailsRow } from "@/routes/_protected.settings/-components/account/chat-technical-details-row";
 import { DeletionTaskReassignments } from "@/routes/_protected.settings/-components/account/deletion-task-reassignments";
 import type { DeletionTaskGroup } from "@/routes/_protected.settings/-components/account/deletion-task-reassignments";
 import { PersonalDataExportCard } from "@/routes/_protected.settings/-components/account/personal-data-export-card";
 import { SessionsCard } from "@/routes/_protected.settings/-components/account/sessions-card";
 import { SignInMethods } from "@/routes/_protected.settings/-components/account/sign-in-methods";
 import { TwoFactorCard } from "@/routes/_protected.settings/-components/account/two-factor-card";
-import { FormField } from "@/routes/_protected.settings/-components/settings-card.pending";
+import { FormField } from "@/routes/_protected.settings/-components/settings-section.pending";
 
 import {
   accountDeletionLeavesTasksUnassigned,
@@ -338,16 +338,36 @@ function ProfilePageBody() {
     dialogDescription = "";
   }
 
+  const resolveDeleteAccountDisabledReason = () => {
+    if (sendOtpMutation.isPending) {
+      return t("common.sending");
+    }
+    if (dialogStep === "loading") {
+      return t("common.loading");
+    }
+    if (dialogStep === "pendingTasksError") {
+      return t("common.loadFailed");
+    }
+    if (!deleteAccountConfirmation.confirmed) {
+      return t("settings.account.deleteAccountConfirmationLabel");
+    }
+    return t("settings.account.checkTaskReassignments");
+  };
+
   return (
     <ProfilePageShell
       accountCards={
         <>
-          <ChatNotificationsCard />
-          <ChatTechnicalDetailsCard />
           <SignInMethods />
           <TwoFactorCard />
           <SessionsCard />
           <PersonalDataExportCard />
+        </>
+      }
+      chatPreferences={
+        <>
+          <ChatNotificationsRow />
+          <ChatTechnicalDetailsRow />
         </>
       }
       deleteAccount={
@@ -633,6 +653,11 @@ function ProfilePageBody() {
               disabled={
                 sendOtpMutation.isPending || verifyDeleteMutation.isPending
               }
+              disabledReason={
+                sendOtpMutation.isPending
+                  ? t("common.sending")
+                  : t("common.deleting")
+              }
             >
               {t("common.cancel")}
             </Button>
@@ -658,6 +683,11 @@ function ProfilePageBody() {
                 disabled={
                   otpCode.length !== 6 || verifyDeleteMutation.isPending
                 }
+                disabledReason={
+                  verifyDeleteMutation.isPending
+                    ? t("common.deleting")
+                    : t("common.enterVerificationCode")
+                }
                 loading={verifyDeleteMutation.isPending}
               >
                 {t("settings.account.confirmDelete")}
@@ -673,6 +703,7 @@ function ProfilePageBody() {
                   !deleteAccountConfirmation.confirmed ||
                   (dialogStep === "tasks" && !selectedTaskReassignmentsAreValid)
                 }
+                disabledReason={resolveDeleteAccountDisabledReason()}
                 loading={sendOtpMutation.isPending}
               >
                 {t("settings.account.sendOtpCode")}
@@ -866,9 +897,15 @@ const LocalePreferences = () => {
 };
 
 const ProfileSubmitButton = ({ label }: { label: string }) => {
+  const t = useTranslations();
   const { pending } = useFormStatus();
   return (
-    <Button className="w-fit" disabled={pending} type="submit">
+    <Button
+      className="w-fit"
+      disabled={pending}
+      disabledReason={t("common.saving")}
+      type="submit"
+    >
       {label}
     </Button>
   );

@@ -246,7 +246,9 @@ describe("TimeEntryForm activity pricing", () => {
       );
       await chooseActivity("A2");
       const button = screen.getByRole("button", { name: SUBMIT_LABEL });
-      await waitFor(() => expect(button.hasAttribute("disabled")).toBe(true));
+      await waitFor(() =>
+        expect(button.getAttribute("aria-disabled")).toBe("true"),
+      );
       await submit();
       const form = button.closest("form");
       if (form === null) {
@@ -260,7 +262,9 @@ describe("TimeEntryForm activity pricing", () => {
         deferred.resolve(NO_RATE);
         expect(Result.isOk(await pending)).toBe(true);
       });
-      await waitFor(() => expect(button.hasAttribute("disabled")).toBe(false));
+      await waitFor(() =>
+        expect(button.getAttribute("aria-disabled")).toBeNull(),
+      );
       await submit();
       await waitFor(() => expect(submitted).toHaveLength(1));
       expect(submitted.at(0)).toMatchObject(

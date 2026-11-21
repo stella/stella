@@ -1349,6 +1349,7 @@ const RowDuplicatePrimaryAction = ({
   pending,
   presentation,
 }: RowDuplicatePrimaryActionProps) => {
+  const t = useTranslations();
   if (presentation !== "primary") {
     return null;
   }
@@ -1357,6 +1358,7 @@ const RowDuplicatePrimaryAction = ({
     <Button
       className="opacity-0 transition-opacity group-hover/row:opacity-100 focus-visible:opacity-100 pointer-coarse:opacity-100"
       disabled={pending}
+      disabledReason={t("workspaces.duplicatingRow")}
       onClick={(event) => {
         event.stopPropagation();
         detached(onDuplicate(), "row-actions.duplicate-primary");

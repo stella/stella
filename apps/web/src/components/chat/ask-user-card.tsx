@@ -231,6 +231,7 @@ const AskUserOptions = ({
           </span>
           <Button
             disabled={draft.picked.length === options.length}
+            disabledReason={t("chat.askUser.allOptionsSelected")}
             onClick={() =>
               onChange((current) => pickAllAskUserOptions(question, current))
             }
@@ -241,6 +242,7 @@ const AskUserOptions = ({
           </Button>
           <Button
             disabled={draft.picked.length === 0}
+            disabledReason={t("chat.askUser.noOptionsSelected")}
             onClick={() => onChange((current) => ({ ...current, picked: [] }))}
             size="xs"
             variant="ghost"
@@ -615,7 +617,12 @@ export const AskUserCard = ({
                 </p>
               )}
               <div className="flex items-center gap-2">
-                <Button disabled={answers === null} size="xs" type="submit">
+                <Button
+                  disabled={answers === null}
+                  disabledReason={t("chat.askUser.answerRequired")}
+                  size="xs"
+                  type="submit"
+                >
                   {isEditing
                     ? t("chat.askUser.rerun")
                     : t("chat.askUser.submit")}

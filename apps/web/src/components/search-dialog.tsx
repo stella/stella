@@ -2103,6 +2103,11 @@ export const SearchDialog = ({
                   aria-label={t("search.aiRefine")}
                   className="size-8 shrink-0"
                   disabled={!query.trim() || refineSearchMutation.isPending}
+                  disabledReason={
+                    refineSearchMutation.isPending
+                      ? t("search.refiningQuery")
+                      : t("search.enterQueryToRefine")
+                  }
                   onClick={() => {
                     handleRefineQuery();
                   }}
@@ -2703,6 +2708,7 @@ const SearchDialogFooter = ({
                 aria-keyshortcuts="Tab"
                 className="h-auto gap-1.5"
                 disabled={isAskingAI}
+                disabledReason={t("chat.forkingThread")}
                 onClick={onAskAI}
                 size="xs"
                 variant="muted"

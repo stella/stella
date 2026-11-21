@@ -318,7 +318,7 @@ pub struct TrustedSelfHostConnection {
 /// Monotonic bridge contract revision. Increment whenever the bridge
 /// surface changes so the web app can require a minimum revision without
 /// coupling to the desktop's literal app version.
-pub const BRIDGE_VERSION: u32 = 43;
+pub const BRIDGE_VERSION: u32 = 44;
 
 /// Versioned contracts advertised to the web app. A client requires the
 /// capability it uses; breaking semantics receive a new capability id.
@@ -768,6 +768,7 @@ mod rpc_codegen_tests {
     OpenFileRequest,
     OpenFileResponse,
     RecoveryTarget,
+    crate::updater::SettingsCheck,
   );
 
   struct DeclarationVisitor<'a> {

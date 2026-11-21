@@ -320,6 +320,7 @@ const OrganizationList = ({
         <Button
           className="w-full"
           disabled={isSelectPending}
+          disabledReason={t("common.switchingOrganization")}
           key={org.id}
           onClick={() => selectOrg(org.id)}
           variant="plain"

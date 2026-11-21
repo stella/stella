@@ -1,10 +1,10 @@
 import type { ReactNode } from "react";
 
 import { ButtonFace, FaceLabelPending } from "@stll/ui/control-face";
-import { FramePanel } from "@stll/ui/frame";
+import { SettingsPanel } from "@stll/ui/settings";
 import { cn } from "@stll/ui/utils";
 
-import { SettingsCardPending } from "@/routes/_protected.settings/-components/settings-card.pending";
+import { SettingsSectionPending } from "@/routes/_protected.settings/-components/settings-section.pending";
 
 /** The status chip's box; the page adds its tone (on, off). */
 export const TWO_FACTOR_STATUS_CLASS =
@@ -15,31 +15,33 @@ type TwoFactorCardFrameProps = {
   status: ReactNode;
   /** Turning it on or off, and the backup codes. */
   actions: ReactNode;
-  /** What the card mounts beside its panel (its dialogs). */
+  /** What the section mounts beside its panel (its dialogs). */
   children?: ReactNode;
 };
 
-/** The two-factor card (`TwoFactorCard`): header, status and actions. */
+/** The two-factor section (`TwoFactorCard`): header, status and actions. */
 export const TwoFactorCardFrame = ({
   actions,
   children,
   status,
 }: TwoFactorCardFrameProps) => (
-  <SettingsCardPending
-    description="settings.account.twoFactor.description"
-    title="settings.account.twoFactor.title"
-  >
-    <FramePanel>
-      <div className="flex items-center justify-between gap-4 p-4">
-        {status}
-        <div className="flex gap-2">{actions}</div>
-      </div>
-    </FramePanel>
+  <>
+    <SettingsSectionPending
+      description="settings.account.twoFactor.description"
+      title="settings.account.twoFactor.title"
+    >
+      <SettingsPanel>
+        <div className="flex flex-wrap items-center justify-between gap-4">
+          {status}
+          <div className="flex gap-2">{actions}</div>
+        </div>
+      </SettingsPanel>
+    </SettingsSectionPending>
     {children}
-  </SettingsCardPending>
+  </>
 );
 
-/** The card while the session loads: the chip and the action as faces. */
+/** The section while the session loads: the chip and the action as faces. */
 export const TwoFactorCardPending = () => (
   <TwoFactorCardFrame
     actions={

@@ -54,6 +54,9 @@ export const ChatGptPasteCallback = ({
         />
         <Button
           disabled={submitting || url.trim() === ""}
+          disabledReason={
+            submitting ? t("finishingSignIn") : t("enterCallbackAddress")
+          }
           type="submit"
           variant="outline"
         >

@@ -29,7 +29,11 @@ export const useHandoffConfirmationContent = ({
       organization: (chunks) => <bdi>{chunks}</bdi>,
     }),
     confirm: (
-      <Button onClick={onConfirm} disabled={submissionStatus === "submitting"}>
+      <Button
+        onClick={onConfirm}
+        disabled={submissionStatus === "submitting"}
+        disabledReason={t("auth.confirmingHandoff")}
+      >
         {t("common.confirm")}
       </Button>
     ),
@@ -38,6 +42,7 @@ export const useHandoffConfirmationContent = ({
         variant="outline"
         onClick={onCancel}
         disabled={submissionStatus === "submitting"}
+        disabledReason={t("auth.confirmingHandoff")}
       >
         {t("common.cancel")}
       </Button>

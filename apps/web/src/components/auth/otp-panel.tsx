@@ -1,14 +1,16 @@
 import { useState } from "react";
 
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
 import { Result, TaggedError } from "better-result";
 import { useTranslations } from "use-intl";
 
+import type { SignInCodeFailureReason } from "@stll/api-contract/email-delivery";
 import {
   PROFESSIONAL_USE_DISPLAYED_VERSION_FIELD,
   PROFESSIONAL_USE_STATEMENT_VERSION,
 } from "@stll/api-contract/professional-use";
+import { Temporal } from "@stll/time";
 import { Button } from "@stll/ui/button";
 import { DialogFormState } from "@stll/ui/dialog";
 import { FrameDescription } from "@stll/ui/frame";
@@ -30,7 +32,9 @@ import { detached } from "@/lib/detached";
 import { toAuthClientError } from "@/lib/errors/auth";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
 import { notifyUserError } from "@/lib/errors/user-toast";
+import { queryView } from "@/lib/query-view.logic";
 import { COMMON_TIMEZONES } from "@/lib/timezones";
+import { useQueryViewError } from "@/lib/use-query-view";
 
 import {
   accessResetProviders,
@@ -43,12 +47,21 @@ import {
   AuthCodeSlots,
   AuthCodeVerification,
 } from "./code-verification-face.pending";
+import { newSignInAttempt, signInAttemptHeaders } from "./email-delivery.logic";
 import {
   OTPPanelFrame,
   OTPPanelLayout,
   OTPProfessionalUseStatement,
 } from "./otp-panel-face.pending";
-import { OTPEmailText, renderEmail } from "./otp-panel-text";
+import {
+  EmailDeliveryFailureText,
+  OTPEmailText,
+  renderEmail,
+} from "./otp-panel-text";
+import {
+  SIGN_IN_CODE_DELIVERY_WINDOW_MS,
+  signInCodeDeliveryOptions,
+} from "./sign-in-code-delivery";
 
 type OTPPanelProps = {
   className?: string;
@@ -61,6 +74,17 @@ type OTPPanelProps = {
   onUseDifferentEmail?: () => void;
   onVerified?: () => void | Promise<void>;
   linkProvider?: SocialProvider | undefined;
+  /**
+   * The attempt id the code request that opened this panel carried. While
+   * the code can be used, the panel asks whether that request's own code
+   * mail bounced, and if so explains why instead of saying a code was sent.
+   */
+  signInAttempt?: string | undefined;
+  /**
+   * A code sent again names a new attempt; the owner of `signInAttempt`
+   * keeps it, so a reload or remount follows the new code's mail.
+   */
+  onSignInAttemptChange?: (signInAttempt: string) => void;
 };
 
 const OTP_EXPIRED_MESSAGE = "OTP expired";
@@ -99,12 +123,30 @@ export const OTPPanelBody = ({
   onUseDifferentEmail,
   onVerified,
   linkProvider,
+  signInAttempt: initialSignInAttempt,
+  onSignInAttemptChange,
 }: Omit<OTPPanelProps, "className">) => {
   const t = useTranslations();
   const analytics = useAnalytics();
   const queryClient = useQueryClient();
   const navigate = useNavigate();
   const [otp, setOtp] = useState(initialOtp ?? "");
+  const [signInAttempt, setSignInAttempt] = useState(() => ({
+    attempt: initialSignInAttempt,
+    pollUntil:
+      Temporal.Now.instant().epochMilliseconds +
+      SIGN_IN_CODE_DELIVERY_WINDOW_MS,
+  }));
+  const delivery = queryView(
+    useQuery(signInCodeDeliveryOptions(signInAttempt)),
+  );
+  // The follow-up only adds an explanation; when it fails, the panel keeps
+  // saying a code was sent and the failure is reported.
+  useQueryViewError(delivery, "OTPPanel:delivery");
+  const deliveryFailure =
+    delivery.type === "items" && delivery.items.status === "failed"
+      ? delivery.items.reason
+      : undefined;
   const [resetConfirmation, setResetConfirmation] = useState<{
     otp: string;
     providers: string[];
@@ -150,9 +192,11 @@ export const OTPPanelBody = ({
 
   const resendOtp = useMutation({
     mutationFn: async () => {
+      const attempt = newSignInAttempt();
       const { error } = await authClient.emailOtp.sendVerificationOtp({
         email,
         type: "sign-in",
+        fetchOptions: { headers: signInAttemptHeaders(attempt) },
       });
 
       if (error) {
@@ -169,6 +213,15 @@ export const OTPPanelBody = ({
       }
 
       setOtp("");
+      // The new code's own mail is followed from now on; an earlier
+      // attempt's bounce no longer describes it.
+      setSignInAttempt({
+        attempt,
+        pollUntil:
+          Temporal.Now.instant().epochMilliseconds +
+          SIGN_IN_CODE_DELIVERY_WINDOW_MS,
+      });
+      onSignInAttemptChange?.(attempt);
       stellaToast.add({
         description: t("auth.checkSpamHint"),
         title: t("auth.codeSentAgain"),
@@ -320,6 +373,7 @@ export const OTPPanelBody = ({
           <Button
             loading={verifyOtp.isPending}
             disabled={verifyOtp.isPending}
+            disabledReason={t("common.verifying")}
             onClick={() =>
               verifyOtp.mutate({
                 email,
@@ -333,6 +387,7 @@ export const OTPPanelBody = ({
           <Button
             variant="ghost"
             disabled={verifyOtp.isPending}
+            disabledReason={t("common.verifying")}
             onClick={handleUseDifferentEmail}
           >
             {t("common.cancel")}
@@ -340,6 +395,7 @@ export const OTPPanelBody = ({
         </div>
       ) : (
         <OTPPanelContent
+          deliveryFailure={deliveryFailure}
           email={email}
           isOtpComplete={isOtpComplete}
           isOtpPulsing={isOtpPulsing}
@@ -364,6 +420,7 @@ export const OTPPanelBody = ({
 };
 
 export const OTPPanelContent = ({
+  deliveryFailure,
   email,
   isOtpComplete,
   isOtpPulsing,
@@ -376,6 +433,7 @@ export const OTPPanelContent = ({
   onSubmit,
   onUseDifferentEmail,
 }: {
+  deliveryFailure?: SignInCodeFailureReason | undefined;
   email: string;
   isOtpComplete: boolean;
   isOtpPulsing: boolean;
@@ -417,6 +475,7 @@ export const OTPPanelContent = ({
               aria-disabled={!isOtpComplete || undefined}
               className={cn(!isOtpComplete && "cursor-not-allowed opacity-64")}
               disabled={verifyPending}
+              disabledReason={t("common.verifying")}
               loading={verifyPending}
               onClick={() => onSubmit()}
             >
@@ -427,10 +486,22 @@ export const OTPPanelContent = ({
       }
       description={
         <>
-          <OTPEmailText email={email} id="auth.weSentCodeTo" />
+          {deliveryFailure === undefined ? (
+            <OTPEmailText email={email} id="auth.weSentCodeTo" />
+          ) : (
+            <span className="text-destructive" role="alert">
+              <EmailDeliveryFailureText
+                email={email}
+                reason={deliveryFailure}
+              />
+            </span>
+          )}
           {" · "}
           <Button
             disabled={verifyPending || resendPending}
+            disabledReason={
+              verifyPending ? t("common.verifying") : t("auth.sendingCode")
+            }
             onClick={onUseDifferentEmail}
             size="inline"
             variant="link"
@@ -444,6 +515,9 @@ export const OTPPanelContent = ({
       resend={
         <Button
           disabled={verifyPending || resendPending}
+          disabledReason={
+            verifyPending ? t("common.verifying") : t("auth.sendingCode")
+          }
           loading={resendPending}
           onClick={onResend}
           size="sm"

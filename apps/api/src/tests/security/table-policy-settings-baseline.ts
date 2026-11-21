@@ -172,6 +172,7 @@ export const TABLE_POLICY_SETTINGS_BASELINE: readonly string[] = [
   "search_documents",
   "search_projection_repair_queue",
   "session",
+  "session_sign_ins",
   "signal_events",
   "signals",
   "sso_provider",

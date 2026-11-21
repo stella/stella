@@ -183,7 +183,8 @@
     "handoffServerMismatch": "Stella Desktop je pripojený k serveru {linkedServer}, ale tento dokument vyžaduje server {requestedServer}. V nastaveniach odpojte aktuálny účet a potom sa pripojte k serveru {requestedServer}, aby ste mohli dokument otvoriť.",
     "handoffAccountChanged": "Počas otvárania dokumentu sa zmenil účet stella desktop. Začnite znova zo stelly.",
     "handoffAlreadyOpen": "Iné okno na podpis je už otvorené. Dokončite ho alebo zatvorte a skúste to znova.",
-    "handoffExpired": "Platnosť odkazu na dokument vypršala skôr, než bol stella desktop pripojený. Začnite znova zo stelly."
+    "handoffExpired": "Platnosť odkazu na dokument vypršala skôr, než bol stella desktop pripojený. Začnite znova zo stelly.",
+    "waitingForFolderSelection": "Vyberte priečinok alebo zatvorte okno na výber súboru."
   },
   "settings": {
     "accountLinked": "Prepojené",
@@ -237,6 +238,17 @@
     "startOnLoginDescription": "Spustiť stella desktop automaticky pri prihlásení.",
     "stellaDesktop": "stella desktop",
     "support": "Podpora",
+    "updates": {
+      "upToDate": "stella desktop je aktuálny.",
+      "available": "Je k dispozícii verzia {version}.",
+      "install": "Nainštalovať a reštartovať",
+      "installing": "Inštaluje sa verzia {version}. Po dokončení sa stella desktop reštartuje.",
+      "installInProgress": "Inštaluje sa aktualizácia.",
+      "deferred": "Verzia {version} čaká, kým upravujete otvorené dokumenty. Keď skončíte, skontrolujte aktualizácie znova a nainštalujte ju, inak sa nainštaluje pri ďalšej automatickej kontrole.",
+      "checkFailed": "stella desktop nemohol skontrolovať aktualizácie.",
+      "installFailed": "stella desktop nemohol nainštalovať aktualizáciu.",
+      "support": "Niečo nefunguje? Napíšte našej podpore: <email>{address}</email>"
+    },
     "title": "Nastavenia",
     "pages": {
       "general": "Všeobecné",
@@ -280,7 +292,10 @@
     "recoveryOpenFolder": "Otvoriť priečinok na obnovenie",
     "recoveryOpenUnassigned": "Otvoriť nepriradené úpravy",
     "recoveryFilePending": "Čaká sa na odloženie",
-    "recoveryError": "Priečinok na obnovenie sa nepodarilo otvoriť. Skúste to znova."
+    "recoveryError": "Priečinok na obnovenie sa nepodarilo otvoriť. Skúste to znova.",
+    "openingRecoveryFolder": "Otvára sa priečinok na obnovenie…",
+    "refreshingRecovery": "Kontrolujú sa úpravy čakajúce na obnovenie…",
+    "loadingAccount": "Kontroluje sa pripojenie vášho účtu…"
   },
   "clipboard": {
     "registryUnavailable": "Pre vaše jurisdikcie nie sú povolené žiadne registre.",
@@ -425,7 +440,14 @@
     "welcomeShortcutTitle": "Otvorte ju odkiaľkoľvek.",
     "welcomeStart": "Začať kopírovať",
     "welcomeTitle": "Zoznámte sa so schránkou",
-    "registryIdentifierSearchHint": "Zadajte {identifiers}."
+    "registryIdentifierSearchHint": "Zadajte {identifiers}.",
+    "enterGroupName": "Zadajte názov skupiny.",
+    "savingChanges": "Ukladajú sa zmeny…",
+    "creatingGroup": "Vytvára sa skupina…",
+    "groupLimitReached": "Môžete vytvoriť najviac {max} skupín.",
+    "loadingAutostart": "Kontroluje sa spúšťanie schránky pri prihlásení…",
+    "savingAutostart": "Ukladá sa nastavenie spúšťania pri prihlásení…",
+    "registryFormatting": "Formátuje sa výsledok z registra…"
   },
   "activity": {
     "title": "Aktivita",
@@ -611,7 +633,15 @@
     "aiStructureMove": "stella AI navrhuje presunúť {duration} do spisu {matter}",
     "aiStructureCreate": "{count, plural, one {Vytvoriť # záznam} few {Vytvoriť # záznamy} other {Vytvoriť # záznamov}}",
     "aiStructureMoveAccept": "Presunúť",
-    "aiFlagSplit": "Rozdeliť záznam"
+    "aiFlagSplit": "Rozdeliť záznam",
+    "creatingDrafts": "Vytvárajú sa koncepty…",
+    "earliestDayReached": "Zobrazujete si najstarší dostupný deň.",
+    "latestDayReached": "Zobrazujete si najnovší dostupný deň.",
+    "savingCapturePreference": "Ukladá sa nastavenie zaznamenávania…",
+    "writeDescription": "Zadajte opis tohto záznamu.",
+    "chooseMatterForEntry": "Vyberte spis pre tento záznam.",
+    "entryNeedsDuration": "Vyberte časový rozsah s fakturovateľnou dĺžkou.",
+    "enterRefinement": "Zadajte pokyn na úpravu opisu."
   },
   "dictation": {
     "title": "Diktovanie",
@@ -751,7 +781,8 @@
       "label": "Čo ste zatiaľ nadiktovali",
       "listening": "Počúvam…",
       "finishing": "Dokončujem…"
-    }
+    },
+    "dictationInProgress": "Pred odobratím modelu dokončite prebiehajúce diktovanie."
   },
   "shortcut": {
     "title": "Skratka schránky",
@@ -792,7 +823,8 @@
       "windowMenu": "Ponuka okna",
       "start": "Štart",
       "taskManager": "Správca úloh"
-    }
+    },
+    "saving": "Ukladá sa klávesová skratka…"
   },
   "onboarding": {
     "back": "Späť",
@@ -936,7 +968,8 @@
       "keystrokesWithoutHoldKey": "Stlačenia klávesov, pokiaľ si nezvolíte kláves na podržanie",
       "fullDiskAccess": "Úplný prístup k disku",
       "administrator": "Oprávnenia správcu"
-    }
+    },
+    "enablingDictation": "Zapína sa diktovanie…"
   },
   "agentSubscriptions": {
     "title": "Predplatné AI",
@@ -1012,7 +1045,9 @@
         "verification": "{name} sa nepodarilo overiť, preto sa nenainštaloval.",
         "storage": "{name} sa nepodarilo uložiť do tohto počítača. Skontrolujte, či je na disku voľné miesto."
       }
-    }
+    },
+    "finishingSignIn": "Dokončuje sa prihlásenie…",
+    "enterCallbackAddress": "Vložte celú adresu z karty prehliadača, v ktorej ste sa prihlásili."
   },
   "localSkills": {
     "title": "Miestne zručnosti",
@@ -1116,7 +1151,9 @@
       "localMissing": "Ak chcete prepisovať v tomto počítači, stiahnite si v Nastaveniach v časti Diktovanie rečový model.",
       "localMissingCloud": "Stiahnite si v Nastaveniach v časti Diktovanie rečový model alebo prepisujte pomocou stella AI.",
       "retainsData": "Vezmite, prosím, na vedomie podmienky spracovania spoločnosti {provider}.",
-      "modelFailed": "Model stella AI sa nepodarilo načítať, takže stella AI teraz nemôže prepisovať. Skúste to znova alebo prepisujte na tomto počítači."
+      "modelFailed": "Model stella AI sa nepodarilo načítať, takže stella AI teraz nemôže prepisovať. Skúste to znova alebo prepisujte na tomto počítači.",
+      "loadingModel": "Kontroluje sa model stella AI na prepis…",
+      "useLocal": "Na prepis nahrávky vyberte tento počítač."
     },
     "matter": {
       "title": "Spis",
@@ -1165,7 +1202,8 @@
       "noSpeech": "V nahrávke sa nenašla žiadna reč.",
       "fileName": "{title} – prepis.txt",
       "documentTitle": "{title} – prepis",
-      "transcriptTitle": "Prepis"
+      "transcriptTitle": "Prepis",
+      "alreadySaved": "Prepis už je uložený v spise."
     },
     "progress": {
       "running": "Prepisuje sa {done, number} z {total, number} min",
@@ -1173,7 +1211,9 @@
       "stop": "Zastaviť",
       "stopped": "Zastavené po {done, number} min. Doterajší text zostáva.",
       "done": "Prepísané: {total, number} min.",
-      "another": "Prepísať ďalšiu nahrávku"
+      "another": "Prepísať ďalšiu nahrávku",
+      "transcribing": "Prepisuje sa nahrávka…",
+      "stopping": "Zastavuje sa prepis…"
     },
     "cleaned": {
       "title": "Upravený text",
@@ -1196,6 +1236,7 @@
       "formatted": "S formátovaním",
       "plain": "Ako obyčajný text",
       "hint": "S formátovaním sa do Wordu alebo Outlooku vložia nadpisy, tučné písmo aj zoznamy. Kopírovanie si vašu voľbu zapamätá."
-    }
+    },
+    "waitingForFileSelection": "Vyberte nahrávku alebo zatvorte okno na výber súboru."
   }
 }

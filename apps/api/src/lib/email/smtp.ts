@@ -71,6 +71,8 @@ export const createSMTPTransport = (
               })),
             }),
       });
+      // A relay's message id is not the one provider delivery events carry.
+      return { type: "accepted_untracked" };
     },
   };
 };

@@ -97,6 +97,7 @@ export const TimeReviewRow = ({
           />
           <Button
             disabled={comment.trim() === ""}
+            disabledReason={t("billing.approval.returnCommentRequired")}
             loading={busy}
             onClick={() => review.returnToDraft([row], comment)}
             size="sm"

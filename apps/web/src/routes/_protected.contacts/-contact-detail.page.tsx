@@ -414,6 +414,7 @@ export function ContactDetailPage() {
                 {canDeleteContact && (
                   <Button
                     disabled={deleteContact.isPending}
+                    disabledReason={t("common.deleting")}
                     onClick={handleDeleteOpen}
                     size={DELETE_CONTACT_BUTTON.size}
                     variant={DELETE_CONTACT_BUTTON.variant}

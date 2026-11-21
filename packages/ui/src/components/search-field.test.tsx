@@ -29,6 +29,7 @@ describe("SearchField clear button", () => {
       <SearchField
         clearLabel="Clear search"
         disabled
+        disabledReason="Saving…"
         onValueChange={() => {}}
         value="lease"
       />,

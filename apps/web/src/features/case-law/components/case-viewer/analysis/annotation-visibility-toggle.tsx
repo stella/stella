@@ -46,6 +46,7 @@ export const AnnotationVisibilityToggle = ({
       aria-pressed={shared}
       className="group/plain"
       disabled={disabled}
+      disabledReason={t("readerAnswers.waitForCurrentAction")}
       onClick={onToggle}
       tooltip={label}
       variant="plain"

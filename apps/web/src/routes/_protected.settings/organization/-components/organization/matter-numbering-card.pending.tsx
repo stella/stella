@@ -9,7 +9,7 @@ import {
   FieldTriggerFace,
   LabelFace,
 } from "@stll/ui/control-face";
-import { Frame, FramePanel } from "@stll/ui/frame";
+import { SettingsPanel, SettingsSection } from "@stll/ui/settings";
 
 import { PendingText } from "@/components/pending-text";
 import type { PendingTextKey } from "@/components/pending-text";
@@ -46,9 +46,9 @@ export const MatterNumberingCardFrame = ({
   preview,
   save,
 }: MatterNumberingCardFrameProps) => (
-  <Frame>
-    <FramePanel>
-      <div className="flex flex-col gap-3 p-1">
+  <SettingsSection>
+    <SettingsPanel>
+      <div className="flex flex-col gap-3">
         {numberingToggle}
         {pattern}
         {customPattern}
@@ -56,8 +56,8 @@ export const MatterNumberingCardFrame = ({
         {preview}
         {save}
       </div>
-    </FramePanel>
-  </Frame>
+    </SettingsPanel>
+  </SettingsSection>
 );
 
 /** The checkbox beside its caption. */

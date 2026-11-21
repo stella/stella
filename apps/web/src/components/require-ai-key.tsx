@@ -270,6 +270,27 @@ export const useAIKeyGate = () =>
     missingMessage: "useAIKeyGate must be used within AIAvailabilityProvider",
   });
 
+export const useAISendBlockReason = () => {
+  const t = useTranslations();
+  const gate = use(AIAvailabilityContext);
+  const state = use(AIUnavailableContext);
+  if (gate?.availability === "pending") {
+    return t("common.loading");
+  }
+  if (state === null) {
+    return undefined;
+  }
+  switch (state.type) {
+    case "unavailable":
+      return t("chat.sendErrorProviderUnavailable");
+    case "configurationRequired":
+      return t(aiUnavailableMessageKey(state.availability));
+    default:
+      state satisfies never;
+      return panic("Unhandled AI send availability state");
+  }
+};
+
 export const AIUnavailableDialogTrigger = () => {
   const state = use(AIUnavailableContext);
   const feedbackAlreadyShown = use(AIAvailabilityFeedbackContext);
@@ -406,6 +427,30 @@ type AIKeyRequiredDialogProps = {
 const DEFAULT_PROVIDER_DRAFTS: ProviderCredentialDraft[] = [
   createProviderCredentialDraft(),
 ];
+
+type AiConfigDisabledReasonOptions = {
+  configStatus: "pending" | "error" | "success";
+  defaultsStatus: "pending" | "error" | "empty" | "items";
+  tCommon: (key: "loading") => string;
+  t: (key: "ai.keyRequired.configUnreadable") => string;
+  tOrganization: (key: "aiConfig.selectModelForEachRole") => string;
+};
+
+const aiConfigDisabledReason = ({
+  configStatus,
+  defaultsStatus,
+  tCommon,
+  t,
+  tOrganization,
+}: AiConfigDisabledReasonOptions) => {
+  if (configStatus === "pending" || defaultsStatus === "pending") {
+    return tCommon("loading");
+  }
+  if (configStatus === "error" || defaultsStatus === "error") {
+    return t("ai.keyRequired.configUnreadable");
+  }
+  return tOrganization("aiConfig.selectModelForEachRole");
+};
 
 export const AIKeyRequiredDialog = ({
   onOpenChange,
@@ -681,6 +726,13 @@ export const AIKeyRequiredDialog = ({
           </DialogClose>
           <Button
             disabled={!canSave}
+            disabledReason={aiConfigDisabledReason({
+              configStatus: configQuery.status,
+              defaultsStatus: defaultsView.type,
+              tCommon,
+              t,
+              tOrganization,
+            })}
             loading={saveMutation.isPending}
             onClick={() => saveMutation.mutate()}
             title={configRefusalKey === null ? undefined : t(configRefusalKey)}

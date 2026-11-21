@@ -18,11 +18,13 @@ export const ReaderAnswerLanguagePicker = ({
   documentLanguage,
   value,
   disabled,
+  disabledReason,
   onChange,
 }: {
   documentLanguage: string;
   value: string;
   disabled: boolean;
+  disabledReason?: string | undefined;
   onChange: (value: string) => void;
 }) => {
   const t = useTranslations();
@@ -45,6 +47,7 @@ export const ReaderAnswerLanguagePicker = ({
           <Button
             aria-label={t("readerAnswers.answerLanguage")}
             disabled={disabled}
+            disabledReason={disabledReason ?? t("common.loading")}
             size="sm"
             variant="ghost"
           />

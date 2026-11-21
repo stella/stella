@@ -1,8 +1,4 @@
 // A disabled control must say why it cannot act.
-//
-// See `disabled-control-needs-reason.logic.ts` for what is flagged; the
-// ratchet counter in `scripts/ratchet.ts` reads the same predicate, so the
-// burn-down count and this rule agree site for site.
 
 import { eslintCompatPlugin } from "@oxlint/plugins";
 

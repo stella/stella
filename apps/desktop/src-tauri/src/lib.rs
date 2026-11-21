@@ -447,9 +447,9 @@ pub fn run() {
                 }
               }
               tray::MenuAction::CheckForUpdates => {
-                let active_edit_sessions = {
-                  let mgr = manager.lock().await;
-                  mgr.has_active_edit_sessions()
+                let sessions = &*manager;
+                let active_edit_sessions = move || async move {
+                  sessions.lock().await.has_active_edit_sessions()
                 };
 
                 match updater::run_check(&handle, active_edit_sessions).await {

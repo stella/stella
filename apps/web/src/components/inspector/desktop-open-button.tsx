@@ -1,3 +1,5 @@
+import { useTranslations } from "use-intl";
+
 import { Button } from "@stll/ui/button";
 import { LaptopIcon } from "@stll/ui/icons";
 import { Loader } from "@stll/ui/loader";
@@ -27,6 +29,7 @@ export const DesktopOpenButton = ({
   propertyId,
   workspaceId,
 }: DesktopOpenButtonProps) => {
+  const t = useTranslations();
   const gate = useDesktopActionGate("edit-file");
   const { label } = gate;
   const target = {
@@ -71,6 +74,7 @@ export const DesktopOpenButton = ({
                 "bg-primary/10 text-primary ring-primary/60 animate-[pulse_700ms_ease-in-out_3] ring-2 motion-reduce:animate-none",
             )}
             disabled={isOpening}
+            disabledReason={t("settings.account.desktopCardOpeningTitle")}
             key={attentionSequence ?? "idle"}
             onClick={() => {
               gate.run(() => {

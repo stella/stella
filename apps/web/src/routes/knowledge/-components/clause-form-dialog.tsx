@@ -217,6 +217,16 @@ const ClauseFormDialogBody = ({
     onSaved();
   };
 
+  const resolveSaveClauseDisabledReason = () => {
+    if (saving) {
+      return t("common.saving");
+    }
+    if (!form.title.trim()) {
+      return t("common.enterTitle");
+    }
+    return t("common.finishReview");
+  };
+
   return (
     <DialogPopup className="sm:max-w-lg">
       <DialogFormState
@@ -340,6 +350,7 @@ const ClauseFormDialogBody = ({
         </DialogClose>
         <Button
           disabled={saving || !form.title.trim() || reviewStatus !== "resolved"}
+          disabledReason={resolveSaveClauseDisabledReason()}
           onClick={() => {
             detached(once.run(handleSave), "clause-form-dialog.save");
           }}

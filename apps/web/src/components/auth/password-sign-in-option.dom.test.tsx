@@ -352,7 +352,9 @@ test("a committed password sign-in with a failed session refresh stays on the fo
     });
     fireEvent.click(submit);
     await waitFor(() => expect(notice).toHaveBeenCalledTimes(1));
-    await waitFor(() => expect(submit.hasAttribute("disabled")).toBe(false));
+    await waitFor(() =>
+      expect(submit.getAttribute("aria-disabled")).not.toBe("true"),
+    );
     expect(appRouter.state.location.pathname).toBe("/auth/sign-in");
     expect(ui.queryByTestId("existing-session")).toBeNull();
     expect(ui.getByDisplayValue("member@example.test")).toBeDefined();

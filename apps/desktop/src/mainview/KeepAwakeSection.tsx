@@ -4,10 +4,14 @@ import { invoke } from "@tauri-apps/api/core";
 import { Result } from "better-result";
 import { useTranslations } from "use-intl";
 
+import {
+  SettingsRow,
+  settingsRowIds,
+  SettingsSection,
+} from "@stll/ui/settings";
 import { Switch } from "@stll/ui/switch";
 
 import { useNativeStatus } from "./AgentSubscriptionsSection";
-import { SettingsGroup, SettingsRow, settingsRowIds } from "./settings-layout";
 
 /**
  * Whether this computer stays awake while agents work on it. It renders
@@ -44,7 +48,7 @@ export const KeepAwakeSection = () => {
   const enabledIds = settingsRowIds("keep-awake");
   const batteryIds = settingsRowIds("keep-awake-on-battery");
   return (
-    <SettingsGroup title={t("title")}>
+    <SettingsSection title={t("title")}>
       <SettingsRow
         description={t("description")}
         footer={
@@ -86,7 +90,7 @@ export const KeepAwakeSection = () => {
           }}
         />
       </SettingsRow>
-    </SettingsGroup>
+    </SettingsSection>
   );
 };
 

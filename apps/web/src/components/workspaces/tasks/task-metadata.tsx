@@ -370,6 +370,7 @@ export const AssigneePicker = ({
               aria-label={tCommon("remove")}
               className="size-5 opacity-0 transition-opacity group-hover/assignee:opacity-100 pointer-coarse:opacity-100"
               disabled={removeAssignee.isPending}
+              disabledReason={tCommon("removing")}
               onClick={() =>
                 removeAssignee.mutate({ taskId, userId: a.user.id })
               }

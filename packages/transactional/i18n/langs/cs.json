@@ -21,25 +21,25 @@
     "subject": "{documentType, select, credit_note {Dobropis} advance {Zálohová faktura} other {Faktura}} {invoiceNumber} od {firmName}"
   },
   "newDeviceLogin": {
-    "action": "Zkontrolovat relace",
-    "body": "K vašemu účtu se někdo přihlásil z nového zařízení nebo místa.",
+    "action": "Zkontrolovat přihlášená zařízení",
+    "body": "K vašemu účtu se právě někdo přihlásil z nového zařízení nebo místa.",
     "device": "Zařízení",
     "deviceName": {
       "browserOnOs": "{browser} v systému {os}",
       "unknown": "Neznámé zařízení"
     },
-    "heading": "Zjištěno nové přihlášení",
-    "ignore": "Pokud jste to byli vy, není potřeba nic dělat. Pokud tuto aktivitu nepoznáváte, zkontrolujte své aktivní relace a odvolejte ty, které nepoznáváte.",
+    "heading": "Nové přihlášení k vašemu účtu",
+    "ignore": "Pokud jste to byli vy, nemusíte nic dělat. Pokud přihlášení nepoznáváte, odhlaste toto zařízení.",
     "ipAddress": "IP adresa",
     "ipAddressUnknown": "Neznámá",
-    "location": "Přibližné místo",
-    "locationNote": "Místo je odhadnuté podle IP adresy a nemusí být přesné.",
+    "location": "Poloha",
     "mapAlt": "Mapa s přibližným místem přihlášení: {location}",
     "place": {
       "cityCountry": "{city}, {country}",
       "cityRegionCountry": "{city}, {region}, {country}",
       "regionCountry": "{region}, {country}"
     },
+    "placeApproximate": "{place} (přibližně)",
     "preview": "Nové přihlášení z {device}",
     "previewUnknownDevice": "Nové přihlášení z neznámého zařízení",
     "subject": "Nové přihlášení k vašemu účtu stella",

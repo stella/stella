@@ -122,6 +122,7 @@ const UnreadableRecovery = ({ form, onRetry }: UnreadableRecoveryProps) => {
       <div className="flex items-center gap-2">
         <Button
           disabled={form.saving}
+          disabledReason={common("saving")}
           onClick={onRetry}
           size="sm"
           variant="outline"
@@ -130,6 +131,7 @@ const UnreadableRecovery = ({ form, onRetry }: UnreadableRecoveryProps) => {
         </Button>
         <Button
           disabled={form.saving}
+          disabledReason={common("saving")}
           onClick={form.toggleRecovery}
           size="sm"
           variant="ghost"
@@ -245,6 +247,7 @@ export const AIConfigForm = ({
 }: AIConfigFormProps) => {
   const common = useTranslations("common");
   const form = useAIConfigForm({ readState, organizationId });
+  const t = useTranslations("organization.aiConfig");
   // A failed read keeps the providers' generic line; nothing else needs it.
   const availabilityView = queryView(
     useQuery(aiAvailabilityOptions({ organizationId })),
@@ -269,6 +272,16 @@ export const AIConfigForm = ({
           providers: providerValues,
         })
       : null;
+  const resolveAiConfigSaveDisabledReason = () => {
+    if (form.saving) {
+      return common("saving");
+    }
+    if (!form.hasChangesToSave) {
+      return common("noChangesToSave");
+    }
+    return t("resolveErrorsBeforeSaving");
+  };
+
   return (
     <AIConfigFormLayout
       deepl={<DeepLKeyCard {...keySections.deepl} disabled={saving} />}
@@ -354,6 +367,7 @@ export const AIConfigForm = ({
           <Button
             size="sm"
             disabled={!form.canClickSave || form.saving}
+            disabledReason={resolveAiConfigSaveDisabledReason()}
             loading={form.saving}
             onClick={() =>
               detached(form.saveSettings(), "ai-config.save-settings")

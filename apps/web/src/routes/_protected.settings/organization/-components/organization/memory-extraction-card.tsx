@@ -1,8 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
-import { useTranslations } from "use-intl";
 
 import { Checkbox } from "@stll/ui/checkbox";
-import { Field, FieldLabel } from "@stll/ui/field";
+import { SettingsPanel, settingsRowIds } from "@stll/ui/settings";
 
 import { QueryViewFeedback } from "@/components/query-view-feedback";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
@@ -23,7 +22,6 @@ export const MemoryExtractionCard = ({
   disabled,
   feedback,
 }: ToggleSettingsSectionProps) => {
-  const t = useTranslations();
   const { activeOrganizationId, id: userId } = useAuthenticatedUser();
   const settingsQuery = useQuery(
     organizationSettingsOptions({
@@ -39,28 +37,41 @@ export const MemoryExtractionCard = ({
     return <AIToggleCardPending {...MEMORY_EXTRACTION_CARD} />;
   }
   if (!settings) {
-    return <QueryViewFeedback view={settingsView} />;
+    return (
+      <SettingsPanel>
+        <QueryViewFeedback view={settingsView} />
+      </SettingsPanel>
+    );
   }
 
   const enabled = value ?? settings.memoryExtractionEnabled;
+  const ids = settingsRowIds(MEMORY_EXTRACTION_CARD.id);
 
   return (
     <AIToggleCardFrame
       description={MEMORY_EXTRACTION_CARD.description}
-      notice={<QueryViewFeedback view={settingsView} />}
+      id={MEMORY_EXTRACTION_CARD.id}
+      notice={
+        settingsView.type === "items" &&
+        settingsView.refetchError !== undefined ? (
+          <QueryViewFeedback view={settingsView} />
+        ) : undefined
+      }
       title={MEMORY_EXTRACTION_CARD.title}
       toggle={
-        <Field className="flex-row items-center gap-2">
-          <Checkbox
-            checked={enabled}
-            disabled={disabled}
-            onCheckedChange={onChange}
-          />
-          <FieldLabel>{t(MEMORY_EXTRACTION_CARD.label)}</FieldLabel>
-        </Field>
+        <Checkbox
+          aria-describedby={ids.description}
+          aria-labelledby={ids.label}
+          id={ids.control}
+          checked={enabled}
+          disabled={disabled}
+          onCheckedChange={onChange}
+        />
       }
     >
-      <AISettingsSectionFeedback feedback={feedback} />
+      {feedback.status === "idle" ? undefined : (
+        <AISettingsSectionFeedback feedback={feedback} />
+      )}
     </AIToggleCardFrame>
   );
 };

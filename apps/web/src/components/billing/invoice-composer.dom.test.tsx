@@ -197,7 +197,9 @@ test("without a number series the review step is not ready and names where to se
     screen.queryByText(messages.billing.invoiceComposer.readyTitle),
   ).toBeNull();
   expect(
-    screen.getByText(messages.errors.apiCodes.invoiceNumberSeriesMissing),
+    screen.getByText(messages.errors.apiCodes.invoiceNumberSeriesMissing, {
+      selector: "li span",
+    }),
   ).toBeDefined();
   expect(
     screen
@@ -205,8 +207,13 @@ test("without a number series the review step is not ready and names where to se
       .getAttribute("href"),
   ).toBe("/settings/organization/number-series");
   expect(
-    button(messages.billing.invoiceComposer.issueInvoice).disabled,
-  ).toBeTrue();
+    screen
+      .getByRole("button", {
+        name: messages.billing.invoiceComposer.issueInvoice,
+        description: messages.errors.apiCodes.invoiceNumberSeriesMissing,
+      })
+      .getAttribute("aria-disabled"),
+  ).toBe("true");
   // The work is not lost: a draft still saves.
   expect(button(messages.billing.invoiceComposer.saveDraft).disabled).toBe(
     false,
@@ -218,7 +225,9 @@ test("without a seller the review step links to the billing profiles", async () 
   await mountAtIssueStep([INVOICE_ISSUE_BLOCKER.sellerProfileMissing]);
 
   expect(
-    screen.getByText(messages.errors.apiCodes.invoiceSellerProfileMissing),
+    screen.getByText(messages.errors.apiCodes.invoiceSellerProfileMissing, {
+      selector: "li span",
+    }),
   ).toBeDefined();
   expect(
     screen
@@ -226,8 +235,13 @@ test("without a seller the review step links to the billing profiles", async () 
       .getAttribute("href"),
   ).toBe("/settings/organization/billing");
   expect(
-    button(messages.billing.invoiceComposer.issueInvoice).disabled,
-  ).toBeTrue();
+    screen
+      .getByRole("button", {
+        name: messages.billing.invoiceComposer.issueInvoice,
+        description: messages.errors.apiCodes.invoiceSellerProfileMissing,
+      })
+      .getAttribute("aria-disabled"),
+  ).toBe("true");
 });
 
 test("a refused issue shows the reason its code names, and that the draft was kept", async () => {

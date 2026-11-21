@@ -218,6 +218,7 @@ export const ProvisionsCited = ({
         <Button
           className="w-fit"
           disabled={isFetchingNextPage}
+          disabledReason={t("common.loading")}
           onClick={() => {
             detached(fetchNextPage(), "case-law.provisions-more");
           }}

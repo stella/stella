@@ -382,6 +382,7 @@ export const VersionsSidebar = ({
           <Button
             className="text-muted-foreground hover:text-foreground hover:bg-accent flex h-full min-w-0 flex-1 justify-start gap-2 rounded-none border-0 border-e px-3 font-normal before:rounded-none"
             disabled={onCompareVersions === undefined}
+            disabledReason={t("fileDetail.compareDocxOnly")}
             onClick={onCompareVersions}
             type="button"
             variant="ghost"
@@ -399,6 +400,7 @@ export const VersionsSidebar = ({
         <Button
           className="text-muted-foreground hover:text-foreground hover:bg-accent flex h-full min-w-0 flex-1 justify-start gap-2 rounded-none border-0 px-3 font-normal before:rounded-none"
           disabled={isUploading}
+          disabledReason={t("workspaces.files.uploading")}
           onClick={() => {
             openFilePicker({
               accept: ".docx,.pdf,.doc",

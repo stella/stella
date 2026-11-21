@@ -144,6 +144,12 @@ export const SignInMethods = () => {
     },
   });
   const pending = connect.isPending || send.isPending || unlink.isPending;
+  const pendingReason = t(
+    pendingSignInReasonKey({
+      connecting: connect.isPending,
+      sending: send.isPending,
+    }),
+  );
   const dataReady =
     accountsView.type === "items" &&
     accountsView.refetchError === undefined &&
@@ -190,6 +196,16 @@ export const SignInMethods = () => {
             } else if (account.providerId === "credential") {
               name = t("auth.password");
             }
+            const resolveDisconnectDisabledReason = () => {
+              if (pending) {
+                return pendingReason;
+              }
+              if (accountsView.items.length <= 1) {
+                return t("settings.account.signInMethods.lastMethod");
+              }
+              return t("settings.account.signInMethods.unavailable");
+            };
+
             return (
               <ListItem key={account.id}>
                 <ListItemContent>
@@ -215,6 +231,7 @@ export const SignInMethods = () => {
                       accountsView.items.length <= 1 ||
                       !capabilitiesView.items.transactionalEmail
                     }
+                    disabledReason={resolveDisconnectDisabledReason()}
                     onClick={() => {
                       setSelected({ id: account.id, provider: name });
                       setCode("");
@@ -244,6 +261,7 @@ export const SignInMethods = () => {
                 <Button
                   variant="ghost"
                   disabled={pending}
+                  disabledReason={pendingReason}
                   onClick={() => connect.mutate(provider)}
                 >
                   {t("common.connect")}
@@ -296,34 +314,104 @@ export const SignInMethods = () => {
               </InputOTP>
             </div>
           )}
-          <DialogFooter>
-            <DialogClose render={<Button variant="ghost" disabled={pending} />}>
-              {t("common.cancel")}
-            </DialogClose>
-            {confirmation === "request" ? (
-              <Button disabled={pending} onClick={() => send.mutate()}>
-                {t("settings.account.sendOtpCode")}
-              </Button>
-            ) : (
-              <Button
-                variant="destructive"
-                disabled={
-                  pending ||
-                  code.length !== CONFIRMATION_CODE_LENGTH ||
-                  !dataReady
-                }
-                onClick={() => {
-                  if (selected) {
-                    unlink.mutate(selected.id);
-                  }
-                }}
-              >
-                {t("common.disconnect")}
-              </Button>
-            )}
-          </DialogFooter>
+          <DisconnectDialogFooter
+            codeComplete={code.length === CONFIRMATION_CODE_LENGTH}
+            confirmation={confirmation}
+            dataReady={dataReady}
+            loading={loading}
+            onConfirm={() => {
+              if (selected) {
+                unlink.mutate(selected.id);
+              }
+            }}
+            onRequest={() => send.mutate()}
+            pending={pending}
+            pendingReason={pendingReason}
+          />
         </DialogPopup>
       </Dialog>
     </SignInMethodsGroup>
+  );
+};
+
+const pendingSignInReasonKey = ({
+  connecting,
+  sending,
+}: {
+  connecting: boolean;
+  sending: boolean;
+}) => {
+  if (connecting) {
+    return "common.connecting";
+  }
+  return sending ? "common.sending" : "common.disconnecting";
+};
+
+type DisconnectDialogFooterProps = {
+  codeComplete: boolean;
+  confirmation: "request" | "code";
+  dataReady: boolean;
+  loading: boolean;
+  onConfirm: () => void;
+  onRequest: () => void;
+  pending: boolean;
+  pendingReason: string;
+};
+
+const DisconnectDialogFooter = ({
+  codeComplete,
+  confirmation,
+  dataReady,
+  loading,
+  onConfirm,
+  onRequest,
+  pending,
+  pendingReason,
+}: DisconnectDialogFooterProps) => {
+  const t = useTranslations();
+  const resolveConfirmDisabledReason = () => {
+    if (pending) {
+      return pendingReason;
+    }
+    if (loading) {
+      return t("common.loading");
+    }
+    if (!dataReady) {
+      return t("common.loadFailed");
+    }
+    return t("common.enterVerificationCode");
+  };
+  return (
+    <DialogFooter>
+      <DialogClose
+        render={
+          <Button
+            variant="ghost"
+            disabled={pending}
+            disabledReason={pendingReason}
+          />
+        }
+      >
+        {t("common.cancel")}
+      </DialogClose>
+      {confirmation === "request" ? (
+        <Button
+          disabled={pending}
+          disabledReason={pendingReason}
+          onClick={onRequest}
+        >
+          {t("settings.account.sendOtpCode")}
+        </Button>
+      ) : (
+        <Button
+          variant="destructive"
+          disabled={pending || !codeComplete || !dataReady}
+          disabledReason={resolveConfirmDisabledReason()}
+          onClick={onConfirm}
+        >
+          {t("common.disconnect")}
+        </Button>
+      )}
+    </DialogFooter>
   );
 };

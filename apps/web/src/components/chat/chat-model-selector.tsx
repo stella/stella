@@ -214,9 +214,14 @@ const ChatRunOnChip = ({
         render={
           <Button
             aria-label={name}
+            // In a narrow status row (a side pane) the chip shows its icon
+            // alone rather than shrinking with the row, so its width stays
+            // put while its menu is open. The aria-label and tooltip still
+            // name the place.
             data-composer-chip="run-on"
             // Until the stored choice is known, nothing can be picked on it.
             disabled={disabled}
+            disabledReason={t("common.loading")}
             size="xs"
             variant="muted"
           />
@@ -224,7 +229,10 @@ const ChatRunOnChip = ({
         tooltip={name}
       >
         {view.icon}
-        <TruncatedText className="max-w-44" render={<BidiText as="span" />}>
+        <TruncatedText
+          className="max-w-44 @max-xl/composer-status:hidden"
+          render={<BidiText as="span" />}
+        >
           {view.label}
         </TruncatedText>
       </MenuTrigger>
@@ -251,6 +259,7 @@ export const ChatModelSelector = ({
   disabled = false,
   models,
 }: ChatModelSelectorProps) => {
+  const t = useTranslations();
   const [open, setOpen] = useState(false);
   const [detailsRequested, setDetailsRequested] = useState(false);
   const selectedTarget = chatRunOnTarget(models.runTarget);
@@ -295,6 +304,11 @@ export const ChatModelSelector = ({
               data-composer-chip="model"
               // Until the stored choice is known, nothing can be picked on it.
               disabled={disabled || models.state === "loading"}
+              disabledReason={
+                models.state === "loading"
+                  ? t("common.loading")
+                  : t("chat.composer.waitForChat")
+              }
               onFocus={() => setDetailsRequested(true)}
               onMouseEnter={() => setDetailsRequested(true)}
               size="xs"
@@ -304,7 +318,14 @@ export const ChatModelSelector = ({
           tooltip={trigger.label}
         >
           {trigger.icon}
-          <TruncatedText className="max-w-36" render={<BidiText as="span" />}>
+          {/* A fixed cap, narrower in a narrow status row (a side pane),
+              rather than a chip that shrinks with the row: a menu trigger
+              whose width follows the row re-renders its open menu's
+              positioning as the row settles. */}
+          <TruncatedText
+            className="max-w-36 @max-xl/composer-status:max-w-20"
+            render={<BidiText as="span" />}
+          >
             {trigger.label}
           </TruncatedText>
         </MenuTrigger>

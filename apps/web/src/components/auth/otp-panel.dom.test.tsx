@@ -3,6 +3,7 @@ import type { ReactNode } from "react";
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { afterAll, afterEach, expect, test } from "bun:test";
 
+import { SIGN_IN_ATTEMPT_HEADER } from "@stll/api-contract/email-delivery";
 import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
 
 GlobalRegistrator.register({ url: "http://localhost:3000/auth/sign-in" });
@@ -13,7 +14,7 @@ const originalFetch = globalThis.fetch;
 globalThis.fetch = Object.assign(async () => Response.json(null), {
   preconnect: () => undefined,
 });
-const { cleanup, render, within, fireEvent } =
+const { cleanup, render, within, fireEvent, waitFor } =
   await import("@testing-library/react");
 const { IntlProvider } = await import("use-intl");
 const messages = (await import("@/i18n/langs/en.json")).default;
@@ -197,6 +198,151 @@ test("OTP verification refreshes the existing session before the two-factor rout
     expect(events.indexOf("session-read")).toBeLessThan(
       events.indexOf("two-factor"),
     );
+  } finally {
+    client.clear();
+    globalThis.fetch = originalFetch;
+  }
+});
+
+const otpContent = (
+  props: Partial<Parameters<typeof OTPPanelContent>[0]> = {},
+) => (
+  <OTPPanelContent
+    email="new.member@example.test"
+    isBare
+    isOtpComplete={false}
+    isOtpPulsing={false}
+    onOtpChange={noop}
+    onResend={noop}
+    onSubmit={noop}
+    onUseDifferentEmail={noop}
+    otp=""
+    resendPending={false}
+    verifyPending={false}
+    {...props}
+  />
+);
+
+test("a recipient server without STARTTLS is explained with its domain, and no code is claimed sent", () => {
+  const ui = withIntl(otpContent({ deliveryFailure: "tls_required" }));
+
+  expect(ui.getByRole("alert").textContent).toBe(
+    "We can't deliver email to example.test: its mail server doesn't accept encrypted email. Ask your IT to enable TLS (STARTTLS) on the mail server, or use a different email address.",
+  );
+  expect(ui.queryByText(/We sent a code/u)).toBeNull();
+  // The code can still be entered, sent again, or the address changed.
+  expect(ui.getByRole("button", { name: /Send code again/u })).toBeTruthy();
+  expect(
+    ui.getByRole("button", { name: messages.auth.useDifferentEmail }),
+  ).toBeTruthy();
+});
+
+test.each([
+  ["mailbox_missing", "this mailbox doesn't exist"],
+  ["mailbox_unavailable", "full or temporarily unavailable"],
+  ["other", "We couldn't deliver email to"],
+] as const)(
+  "a %s failure names the address and what to do",
+  (reason, phrase) => {
+    const ui = withIntl(otpContent({ deliveryFailure: reason }));
+
+    const alert = ui.getByRole("alert");
+    expect(alert.textContent).toContain(phrase);
+    expect(alert.textContent).toContain("new.member@example.test");
+    expect(alert.textContent).toMatch(/use a different email address\.$/iu);
+    expect(ui.queryByText(/We sent a code/u)).toBeNull();
+  },
+);
+
+test("without a known failure the panel says a code was sent and shows no alert", () => {
+  const ui = withIntl(otpContent());
+
+  expect(ui.queryByRole("alert")).toBeNull();
+  expect(ui.getByText(/We sent a code to/u)).toBeTruthy();
+});
+
+test("the panel explains its own code mail's bounce, and a code sent again starts over", async () => {
+  const { QueryClient, QueryClientProvider } =
+    await import("@tanstack/react-query");
+  const router = await import("@tanstack/react-router");
+  const client = new QueryClient({
+    defaultOptions: { queries: { retry: false } },
+  });
+  const opening = "a".repeat(43);
+  const resent: string[] = [];
+  const polled: unknown[] = [];
+  const handedBack: string[] = [];
+  globalThis.fetch = Object.assign(
+    async (input: string | URL | Request, init?: RequestInit) => {
+      const url = input instanceof Request ? input.url : input.toString();
+      if (url.includes("email-otp/send-verification-otp")) {
+        resent.push(
+          new Headers(init?.headers).get(SIGN_IN_ATTEMPT_HEADER) ?? "",
+        );
+        return Response.json({ success: true });
+      }
+      if (url.includes("email-otp/sign-in-delivery")) {
+        const body: unknown =
+          typeof init?.body === "string" ? JSON.parse(init.body) : null;
+        polled.push(body);
+        // Only the attempt that opened the panel bounced.
+        return Response.json(
+          JSON.stringify(body) === JSON.stringify({ attempt: opening })
+            ? { status: "failed", reason: "tls_required" }
+            : { status: "none" },
+        );
+      }
+      return Response.json(null);
+    },
+    { preconnect: () => undefined },
+  );
+  const root = router.createRootRoute({ component: router.Outlet });
+  const otp = router.createRoute({
+    getParentRoute: () => root,
+    path: "/auth/otp",
+    component: () => (
+      <OTPPanel
+        email="new.member@example.test"
+        redirectTo="/account"
+        signInAttempt={opening}
+        onSignInAttemptChange={(attempt) => {
+          handedBack.push(attempt);
+        }}
+      />
+    ),
+  });
+  const appRouter = router.createRouter({
+    routeTree: root.addChildren([otp]),
+    history: router.createMemoryHistory({ initialEntries: ["/auth/otp"] }),
+    isServer: false,
+  });
+  try {
+    await appRouter.load();
+    const ui = render(
+      <QueryClientProvider client={client}>
+        <IntlProvider locale="en" messages={messages}>
+          <router.RouterProvider router={appRouter} />
+        </IntlProvider>
+      </QueryClientProvider>,
+    );
+    expect((await ui.findByRole("alert")).textContent).toContain(
+      "its mail server doesn't accept encrypted email",
+    );
+    expect(ui.queryByText(/We sent a code to/u)).toBeNull();
+
+    fireEvent.click(ui.getByRole("button", { name: /Send code again/u }));
+    await ui.findByText(/We sent a code to/u);
+    expect(ui.queryByRole("alert")).toBeNull();
+    // The new request carried a fresh attempt, and the panel asks about that
+    // one only, by its id alone.
+    expect(resent).toHaveLength(1);
+    expect(resent[0]).toMatch(/^[\w-]{43}$/u);
+    expect(resent[0]).not.toBe(opening);
+    await waitFor(() => {
+      expect(polled.at(-1)).toEqual({ attempt: resent[0] });
+    });
+    // The owner keeps the new attempt, so a reload follows the new code.
+    expect(handedBack).toEqual(resent);
   } finally {
     client.clear();
     globalThis.fetch = originalFetch;
