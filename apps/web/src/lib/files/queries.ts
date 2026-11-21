@@ -338,7 +338,7 @@ export const cadesPreviewOptions = (props: FileOptionsProps) =>
   );
 
 /** The PDF a signed file carries, read as delivered by its content route. */
-const fetchEmbeddedPdf = async (path: string, signal: AbortSignal) => {
+const fetchEmbeddedPdf = async (path: `/${string}`, signal: AbortSignal) => {
   const response = await fetchWithTimeout(apiUrl(path), {
     credentials: "include",
     signal,

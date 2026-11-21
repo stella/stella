@@ -453,6 +453,11 @@ test("keeps the original available when the signed container cannot be opened", 
   expect(pdfEngineRenderCount).toBe(0);
 });
 
+type SignaturePreviewData = InferDataFromTag<
+  unknown,
+  ReturnType<typeof signaturePreviewOptions>["queryKey"]
+>;
+
 test("a detached signature lists its signers and links the signed document", async () => {
   const tab = {
     ...pdfTab,
@@ -462,29 +467,31 @@ test("a detached signature lists its signers and links the signed document", asy
     mimeType: "application/pkcs7-signature",
   };
   const key = { fieldId: tab.id, workspaceId: tab.workspaceId };
+  // A typed value discriminates the preview union; a literal would not.
+  const preview: SignaturePreviewData = {
+    type: "signature",
+    standard: "cades",
+    packaging: "detached",
+    signers: [
+      {
+        id: "layer-0.signer-0",
+        name: "Example notary office",
+        signedAt: "2026-03-02T09:30:00.000Z",
+      },
+      { id: "layer-0.signer-1", name: null, signedAt: null },
+    ],
+    statedFileNames: ["příloha.pdf"],
+    signedFiles: [
+      {
+        entityId: ENTITY_ID,
+        fileName: "smlouva.pdf",
+        binding: "digestMatches",
+      },
+    ],
+    document: null,
+  };
   const mounted = renderFileTab(tab, (client) => {
-    client.setQueryData(signaturePreviewOptions(key).queryKey, {
-      type: "signature",
-      standard: "cades",
-      packaging: "detached",
-      signers: [
-        {
-          id: "layer-0.signer-0",
-          name: "Example notary office",
-          signedAt: "2026-03-02T09:30:00.000Z",
-        },
-        { id: "layer-0.signer-1", name: null, signedAt: null },
-      ],
-      statedFileNames: ["příloha.pdf"],
-      signedFiles: [
-        {
-          entityId: ENTITY_ID,
-          fileName: "smlouva.pdf",
-          binding: "digestMatches",
-        },
-      ],
-      document: null,
-    });
+    client.setQueryData(signaturePreviewOptions(key).queryKey, preview);
   });
   expect(
     await mounted.findByRole("heading", { name: "smlouva.pdf.p7s" }),
