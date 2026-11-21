@@ -1,3 +1,3 @@
 {
-  "add-constraint": "The tightened location check replaces the old one on session_sign_ins, which holds one row per live session, so validation reads it within the 5s statement_timeout and ACCESS EXCLUSIVE acquisition is bounded by the 1s lock_timeout."
+  "add-constraint": "The tightened location check is added NOT VALID without scanning existing session_sign_ins rows; the preceding drop and replacement are atomic, lock acquisition is bounded by 1s and each catalog statement by 10s, and the registered online phase validates after the schema lock is released."
 }

@@ -44,6 +44,7 @@ export { default as constraints_reader_annotation_constraints } from "./online-m
 export { default as constraints_reader_answer_constraints } from "./online-migration-entries/constraints-reader-answer-constraints";
 export { default as constraints_sanctions_monitoring_constraints } from "./online-migration-entries/constraints-sanctions-monitoring-constraints";
 export { default as constraints_search_history_country_constraints } from "./online-migration-entries/constraints-search-history-country-constraints";
+export { default as constraints_session_sign_in_location_constraint } from "./online-migration-entries/constraints-session-sign-in-location-constraint";
 export { default as constraints_time_entry_submitted_constraints } from "./online-migration-entries/constraints-time-entry-submitted-constraints";
 export { default as constraints_usage_action_type_constraints } from "./online-migration-entries/constraints-usage-action-type-constraints";
 export { default as constraints_user_locale_constraints } from "./online-migration-entries/constraints-user-locale-constraints";
@@ -236,6 +237,7 @@ export { default as repairs_reader_answer_constraint_validation } from "./online
 export { default as repairs_sanctions_monitoring_constraint_validations } from "./online-migration-entries/repairs-sanctions-monitoring-constraint-validations";
 export { default as repairs_search_history_country_constraint_validation } from "./online-migration-entries/repairs-search-history-country-constraint-validation";
 export { default as repairs_search_history_country_repair } from "./online-migration-entries/repairs-search-history-country-repair";
+export { default as repairs_session_sign_in_location_constraint_validation } from "./online-migration-entries/repairs-session-sign-in-location-constraint-validation";
 export { default as repairs_time_entry_submitted_constraint_validation } from "./online-migration-entries/repairs-time-entry-submitted-constraint-validation";
 export { default as repairs_usage_action_type_constraint_validation } from "./online-migration-entries/repairs-usage-action-type-constraint-validation";
 export { default as repairs_user_locale_constraint_validation } from "./online-migration-entries/repairs-user-locale-constraint-validation";
