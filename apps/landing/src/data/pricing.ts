@@ -3,7 +3,7 @@
 // can change a price. Plan names are not translated and, like the brand, are
 // always lowercase.
 
-export const PRICING_CURRENCY = "EUR";
+const PRICING_CURRENCY = "EUR";
 
 export const billingIntervals = ["monthly", "yearly"] as const;
 export type BillingInterval = (typeof billingIntervals)[number];
