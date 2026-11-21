@@ -18,6 +18,7 @@
  * the list from the apps' imports; the build fails on a module it misses.
  */
 /* BEGIN GENERATED MCP APP STYLE SOURCES */
+@source "../../../decision-reader/src/collection-attribution.tsx";
 @source "../../../decision-reader/src/court-name.tsx";
 @source "../../../decision-reader/src/decision-identity.tsx";
 @source "../../../decision-reader/src/decision-title.ts";
