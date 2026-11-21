@@ -575,13 +575,6 @@ const readHostDecisionBody = async ({
     corpusPayloadUnavailable =
       corpusPayloadUnavailable || hostSections.unavailable;
     hostSectionsPresent = (hostSections.payload?.length ?? 0) > 0;
-    const sectionsText = hostSections.payload
-      ?.map((section) => section.text)
-      .join("\n\n")
-      .trim();
-    if (sectionsText) {
-      fulltext = sectionsText;
-    }
   }
   return {
     documentAst,
@@ -590,8 +583,9 @@ const readHostDecisionBody = async ({
     corpusPayloadUnavailable,
     hostSectionsPresent,
     astIsUsable: hostAstIsUsable,
-    hasReadableDocument:
-      hostAstIsUsable || Boolean(fulltext) || hostSectionsPresent,
+    // Stored sections alone do not make a read readable: such a row stays
+    // pending, so the on-demand document fetch still runs for it.
+    hasReadableDocument: hostAstIsUsable || Boolean(fulltext),
     projectionDigest: astRead.projectionDigest,
     documentAstSource: astRead.source,
   };
@@ -628,11 +622,12 @@ const resolveDecisionBody = async ({
     sections,
     fulltext,
     corpusPayloadUnavailable,
-    hostSectionsPresent,
   } = host;
   let bodySource: DecisionBodySource = { textSource: "host" };
   let collectionDigest: string | null = null;
-  const canonicalHasBody = host.hasReadableDocument;
+  // Stored sections still count as a host body when choosing between the
+  // host and a collection.
+  const canonicalHasBody = host.hasReadableDocument || host.hostSectionsPresent;
   if (collectionContext.status === "collection" && canonicalHasBody) {
     bodySource = collectionContext.bodySource;
   }
@@ -651,7 +646,6 @@ const resolveDecisionBody = async ({
       astIsUsable = false;
       fulltext = null;
       sections = null;
-      hostSectionsPresent = false;
     }
 
     const collection = await readCollectionBody({
@@ -704,7 +698,6 @@ const resolveDecisionBody = async ({
     astIsUsable = false;
     fulltext = null;
     sections = null;
-    hostSectionsPresent = false;
     corpusPayloadUnavailable = true;
   }
 
@@ -715,8 +708,7 @@ const resolveDecisionBody = async ({
     bodySource,
     // Usability is read from the stored ASTs: an empty stored AST is an
     // object without blocks, and the wire projection omits plain text.
-    hasReadableDocument:
-      astIsUsable || Boolean(fulltext) || hostSectionsPresent,
+    hasReadableDocument: astIsUsable || Boolean(fulltext),
     corpusPayloadUnavailable,
     projectionDigest: collectionDigest ?? host.projectionDigest,
     documentAstSource: host.documentAstSource,
