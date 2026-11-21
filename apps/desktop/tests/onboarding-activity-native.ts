@@ -61,6 +61,8 @@ export type NativeSide = {
   /** While set, reading the activity state fails. */
   activityUnreadable: boolean;
   drafts: DesktopBillingDraftSettingsResponse;
+  /** How many grants the server still refuses before it accepts one. */
+  grantRefusals: number;
   onboarding: OnboardingSnapshot;
   calls: { args: unknown; command: string }[];
 };
@@ -72,6 +74,7 @@ export const nativeSide = (
   activityUnreadable: false,
   calls: [],
   drafts: DRAFTS_OFFERED,
+  grantRefusals: 0,
   onboarding: ACTIVITY_STEP,
   ...overrides,
 });
@@ -136,6 +139,10 @@ export const installNativeSide = (native: NativeSide) => {
         case "billing_draft_get_settings":
           return scoped(native.drafts);
         case "billing_draft_grant_consent":
+          if (native.grantRefusals > 0) {
+            native.grantRefusals -= 1;
+            panic("draft time entry is unavailable");
+          }
           native.drafts = { ...native.drafts, consent: "granted" };
           return scoped(native.drafts);
         case "billing_draft_withdraw_consent":

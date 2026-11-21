@@ -1,3 +1,5 @@
+import { useState } from "react";
+
 import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 
@@ -136,6 +138,11 @@ const CallsScreen = ({ controls, snapshot }: ScreenProps) => {
   );
 };
 
+/** What the drafts switch is doing: idle, saving the choice it shows, or
+ *  back after a save the server did not confirm. */
+type ConsentSave =
+  { type: "idle" } | { enabled: boolean; type: "saving" } | { type: "failed" };
+
 /** 4. Consent to stella AI drafts, in the words the time entry card asks
  *  with; it is the same consent, kept with the account. */
 const AiDraftsScreen = ({
@@ -145,21 +152,35 @@ const AiDraftsScreen = ({
 }) => {
   const t = useTranslations("onboarding.activitySetup.aiDrafts");
   const activityT = useTranslations("activity");
+  const [save, setSave] = useState<ConsentSave>({ type: "idle" });
   const { settings } = drafts;
-  const consent = settings.type === "ready" ? settings.consent : "unavailable";
+  // Only a confirmed grant shows as on: a grant the server never confirmed
+  // stays unconfirmed in the consent owner, and the switch must stay usable
+  // to try again or to withdraw.
+  const granted = settings.type === "ready" && settings.consent === "granted";
+  const choose = async (enabled: boolean) => {
+    setSave({ enabled, type: "saving" });
+    const saved = await drafts.setConsent(enabled ? "granted" : "revoked");
+    setSave(saved ? { type: "idle" } : { type: "failed" });
+  };
   return (
     <>
       <ScreenHeader body={t("body")} title={activityT("billingDraftsTitle")} />
       <ScreenContent>
         <SwitchCard
-          checked={consent === "granted" || consent === "pending-grant"}
+          checked={save.type === "saving" ? save.enabled : granted}
           description={activityT("aiDraftConsent")}
-          disabled={consent === "pending-grant"}
+          disabled={save.type === "saving"}
           onChange={(enabled) => {
-            void drafts.setConsent(enabled ? "granted" : "revoked");
+            void choose(enabled);
           }}
           title={t("allow")}
         />
+        {save.type === "failed" ? (
+          <p className="text-destructive-foreground px-1 text-sm" role="alert">
+            {activityT("errorUpdate")}
+          </p>
+        ) : null}
         <Facts facts={[t("withdraw")]} />
       </ScreenContent>
     </>

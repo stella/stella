@@ -172,6 +172,32 @@ test("the drafts screen asks with the card's consent and grants it on the accoun
   expect(view.queryByRole("button", { name: onboarding.skipRest })).toBeNull();
 });
 
+test("a grant the server refuses says so and can be tried again", async () => {
+  const native = nativeSide({ activity: RECORDING, grantRefusals: 1 });
+  const view = await renderSetup(native);
+  for (let screen = 0; screen < 3; screen += 1) {
+    await click(view, onboarding.continue);
+  }
+  await heading(view, activity.billingDraftsTitle);
+
+  const allow = () => view.getByRole("switch", { name: setup.aiDrafts.allow });
+  fireEvent.click(allow());
+  await view.findByText(activity.errorUpdate);
+  expect(native.drafts.consent).toBe("revoked");
+  await waitFor(() => {
+    expect(allow().getAttribute("aria-checked")).toBe("false");
+  });
+
+  fireEvent.click(allow());
+  await waitFor(() => {
+    expect(native.drafts.consent).toBe("granted");
+  });
+  await waitFor(() => {
+    expect(allow().getAttribute("aria-checked")).toBe("true");
+  });
+  expect(view.queryByText(activity.errorUpdate)).toBeNull();
+});
+
 test("without drafting for the firm, calls is the last screen", async () => {
   const native = nativeSide({
     activity: RECORDING,
