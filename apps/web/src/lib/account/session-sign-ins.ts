@@ -18,7 +18,7 @@ import { resourceQueryOptions } from "@/lib/workspace-realtime";
 const invalidResponse = (message: string) =>
   new AuthClientError({ message, status: 502, statusText: "Bad Gateway" });
 
-export const sessionSignInsKeys = {
+const sessionSignInsKeys = {
   all: ["session-sign-ins"] as const,
   list: (userId: string) => [...sessionSignInsKeys.all, userId] as const,
   map: ({ userId, sessionId }: SessionSignInMapOptions) =>
