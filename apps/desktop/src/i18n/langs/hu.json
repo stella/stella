@@ -662,6 +662,35 @@
       "openSoundPc": "Hangbeállítások megnyitása",
       "title": "A stella nem hallja a mikrofont"
     },
+    "perApp": {
+      "add": "Hozzáadás…",
+      "cleanup": {
+        "default": "Javítás a beállítás szerint",
+        "label": "Javítás: {name}",
+        "off": "Nincs javítás",
+        "on": "Javítással"
+      },
+      "description": "Kapcsolja be vagy ki az AI-javítást, és válasszon nyelvet egy alkalmazáshoz vagy alkalmazásfajtához. Az az alkalmazás dönt, amely a diktálás kezdetekor előtérben van.",
+      "failed": "A beállításokat nem sikerült menteni. Próbálja újra.",
+      "group": "Alkalmazásonként",
+      "kinds": {
+        "browser": "Böngészők",
+        "chat": "Csevegőalkalmazások",
+        "code": "Kódszerkesztők",
+        "document": "Dokumentumok",
+        "email": "Levelezőalkalmazások",
+        "other": "Egyéb alkalmazások",
+        "terminal": "Terminálok"
+      },
+      "kindsOfApp": "Alkalmazásfajták",
+      "language": {
+        "default": "Nyelv a beállítás szerint",
+        "label": "Nyelv: {name}"
+      },
+      "recentApps": "Legutóbbi alkalmazások",
+      "remove": "{name} eltávolítása",
+      "title": "Beállítások egy alkalmazáshoz"
+    },
     "preview": {
       "finishing": "Befejezés…",
       "label": "Az eddig diktált szöveg",

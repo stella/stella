@@ -28,7 +28,7 @@ use crate::{
   dictation_audio::to_mono,
   dictation_cleanup,
   dictation_cloud::{self, CloudSession, Destination},
-  dictation_context::{self, CleanupContext},
+  dictation_context::{self, CleanupContext, Sharing},
   dictation_focus::{self, FocusTarget, Insertion},
   dictation_format::{AppClass, Segment},
   dictation_hold_key::{HoldChoice, MINIMUM_HOLD},
@@ -142,10 +142,7 @@ fn run(app: &AppHandle, commands: &Receiver<Command>) {
             Ok(capture) => {
               // Read once recording runs, so it never delays capture; the
               // context is where the speaker pressed the shortcut.
-              let context = dictation_context::read(
-                focus.as_ref(),
-                dictation::context_sharing(app),
-              );
+              let context = dictation_context::read(focus.as_ref(), capture.sharing);
               active = Some(Active {
                 capture,
                 focus,
@@ -308,6 +305,10 @@ struct Capture {
   segmenter: Segmenter,
   live: Live<Engines>,
   language: SpeakerLanguage,
+  /// Whether the text goes through AI cleanup, and what cleanup may read
+  /// besides the kind of app.
+  cleanup: bool,
+  sharing: Sharing,
   /// Mono samples taken so far, for the local log.
   recorded: usize,
   /// Whether the start sound played, so the stop sound plays too.
@@ -350,7 +351,12 @@ fn begin(
   if let Some(chosen) = &recorder.missing {
     dictation::report_missing_microphone(app, chosen, recorder.device.clone());
   }
-  let language = dictation::language(app);
+  // The app in front at the press decides cleanup and the language.
+  let dictation::ForApp {
+    cleanup,
+    language,
+    sharing,
+  } = dictation::for_app(app, focus);
   let local_installed = model.is_some();
   let mut cloud = CloudSession::new(
     app.clone(),
@@ -384,6 +390,8 @@ fn begin(
     recorder,
     live,
     language,
+    cleanup,
+    sharing,
     recorded: 0,
     sounded: false,
   })
@@ -413,8 +421,10 @@ fn finish(
     mut segmenter,
     mut live,
     language,
+    cleanup: cleanup_enabled,
     recorded,
     sounded,
+    ..
   } = capture;
   let channels = recorder.channels;
   let rate = recorder.rate;
@@ -475,7 +485,6 @@ fn finish(
     // A hold that heard nothing is told unless it was a tap.
     return heard_nothing(held).map(|()| Delivered::Empty);
   }
-  let cleanup_enabled = dictation::cleanup_enabled(app);
   // Cleanup spells the custom words itself; without it, the words the speech
   // model here missed are spelled on this computer.
   let respelled;

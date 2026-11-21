@@ -41,6 +41,11 @@ import {
   DESKTOP_PLATFORM,
   useKeyboardLayout,
 } from "../shared/use-clipboard-shortcut";
+import { DictationAppSettings } from "./DictationAppSettings";
+import type {
+  DictationAppSetting,
+  DictationRecentApp,
+} from "./DictationAppSettings";
 import { DictationCustomWords } from "./DictationCustomWords";
 import { DictationDestination } from "./DictationDestination";
 import type { DictationDestinationValue } from "./DictationDestination";
@@ -63,6 +68,9 @@ type DictationLanguage = {
 };
 
 export type DictationSnapshot = {
+  /** Cleanup and the language for one app or kind of app, over the
+   *  settings below. */
+  appSettings: DictationAppSetting[];
   available: boolean;
   /** Whether the transcribed text goes through stella to the organization's
    *  AI provider before it is typed. */
@@ -117,6 +125,9 @@ export type DictationSnapshot = {
   model: DictationModel;
   modelBytes: number;
   phase: "idle" | "recording" | "transcribing";
+  /** Apps dictated into since stella started, offered for their own
+   *  settings. */
+  recentApps: DictationRecentApp[];
   /** Whether a shortcut types the last dictation again, its keys, and
    *  whether another app holds them. */
   retypeKeys: ShortcutKeys;
@@ -359,6 +370,9 @@ const DictationPage = ({
   const setCustomWords = async (words: string[]) =>
     await change("dictation_set_custom_words", { words });
 
+  const setAppSettings = async (settings: DictationAppSetting[]) =>
+    await change("dictation_set_app_settings", { settings });
+
   const download = async () => {
     await change("dictation_download_model");
   };
@@ -514,6 +528,12 @@ const DictationPage = ({
               />
             )}
           </SettingsSection>
+          <DictationAppSettings
+            languages={snapshot.language.supported}
+            onChange={setAppSettings}
+            recentApps={snapshot.recentApps}
+            settings={snapshot.appSettings}
+          />
           {/* stella AI and cleanup take the words; without either, the
               text from the speech model here is spelled with them. */}
           <DictationCustomWords

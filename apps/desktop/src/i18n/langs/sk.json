@@ -662,6 +662,35 @@
       "openSoundPc": "Otvoriť nastavenia zvuku",
       "title": "stella nepočuje váš mikrofón"
     },
+    "perApp": {
+      "add": "Pridať…",
+      "cleanup": {
+        "default": "Úprava podľa nastavenia",
+        "label": "Úprava pre {name}",
+        "off": "Bez úpravy",
+        "on": "S úpravou"
+      },
+      "description": "Zapnite alebo vypnite úpravu pomocou AI a zvoľte jazyk pre jednu aplikáciu alebo druh aplikácií. Rozhoduje aplikácia, ktorá je v popredí, keď začnete diktovať.",
+      "failed": "Nastavenia sa nepodarilo uložiť. Skúste to znova.",
+      "group": "Podľa aplikácie",
+      "kinds": {
+        "browser": "Prehliadače",
+        "chat": "Četové aplikácie",
+        "code": "Editory kódu",
+        "document": "Dokumenty",
+        "email": "E-mailové aplikácie",
+        "other": "Ostatné aplikácie",
+        "terminal": "Terminály"
+      },
+      "kindsOfApp": "Druhy aplikácií",
+      "language": {
+        "default": "Jazyk podľa nastavenia",
+        "label": "Jazyk pre {name}"
+      },
+      "recentApps": "Nedávne aplikácie",
+      "remove": "Odobrať {name}",
+      "title": "Nastavenia pre aplikáciu"
+    },
     "preview": {
       "finishing": "Dokončujem…",
       "label": "Čo ste zatiaľ nadiktovali",

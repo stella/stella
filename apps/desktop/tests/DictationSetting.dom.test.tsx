@@ -20,6 +20,7 @@ afterAll(async () => {
 });
 
 const ENABLED_SNAPSHOT = {
+  appSettings: [],
   available: true,
   cleanup: true,
   cloudAvailable: false,
@@ -46,6 +47,7 @@ const ENABLED_SNAPSHOT = {
   model: { status: "ready" },
   modelBytes: 740_363_168,
   phase: "idle",
+  recentApps: [],
   retypeKeys: { code: "KeyV", modifiers: ["control", "alt", "shift"] },
   retypeShortcut: true,
   retypeShortcutTaken: false,
@@ -450,6 +452,40 @@ test("a retype shortcut another app holds says so", async () => {
     retypeShortcutTaken: true,
   });
   expect(await findByText(/^Another app is using /u)).toBeTruthy();
+});
+
+test("removing an app's own settings stores the rest", async () => {
+  const calls: unknown[] = [];
+  const code = {
+    cleanup: "off",
+    language: null,
+    target: { kind: "code", type: "kind" },
+  };
+  const mail = {
+    cleanup: null,
+    language: "cs",
+    target: { identifier: "com.apple.mail", name: "Mail", type: "app" },
+  };
+  const { getByRole } = await renderSetting(
+    { ...ENABLED_SNAPSHOT, appSettings: [code, mail] },
+    (called, payload) => {
+      if (called !== "dictation_set_app_settings") {
+        return undefined;
+      }
+      calls.push(payload);
+      return { ...ENABLED_SNAPSHOT, appSettings: [mail] };
+    },
+  );
+
+  fireEvent.click(
+    getByRole("button", {
+      name: `Remove ${defaultMessages.dictation.perApp.kinds.code}`,
+    }),
+  );
+
+  await waitFor(() => {
+    expect(calls).toEqual([{ settings: [mail] }]);
+  });
 });
 
 test("an unread focus is not reported as switching apps", () => {

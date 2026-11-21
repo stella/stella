@@ -662,6 +662,35 @@
       "openSoundPc": "Atidaryti garso nustatymus",
       "title": "„stella“ negirdi mikrofono"
     },
+    "perApp": {
+      "add": "Pridėti…",
+      "cleanup": {
+        "default": "Taisymas pagal nustatymą",
+        "label": "Taisymas: {name}",
+        "off": "Be taisymo",
+        "on": "Su taisymu"
+      },
+      "description": "Įjunkite arba išjunkite DI taisymą ir pasirinkite kalbą vienai programai ar programų rūšiai. Lemia programa, kuri yra priekyje, kai pradedate diktuoti.",
+      "failed": "Nustatymų išsaugoti nepavyko. Bandykite dar kartą.",
+      "group": "Pagal programą",
+      "kinds": {
+        "browser": "Naršyklės",
+        "chat": "Pokalbių programos",
+        "code": "Kodo redaktoriai",
+        "document": "Dokumentai",
+        "email": "El. pašto programos",
+        "other": "Kitos programos",
+        "terminal": "Terminalai"
+      },
+      "kindsOfApp": "Programų rūšys",
+      "language": {
+        "default": "Kalba pagal nustatymą",
+        "label": "Kalba: {name}"
+      },
+      "recentApps": "Naujausios programos",
+      "remove": "Pašalinti {name}",
+      "title": "Programos nustatymai"
+    },
     "preview": {
       "finishing": "Baigiama…",
       "label": "Iki šiol padiktuotas tekstas",

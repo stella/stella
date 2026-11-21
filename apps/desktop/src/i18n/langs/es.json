@@ -662,6 +662,35 @@
       "openSoundPc": "Abrir configuración de sonido",
       "title": "stella no oye tu micrófono"
     },
+    "perApp": {
+      "add": "Añadir…",
+      "cleanup": {
+        "default": "Corrección según el ajuste",
+        "label": "Corrección para {name}",
+        "off": "Sin corrección",
+        "on": "Con corrección"
+      },
+      "description": "Activa o desactiva la corrección con IA y elige el idioma para una app o un tipo de app. Decide la app que está en primer plano al empezar a dictar.",
+      "failed": "No se pudieron guardar los ajustes. Inténtalo de nuevo.",
+      "group": "Por app",
+      "kinds": {
+        "browser": "Navegadores",
+        "chat": "Apps de chat",
+        "code": "Editores de código",
+        "document": "Documentos",
+        "email": "Apps de correo",
+        "other": "Otras apps",
+        "terminal": "Terminales"
+      },
+      "kindsOfApp": "Tipos de app",
+      "language": {
+        "default": "Idioma según el ajuste",
+        "label": "Idioma para {name}"
+      },
+      "recentApps": "Apps recientes",
+      "remove": "Quitar {name}",
+      "title": "Ajustes para una app"
+    },
     "preview": {
       "finishing": "Terminando…",
       "label": "Lo que ha dictado hasta ahora",

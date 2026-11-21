@@ -40,6 +40,7 @@ mod device_preference;
 mod device_proof;
 mod diagnostics;
 mod dictation;
+mod dictation_app_settings;
 mod dictation_audio;
 mod dictation_cleanup;
 mod dictation_cloud;

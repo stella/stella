@@ -243,6 +243,7 @@ const openWindow = async (
             ["dictation_set_destination", "destination", "destination"],
             ["dictation_set_cloud_model", "modelId", "cloudModel"],
             ["dictation_set_custom_words", "words", "customWords"],
+            ["dictation_set_app_settings", "settings", "appSettings"],
           ] as const
         ).map(([command, argument, field]) => [
           command,
