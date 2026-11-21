@@ -1,5 +1,11 @@
 # @stll/ui
 
+## 0.79.0
+
+### Minor Changes
+
+- [#9091](https://github.com/stella/stella/pull/9091) [`2d31b6d`](https://github.com/stella/stella/commit/2d31b6d446bf6c1a38c09d27d0b56456dcbed015) Thanks [@jan-kubica](https://github.com/jan-kubica)! - `@stll/ui/settings` holds the pieces settings pages are composed from: `SettingsSection` (a title, one quiet line and an optional trailing action over one list surface), `SettingsRow` (an optional media tile, a title, one secondary line and a trailing control; `interaction="label"` makes the row's text the label of its switch or checkbox), `SettingsPanel` (a form or other content on the same surface) and `settingsRowIds`. It imports no Base UI, so a pending view can draw it. `ListGroupTitle` takes `tone="destructive"`, and `ListGroupAction` and `ListItemMedia` move to `@stll/ui/list-shell`; `@stll/ui/list` still exports both.
+
 ## 0.78.0
 
 ### Minor Changes
