@@ -12,7 +12,7 @@ const unreadable = () =>
   Promise.reject(
     new CorpusPayloadUnavailableError({
       message: "Fixture object unavailable",
-      decisionId,
+      documentId: decisionId,
       key: "text-key",
     }),
   );

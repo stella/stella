@@ -103,7 +103,7 @@ describe("served decision AST projection", () => {
           await Promise.reject(
             new CorpusPayloadUnavailableError({
               message: "Fixture object unavailable",
-              decisionId,
+              documentId: decisionId,
               key: "ast-key",
             }),
           ),
