@@ -1,6 +1,0 @@
-{
-  "metric": "no-db-await-in-loop-suppressions",
-  "file": "apps/api/src/handlers/case-law/ingestion/pipeline/failure-evidence-persistence.ts",
-  "delta": 2,
-  "reason": "One admitted ingestion batch locks each known canonical decision before capturing publisher input, then writes each exact-input observation fence in order. Sequential transaction operations preserve erasure ordering and monotonic fences for repeated identities; parallel writes or independent transactions would break those invariants."
-}

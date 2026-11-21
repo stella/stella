@@ -807,12 +807,17 @@ const dynamicImport = async (
   if (!specifier || !ts.isStringLiteral(specifier)) {
     return undefined;
   }
+  const bindingElements = declaration.name.elements.filter(
+    (element): element is ts.BindingElement & { name: ts.Identifier } =>
+      element.name !== undefined && ts.isIdentifier(element.name),
+  );
+  const symbols =
+    bindingElements.length > 0
+      ? await checker.getSymbolAtLocation(bindingElements.map((el) => el.name))
+      : [];
   const bindings = [];
-  for (const element of declaration.name.elements) {
-    if (!element.name || !ts.isIdentifier(element.name)) {
-      continue;
-    }
-    const symbol = await checker.getSymbolAtLocation(element.name);
+  for (const [index, element] of bindingElements.entries()) {
+    const symbol = symbols.at(index);
     const exportName = element.propertyName ?? element.name;
     if (symbol && ts.isIdentifier(exportName)) {
       bindings.push({ symbol, imported: exportName.text });
@@ -821,11 +826,13 @@ const dynamicImport = async (
   return { specifier: specifier.text, bindings };
 };
 
-const reachedNamedImports = async (
+type SymbolLookup = (node: ts.Node | undefined) => CompilerSymbol | undefined;
+
+const reachedNamedImports = (
   statement: ts.ImportDeclaration,
-  checker: Checker,
+  symbolOf: SymbolLookup,
   usedSymbols: ReadonlySet<CompilerSymbol>,
-): Promise<string[]> => {
+): string[] => {
   const clause = statement.importClause;
   const bindings = clause?.namedBindings;
   if (
@@ -841,12 +848,116 @@ const reachedNamedImports = async (
     if (element.isTypeOnly) {
       continue;
     }
-    const symbol = await checker.getSymbolAtLocation(element.name);
+    const symbol = symbolOf(element.name);
     if (symbol && usedSymbols.has(symbol)) {
       names.push(element.propertyName?.text ?? element.name.text);
     }
   }
   return names;
+};
+
+const resolveImportSymbols = async (
+  importStatements: readonly ts.ImportDeclaration[],
+  checker: Checker,
+): Promise<SymbolLookup> => {
+  const nodesToResolve: ts.Node[] = [];
+  const nodeIndex = new Map<ts.Node, number>();
+  const registerNode = (node: ts.Node | undefined): void => {
+    if (node && !nodeIndex.has(node)) {
+      nodeIndex.set(node, nodesToResolve.length);
+      nodesToResolve.push(node);
+    }
+  };
+  for (const statement of importStatements) {
+    for (const name of namedImports(statement)) {
+      registerNode(importedBinding(statement, name));
+    }
+    const bindings = statement.importClause?.namedBindings;
+    if (bindings && ts.isNamedImports(bindings)) {
+      for (const element of bindings.elements) {
+        registerNode(element.name);
+      }
+    }
+  }
+  const resolvedSymbols =
+    nodesToResolve.length > 0
+      ? await checker.getSymbolAtLocation(nodesToResolve)
+      : [];
+  return (node) => {
+    if (!node) {
+      return undefined;
+    }
+    const index = nodeIndex.get(node);
+    return index === undefined ? undefined : resolvedSymbols.at(index);
+  };
+};
+
+const collectDynamicImportCandidates = (
+  source: ts.SourceFile,
+): ts.VariableDeclaration[] => {
+  const candidates: ts.VariableDeclaration[] = [];
+  const visit = (node: ts.Node): void => {
+    if (
+      ts.isVariableDeclaration(node) &&
+      ts.isObjectBindingPattern(node.name) &&
+      node.initializer !== undefined
+    ) {
+      candidates.push(node);
+    }
+    for (const child of node.childrenIter()) {
+      visit(child);
+    }
+  };
+  visit(source);
+  return candidates;
+};
+
+const recordDynamicImportReachability = async ({
+  repoRoot,
+  file,
+  source,
+  checker,
+  usedSymbols,
+  invokedSymbols,
+  patchedPackages,
+  siblingStem,
+  supportSubjects,
+  importedRuntimeBindings,
+  patchedDependencyBindings,
+  reachedSiblingExports,
+}: ImportReachabilityOptions & {
+  siblingStem: string;
+  supportSubjects: SupportSubject[];
+  importedRuntimeBindings: Set<CompilerSymbol>;
+  patchedDependencyBindings: Set<CompilerSymbol>;
+  reachedSiblingExports: Set<string>;
+}): Promise<void> => {
+  for (const candidate of collectDynamicImportCandidates(source)) {
+    const dynamic = await dynamicImport(candidate, checker);
+    if (!dynamic) {
+      continue;
+    }
+    const resolved = existingSource(repoRoot, file, dynamic.specifier);
+    const support =
+      resolved === undefined
+        ? existingSource(repoRoot, file, dynamic.specifier, true)
+        : undefined;
+    for (const { symbol, imported } of dynamic.bindings) {
+      if (patchedPackages.has(packageNameOf(dynamic.specifier))) {
+        patchedDependencyBindings.add(symbol);
+      } else if (support && invokedSymbols.has(symbol)) {
+        supportSubjects.push({ file: support, imported });
+      } else if (resolved) {
+        importedRuntimeBindings.add(symbol);
+        if (
+          usedSymbols.has(symbol) &&
+          resolved.replace(/\.[cm]?[jt]sx?$/u, "") === siblingStem
+        ) {
+          reachedSiblingExports.add(imported);
+        }
+      }
+    }
+  }
 };
 
 const importReachability = async ({
@@ -868,46 +979,34 @@ const importReachability = async ({
   );
   let hasFactory = false;
   let reachesSourceFileIndex = false;
-  const visitImports = async (node: ts.Node): Promise<void> => {
-    if (ts.isVariableDeclaration(node)) {
-      const dynamic = await dynamicImport(node, checker);
-      if (dynamic) {
-        const resolved = existingSource(repoRoot, file, dynamic.specifier);
-        const support =
-          resolved === undefined
-            ? existingSource(repoRoot, file, dynamic.specifier, true)
-            : undefined;
-        for (const { symbol, imported } of dynamic.bindings) {
-          if (patchedPackages.has(packageNameOf(dynamic.specifier))) {
-            patchedDependencyBindings.add(symbol);
-          } else if (support && invokedSymbols.has(symbol)) {
-            supportSubjects.push({ file: support, imported });
-          } else if (resolved) {
-            importedRuntimeBindings.add(symbol);
-            if (
-              usedSymbols.has(symbol) &&
-              resolved.replace(/\.[cm]?[jt]sx?$/u, "") === siblingStem
-            ) {
-              reachedSiblingExports.add(imported);
-            }
-          }
-        }
-      }
-    }
-    await visitChildren(node, visitImports);
-  };
-  await visitImports(source);
-  for (const statement of source.statements) {
-    if (
-      !ts.isImportDeclaration(statement) ||
-      !ts.isStringLiteral(statement.moduleSpecifier)
-    ) {
-      continue;
-    }
+  await recordDynamicImportReachability({
+    repoRoot,
+    file,
+    source,
+    checker,
+    usedSymbols,
+    invokedSymbols,
+    patchedPackages,
+    siblingStem,
+    supportSubjects,
+    importedRuntimeBindings,
+    patchedDependencyBindings,
+    reachedSiblingExports,
+  });
+  const importStatements = source.statements.filter(
+    (
+      statement,
+    ): statement is ts.ImportDeclaration & {
+      moduleSpecifier: ts.StringLiteral;
+    } =>
+      ts.isImportDeclaration(statement) &&
+      ts.isStringLiteral(statement.moduleSpecifier),
+  );
+  const symbolOf = await resolveImportSymbols(importStatements, checker);
+  for (const statement of importStatements) {
     if (patchedPackages.has(packageNameOf(statement.moduleSpecifier.text))) {
       for (const name of namedImports(statement)) {
-        const binding = importedBinding(statement, name);
-        const symbol = binding && (await checker.getSymbolAtLocation(binding));
+        const symbol = symbolOf(importedBinding(statement, name));
         if (symbol) {
           patchedDependencyBindings.add(symbol);
         }
@@ -927,9 +1026,9 @@ const importReachability = async ({
         true,
       );
       if (support) {
-        for (const imported of await reachedNamedImports(
+        for (const imported of reachedNamedImports(
           statement,
-          checker,
+          symbolOf,
           invokedSymbols,
         )) {
           supportSubjects.push({ file: support, imported });
@@ -938,8 +1037,7 @@ const importReachability = async ({
       continue;
     }
     for (const name of namedImports(statement)) {
-      const binding = importedBinding(statement, name);
-      const symbol = binding && (await checker.getSymbolAtLocation(binding));
+      const symbol = symbolOf(importedBinding(statement, name));
       if (symbol) {
         importedRuntimeBindings.add(symbol);
         const owner = resolvedSource
@@ -964,7 +1062,7 @@ const importReachability = async ({
       continue;
     }
     for (const element of bindings.elements) {
-      const symbol = await checker.getSymbolAtLocation(element.name);
+      const symbol = symbolOf(element.name);
       if (symbol && usedSymbols.has(symbol)) {
         reachedSiblingExports.add(
           element.propertyName?.text ?? element.name.text,
@@ -1105,6 +1203,7 @@ export const analyzeTestSubjectReachability = async ({
     const sourceFor =
       siblingSource ??
       (async (filename: string) => await program.getSourceFile(filename));
+    const supportCache = new Map<string, Promise<boolean>>();
     const supportReachesSubject = async (
       subjects: readonly SupportSubject[],
       visited = new Set<string>(),
@@ -1114,61 +1213,79 @@ export const analyzeTestSubjectReachability = async ({
         if (visited.has(key)) {
           continue;
         }
-        visited.add(key);
-        const source = await program.getSourceFile(subject.file);
-        if (!source) {
-          panic(`Could not inspect test support ${subject.file}`);
+        if (visited.size === 0) {
+          const cached = supportCache.get(key);
+          if (cached !== undefined) {
+            if (await cached) {
+              return true;
+            }
+            continue;
+          }
         }
-        const roots = await runtimeRoots(
-          source,
-          checker,
-          new Set([subject.imported]),
-        );
-        const usedSymbols = await runtimeSymbols(roots, checker);
-        const invokedSymbols = await invokedRuntimeSymbols(roots, checker);
-        const file = repoRelativePath(repoRoot, subject.file);
-        const imports = await importReachability({
-          repoRoot,
-          file,
-          source,
-          checker,
-          usedSymbols,
-          invokedSymbols,
-          patchedPackages,
-        });
-        if (
-          namedCategory({
+        const evaluate = async (): Promise<boolean> => {
+          const nextVisited = new Set(visited);
+          nextVisited.add(key);
+          const source = await program.getSourceFile(subject.file);
+          if (!source) {
+            panic(`Could not inspect test support ${subject.file}`);
+          }
+          const roots = await runtimeRoots(
+            source,
+            checker,
+            new Set([subject.imported]),
+          );
+          const [usedSymbols, invokedSymbols] = await Promise.all([
+            runtimeSymbols(roots, checker),
+            invokedRuntimeSymbols(roots, checker),
+          ]);
+          const file = repoRelativePath(repoRoot, subject.file);
+          const imports = await importReachability({
+            repoRoot,
             file,
-            fileText: source.text,
-            reachableText: runtimeText(roots, source),
-          }) ||
-          includesRuntimeBinding(
+            source,
+            checker,
             usedSymbols,
-            imports.importedRuntimeBindings,
-          ) ||
-          includesRuntimeBinding(
-            usedSymbols,
-            imports.patchedDependencyBindings,
-          ) ||
-          (await supportReachesSubject(imports.supportSubjects, visited))
-        ) {
+            invokedSymbols,
+            patchedPackages,
+          });
+          return Boolean(
+            namedCategory({
+              file,
+              fileText: source.text,
+              reachableText: runtimeText(roots, source),
+            }) ||
+            includesRuntimeBinding(
+              usedSymbols,
+              imports.importedRuntimeBindings,
+            ) ||
+            includesRuntimeBinding(
+              usedSymbols,
+              imports.patchedDependencyBindings,
+            ) ||
+            (await supportReachesSubject(imports.supportSubjects, nextVisited)),
+          );
+        };
+        const pending = evaluate();
+        if (visited.size === 0) {
+          supportCache.set(key, pending);
+        }
+        if (await pending) {
           return true;
         }
       }
       return false;
     };
-    for (const file of testFiles) {
+    const analyzeFile = async (file: string): Promise<void> => {
       const absolute = path.join(repoRoot, file);
       const source =
         (await program.getSourceFile(absolute)) ??
         panic(`Could not parse ${file}`);
       const text = source.text;
       const reachableRuntime = await runtimeRoots(source, checker);
-      const usedSymbols = await runtimeSymbols(reachableRuntime, checker);
-      const invokedSymbols = await invokedRuntimeSymbols(
-        reachableRuntime,
-        checker,
-      );
+      const [usedSymbols, invokedSymbols] = await Promise.all([
+        runtimeSymbols(reachableRuntime, checker),
+        invokedRuntimeSymbols(reachableRuntime, checker),
+      ]);
       const {
         hasFactory,
         importedRuntimeBindings,
@@ -1228,7 +1345,24 @@ export const analyzeTestSubjectReachability = async ({
           parser,
         })),
       );
-    }
+    };
+    const CONCURRENCY = 8;
+    let cursor = 0;
+    await Promise.all(
+      Array.from(
+        { length: Math.min(CONCURRENCY, testFiles.length) },
+        async () => {
+          while (cursor < testFiles.length) {
+            const index = cursor;
+            cursor += 1;
+            const file = testFiles.at(index);
+            if (file !== undefined) {
+              await analyzeFile(file);
+            }
+          }
+        },
+      ),
+    );
     return findings.toSorted((left, right) => {
       const leftKey = `${left.file}:${left.kind}:${left.name ?? ""}`;
       const rightKey = `${right.file}:${right.kind}:${right.name ?? ""}`;

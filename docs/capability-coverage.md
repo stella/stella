@@ -839,12 +839,12 @@ mechanics, and similar), not gaps in coverage.
 | human_confirmation | 3 |
 | mcp_transport | 12 |
 | native_device | 5 |
-| native_tool_ui | 16 |
+| native_tool_ui | 17 |
 | organization_export | 2 |
 | provider_secret | 35 |
 | public_indexing | 13 |
 | realtime_stream | 10 |
-| search_ui | 22 |
+| search_ui | 23 |
 | session_token_exchange | 23 |
 | ui_navigation_state | 14 |
 | upload_mechanics | 30 |

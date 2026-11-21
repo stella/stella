@@ -419,6 +419,10 @@ const ROOT_MUTATION_DISPOSITIONS = {
     type: "non-replay",
     reason: "credential",
   },
+  "POST /v1/case/citations/check": {
+    type: "non-replay",
+    reason: "read",
+  },
   "POST /v1/case/decisions/search/expand": {
     type: "non-replay",
     reason: "current-state",
@@ -657,6 +661,10 @@ const ROOT_MUTATION_DISPOSITIONS = {
   // Each change carries its own id and is applied once, so a repeat answers
   // the current fixes.
   "POST /v1/dictation/learned-fixes": {
+    type: "non-replay",
+    reason: "current-state",
+  },
+  "POST /v1/dictation/recording-cleanup": {
     type: "non-replay",
     reason: "current-state",
   },

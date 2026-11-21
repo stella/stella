@@ -182,6 +182,7 @@ const ChatMessageEdit = ({
       return;
     }
     const undoFirst = editUndoesFilesFirst(choice);
+    const learned = field.learnOnceSent(draft.text);
     setSending(true);
     setNotice(undefined);
     setProblem(null);
@@ -216,7 +217,9 @@ const ChatMessageEdit = ({
         }
       }
       const outcome = await onSend(draft);
-      if (outcome.type === "refused" && open.current) {
+      if (outcome.type === "accepted") {
+        learned();
+      } else if (open.current) {
         setSending(false);
         setNotice(outcome.notice);
       }

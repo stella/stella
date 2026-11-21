@@ -1,13 +1,14 @@
 import { useEffect, useEffectEvent } from "react";
 
 import { panic } from "better-result";
+import { useRouter } from "expo-router";
 import { Alert, View } from "react-native";
 import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
 import { Text } from "@stll/ui/text";
 
-import { useDictation } from "@/components/use-dictation";
+import { HOLD_TO_TALK_MS, useDictation } from "@/components/use-dictation";
 import type {
   DictationNotice,
   DictationWaiting,
@@ -20,7 +21,8 @@ import { useUiColors } from "@/theme";
 
 /**
  * A microphone beside a text field: tap to dictate, done to transcribe,
- * the cross to drop the recording. The text goes to `onText`, which adds it
+ * the cross to drop the recording; or hold it to dictate while it is held.
+ * While recording a bar shows how loud it hears the person. The text goes to `onText`, which adds it
  * to the field; while recording it says how long it has listened, and when
  * a dictation gives no text it says why. A dictation not transcribed yet
  * says so, with a retry and a discard; a text recovered from a closed field
@@ -63,40 +65,56 @@ export const DictateButton = ({
           <Text
             accessibilityLiveRegion="polite"
             className="flex-1"
-            variant={dictation.notice === undefined ? "caption" : "error"}
+            variant={
+              dictation.notice === undefined && !dictation.noSignal
+                ? "caption"
+                : "error"
+            }
           >
             {status}
           </Text>
         )}
+        {dictation.phase === "recording" ? (
+          <DictationLevel level={dictation.level} />
+        ) : null}
+        {dictation.phase === "idle" ? null : (
+          <Button
+            accessibilityLabel={t("dictationCancel")}
+            disabled={dictation.phase !== "recording"}
+            icon={<XIcon color={ui.foreground} size={18} />}
+            onPress={dictation.cancel}
+            size="icon-sm"
+            variant="ghost"
+          />
+        )}
+        {/* One button, the microphone and then done, so a press held on
+            the microphone is still the same press when recording starts. */}
         {dictation.phase === "idle" ? (
           <Button
+            accessibilityHint={t("dictateHoldHint")}
             accessibilityLabel={t("dictate")}
+            delayLongPress={HOLD_TO_TALK_MS}
             disabled={disabled}
             icon={<DictateIcon color={ui.foreground} size={18} />}
+            key="microphone"
+            onLongPress={dictation.hold}
             onPress={dictation.start}
+            onPressOut={dictation.release}
             size="icon-sm"
             variant="ghost"
           />
         ) : (
-          <>
-            <Button
-              accessibilityLabel={t("dictationCancel")}
-              disabled={dictation.phase !== "recording"}
-              icon={<XIcon color={ui.foreground} size={18} />}
-              onPress={dictation.cancel}
-              size="icon-sm"
-              variant="ghost"
-            />
-            <Button
-              accessibilityLabel={t("dictationFinish")}
-              disabled={dictation.phase !== "recording"}
-              icon={<CheckIcon color={ui.foreground} size={18} />}
-              loading={dictation.phase === "transcribing"}
-              onPress={dictation.finish}
-              size="icon-sm"
-              variant="outline"
-            />
-          </>
+          <Button
+            accessibilityLabel={t("dictationFinish")}
+            disabled={dictation.phase !== "recording"}
+            icon={<CheckIcon color={ui.foreground} size={18} />}
+            key="microphone"
+            loading={dictation.phase === "transcribing"}
+            onPress={dictation.finish}
+            onPressOut={dictation.release}
+            size="icon-sm"
+            variant="outline"
+          />
         )}
       </View>
     </View>
@@ -117,6 +135,7 @@ export const KeptDictationBar = ({
 }) => {
   const t = useTranslations("chat");
   const ui = useUiColors();
+  const router = useRouter();
   const { offered, phase, waiting } = dictation;
   const waitingText = useWaitingText(waiting);
   const confirmDiscard = useConfirmDiscard(dictation.discardWaiting);
@@ -129,7 +148,12 @@ export const KeptDictationBar = ({
         <Text
           accessibilityLiveRegion="polite"
           className="flex-1"
-          variant={waiting?.status === "needs-person" ? "error" : "caption"}
+          variant={
+            waiting?.status === "needs-person" ||
+            waiting?.status === "needs-model"
+              ? "error"
+              : "caption"
+          }
         >
           {waitingText}
         </Text>
@@ -142,6 +166,17 @@ export const KeptDictationBar = ({
           variant="outline"
         >
           {t("dictationPaste")}
+        </Button>
+      ) : null}
+      {waiting?.status === "needs-model" ? (
+        <Button
+          onPress={() => {
+            router.push("/settings");
+          }}
+          size="sm"
+          variant="outline"
+        >
+          {t("dictationOpenSettings")}
         </Button>
       ) : null}
       {waiting === undefined ? null : (
@@ -183,14 +218,37 @@ const useConfirmDiscard = (discard: () => void) => {
   };
 };
 
+/**
+ * How loud the microphone hears the person, as a short bar beside the
+ * clock, from the level the recorder meters.
+ */
+export const DictationLevel = ({ level }: { level: number }) => (
+  <View
+    accessibilityElementsHidden
+    className="bg-secondary h-1.5 w-10 overflow-hidden rounded-full"
+    importantForAccessibility="no-hide-descendants"
+  >
+    <View
+      className="bg-foreground h-full rounded-full"
+      style={{ width: `${Math.round(level * 100)}%` }}
+    />
+  </View>
+);
+
 /** What the microphone says next to it: how long it listened, or why a dictation gave no text. */
 const useDictationStatus = ({
   elapsedMs,
+  noSignal,
   notice,
   phase,
-}: Pick<ReturnType<typeof useDictation>, "elapsedMs" | "notice" | "phase">):
-  string | undefined => {
+}: Pick<
+  ReturnType<typeof useDictation>,
+  "elapsedMs" | "noSignal" | "notice" | "phase"
+>): string | undefined => {
   const t = useTranslations("chat");
+  if (noSignal) {
+    return t("dictationNoSignal");
+  }
   if (phase === "recording") {
     return t("dictationListening", {
       elapsed: dictationClock(elapsedMs),
@@ -226,6 +284,8 @@ const useWaitingText = (
       return t(waiting.earlier ? "dictationKeptEarlier" : "dictationKept");
     case "needs-person":
       return t("dictationKeptRefused");
+    case "needs-model":
+      return t("dictationKeptModelWithdrawn");
     default:
       waiting.status satisfies never;
       return panic("A kept dictation has no known status");

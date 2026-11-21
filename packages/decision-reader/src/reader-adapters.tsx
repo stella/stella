@@ -1,9 +1,10 @@
 import { createContext, useContext } from "react";
-import type { ReactElement, ReactNode } from "react";
+import type { ComponentType, ReactElement, ReactNode } from "react";
 
 import { panic } from "better-result";
 
 import type { ReaderCitationTreatment } from "./citation-treatment";
+import type { CollectionBodySource } from "./collection-attribution";
 import type { MissingBodyReason } from "./decision-body-state.logic";
 import type { ReaderMessageKey } from "./reader-message-types";
 import type {
@@ -69,6 +70,12 @@ export type ReaderPresentationAdapters = {
 export type PermalinkCopyState = { copied: boolean; copy: () => void };
 
 export type DecisionReaderAdapters = ReaderPresentationAdapters & {
+  /**
+   * A collection body's attribution, usually `CollectionAttributionList`
+   * with the host's strings. It may suspend: a host can load those strings
+   * with the component, off its startup path.
+   */
+  CollectionAttribution: ComponentType<{ bodySource: CollectionBodySource }>;
   renderDecisionLink: (props: ReaderDecisionLinkProps) => ReactElement;
   renderStatuteLink: (props: ReaderStatuteLinkProps) => ReactElement;
   renderBodyUnavailable: (props: {

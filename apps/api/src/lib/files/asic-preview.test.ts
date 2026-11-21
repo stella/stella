@@ -43,13 +43,24 @@ test("reads ASiC-E payloads for preview and search from a legacy generic upload"
   const source = storedAsic(bytes, "filing.asice", "application/octet-stream");
   const preview = await readAsicPreview(source, ASIC_E_FILE_FORMAT.mimeType);
   expect(preview.unwrap().members).toMatchObject([
-    { fileName: "filing.txt", text: "Sdělení č. 47", status: "readable" },
+    {
+      fileName: "filing.txt",
+      text: "Sdělení č. 47",
+      textFormat: "plain",
+      status: "readable",
+    },
     {
       fileName: "filing.pdf",
       text: expect.stringContaining(marker),
+      textFormat: "markdown",
       status: "readable",
     },
-    { fileName: "archive.docx", text: "", status: "unavailable" },
+    {
+      fileName: "archive.docx",
+      text: "",
+      textFormat: "plain",
+      status: "unavailable",
+    },
   ]);
 
   const extracted = (await extractFileTextResult(source)).unwrap();
@@ -77,6 +88,7 @@ test("reads a recognized Office payload from ASiC-S", async () => {
     {
       fileName: "agreement.bin",
       text: expect.stringContaining("Saved contract. Článek první."),
+      textFormat: "markdown",
       status: "readable",
     },
   ]);

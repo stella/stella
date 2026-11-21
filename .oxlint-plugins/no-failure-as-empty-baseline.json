@@ -48,7 +48,6 @@
     "apps/api/src/lib/queue-reconcile-scan.ts::handle::result-error-returns-empty#1": "Existing site pending review: return a ReadOutcome or propagate the failure.",
     "apps/api/src/lib/report-export-enqueue.ts::handle::result-error-returns-empty#1": "Existing site pending review: return a ReadOutcome or propagate the failure.",
     "apps/api/src/lib/s3.ts::fetchEcsCredentials::result-error-returns-empty#1": "Existing site pending review: return a ReadOutcome or propagate the failure.",
-    "apps/api/src/lib/s3.ts::readS3ResponseErrorCode::result-error-returns-empty#1": "Existing site pending review: return a ReadOutcome or propagate the failure.",
     "apps/api/src/lib/scheduler/tasks/case-law-provision-state-backfill.ts::createCaseLawProvisionStateBackfillTask::result-error-returns-empty#1": "Existing site pending review: return a ReadOutcome or propagate the failure.",
     "apps/api/src/lib/search/extraction-worker.ts::extractAttachmentPlaintext::result-error-returns-empty#1": "Existing site pending review: return a ReadOutcome or propagate the failure.",
     "apps/api/src/lib/search/extraction-worker.ts::extractPdfMarkdown::catch-returns-empty#1": "Existing site pending review: return a ReadOutcome or propagate the failure.",
@@ -70,11 +69,7 @@
     "apps/api/src/scripts/post-deploy-smoke.ts::readStreamPrefix::promise-catch-empty#1": "Existing site pending review: return a ReadOutcome or propagate the failure.",
     "apps/api/src/scripts/post-deploy-smoke.ts::sendChat::promise-catch-empty#1": "Existing site pending review: return a ReadOutcome or propagate the failure.",
     "packages/agent-engine/src/bun-docker/api.ts::demuxExecStream::promise-catch-empty#1": "Existing site pending review: return a ReadOutcome or propagate the failure.",
-    "packages/business-registries/src/companies-house/client.ts::readUpstreamMessage::catch-returns-empty#1": "Existing site pending review: return a ReadOutcome or propagate the failure.",
-    "packages/business-registries/src/companies-house/client.ts::readUpstreamMessage::catch-returns-empty#2": "Existing site pending review: return a ReadOutcome or propagate the failure.",
     "packages/cli/src/registry-cache.ts::readCacheFile::result-error-returns-empty#1": "Existing site pending review: return a ReadOutcome or propagate the failure.",
-    "packages/cli/src/run-leaf-command.ts::parseInputObject::result-error-returns-empty#1": "Existing site pending review: return a ReadOutcome or propagate the failure.",
-    "packages/cli/src/run-leaf-command.ts::parseInputObject::result-error-returns-empty#2": "Existing site pending review: return a ReadOutcome or propagate the failure.",
     "packages/scripts/src/dev-runner.ts::isHealthyApiPort::catch-returns-empty#1": "Existing site pending review: return a ReadOutcome or propagate the failure."
   }
 }

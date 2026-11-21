@@ -659,6 +659,8 @@ export const LIMITS = {
   caseLawResearchAnswerPassageChars: 1500,
   /** Rationale kept beside an answer. */
   caseLawResearchAnswerRationaleChars: 600,
+  /** Longest sentence a citation check judges. */
+  caseLawCitationCheckClaimChars: 2000,
   caseLawDecisionCitationPageSize: 50,
   /** Documents in a case file, after language-version deduplication. */
   caseLawCaseFilePageSize: 50,

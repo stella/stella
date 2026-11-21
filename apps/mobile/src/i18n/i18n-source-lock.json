@@ -579,6 +579,12 @@
   "settings.deleteAccountHint": "Opens your account on the web, where you can delete it and everything in it that is yours.",
   "settings.dictationCleanup": "Clean up with AI",
   "settings.dictationCleanupHint": "Fixes recognition mistakes and spoken formatting such as “new line”. Only the text, not the audio, goes through stella to your organization’s AI provider; stella does not store it.",
+  "settings.dictationLearnedDelete": "Delete what stella learned",
+  "settings.dictationLearnedEmpty": "No fixes learned yet.",
+  "settings.dictationLearnedFix": "{from} → {to}",
+  "settings.dictationLearnedHint": "When you correct the spelling of a dictated word or name the same way twice, stella spells it that way in later dictations. Kept only on this phone.",
+  "settings.dictationLearnedTitle": "Fixes learned from your corrections",
+  "settings.dictationLearnedUnreadable": "What stella learned could not be read.",
   "settings.dictationModelDefault": "Default",
   "settings.dictationModelDefaultNamed": "Default ({model})",
   "settings.dictationModelHint": "The model that turns what you dictate into text. stella does not store the audio.",
@@ -728,5 +734,11 @@
   "chat.dictationDiscardTitle": "Discard this dictation?",
   "chat.dictationDiscardMessage": "Its recording is deleted from this phone and cannot be transcribed later.",
   "chat.dictationPaste": "Paste dictation",
-  "chat.dictationKeep": "Keep dictation"
+  "chat.dictationKeep": "Keep dictation",
+  "chat.dictateHoldHint": "Tap to dictate, or hold to dictate until you let go.",
+  "chat.dictationNoSignal": "The microphone gives no signal. Check that it is not muted or used by another app.",
+  "chat.dictationKeptModelWithdrawn": "The model you picked is no longer offered. Pick one in Settings → Dictation, then retry.",
+  "chat.dictationOpenSettings": "Open Settings",
+  "settings.dictationModelWithdrawn": "No longer offered",
+  "settings.dictationModelWithdrawnHint": "The model you picked is no longer offered. Pick another; until then, a dictation goes only to a model of the same provider, region and retention, and otherwise waits on this phone as not transcribed."
 }

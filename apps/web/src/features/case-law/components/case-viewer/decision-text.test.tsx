@@ -78,6 +78,7 @@ const textDecision = (overrides: Partial<TextDecision> = {}): TextDecision => ({
   judges: [],
   language: "cs",
   sourceAttributionUrl: null,
+  bodySource: { textSource: "host" },
   textFields: {
     abstract: absent,
     headnote: absent,
@@ -96,6 +97,7 @@ const renderDecision = (abstract: string): string =>
             surface="development"
             decision={textDecision({
               sourceAttributionUrl: "https://rozhodnuti.nsoud.cz/detail/1",
+              bodySource: { textSource: "host" },
               textFields: {
                 abstract: { text: abstract, type: TEXT_FIELD_TYPE.PRESENT },
                 headnote: absent,

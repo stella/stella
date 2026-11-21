@@ -17,6 +17,7 @@ import {
 } from "./learned-fixes/desktop";
 import listLearnedFixes from "./learned-fixes/list";
 import memberCleanup from "./member-cleanup";
+import memberRecordingCleanup from "./member-recording-cleanup";
 import models from "./models";
 import recordingCleanup from "./recording-cleanup";
 import transcribe from "./transcribe";
@@ -30,6 +31,7 @@ export const dictationRoute = routes(
       DELETE: clearLearnedFixes,
     },
     "/models": { GET: models },
+    "/recording-cleanup": { POST: memberRecordingCleanup },
     "/transcribe": { POST: transcribe },
   },
   { prefix: "/dictation" },
