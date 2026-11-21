@@ -9,7 +9,7 @@ import { DOCKED_COMPOSER_CLEARANCE } from "@/components/ai-suggestions/composer-
 import { FileViewerWithAI } from "@/components/ai-suggestions/file-viewer-with-ai";
 import { EInvoiceDetails } from "@/components/inspector/e-invoice-details";
 import type { FileTab } from "@/components/inspector/inspector-tabs-store";
-import { eInvoicePreviewOptions } from "@/lib/files/queries";
+import { eInvoicePreviewOptions } from "@/lib/files/e-invoice-queries";
 
 export const EInvoiceViewer = ({
   onDownload,
