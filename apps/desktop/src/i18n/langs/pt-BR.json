@@ -669,6 +669,11 @@
     },
     "removeFailed": "Não foi possível remover o modelo de fala. Tente novamente.",
     "removeModel": "Remover",
+    "retype": {
+      "description": "Pressione {shortcut} para digitar seu último ditado de novo no cursor. Ele fica só na memória, enquanto estiver no histórico da área de transferência.",
+      "taken": "Outro app está usando {shortcut}. O menu Ditado do ícone do stella oferece o mesmo.",
+      "title": "Atalho para o último ditado"
+    },
     "shortcutTaken": "Outro aplicativo está usando {shortcut}.",
     "sounds": {
       "description": "Tocar um som curto e discreto quando a gravação começa e quando termina.",
@@ -1210,6 +1215,7 @@
     "checkForUpdates": "Verificar atualizações",
     "dictation": "Ditado",
     "dictationHint": "Segure {key} para ditar",
+    "dictationRetype": "Digitar o último ditado de novo",
     "dictationSettings": "Configurações de ditado…",
     "dictationTurnOn": "Ativar o ditado…",
     "documentsSyncing": "{count, plural, one {{count} documento sincronizando} other {{count} documentos sincronizando}}",

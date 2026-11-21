@@ -669,6 +669,11 @@
     },
     "removeFailed": "Model řeči se nepodařilo odstranit. Zkuste to znovu.",
     "removeModel": "Odebrat",
+    "retype": {
+      "description": "Stiskem {shortcut} napíšete poslední diktát znovu na místo kurzoru. Drží se jen v paměti, dokud je v historii schránky.",
+      "taken": "Zkratku {shortcut} používá jiná aplikace. Totéž nabízí nabídka Diktování u ikony aplikace stella.",
+      "title": "Zkratka pro poslední diktát"
+    },
     "shortcutTaken": "Zkratku {shortcut} používá jiná aplikace.",
     "sounds": {
       "description": "Přehrát krátký tichý zvuk, když nahrávání začne a když skončí.",
@@ -1210,6 +1215,7 @@
     "checkForUpdates": "Zkontrolovat aktualizace",
     "dictation": "Diktování",
     "dictationHint": "Pro diktování podržte {key}",
+    "dictationRetype": "Napsat poslední diktát znovu",
     "dictationSettings": "Nastavení diktování…",
     "dictationTurnOn": "Zapnout diktování…",
     "documentsSyncing": "{count, plural, one {1 dokument se synchronizuje} few {{count} dokumenty se synchronizují} other {{count} dokumentů se synchronizuje}}",

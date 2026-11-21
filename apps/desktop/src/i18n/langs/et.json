@@ -669,6 +669,11 @@
     },
     "removeFailed": "Kõnemudelit ei õnnestunud eemaldada. Proovige uuesti.",
     "removeModel": "Eemalda",
+    "retype": {
+      "description": "Vajutage {shortcut}, et sisestada viimane dikteering uuesti kursori kohale. Seda hoitakse ainult mälus, kuni see on lõikelaua ajaloos.",
+      "taken": "Teine rakendus kasutab kiirklahvi {shortcut}. stella ikooni menüü Dikteerimine pakub sama.",
+      "title": "Viimase dikteeringu kiirklahv"
+    },
     "shortcutTaken": "{shortcut} on teise rakenduse kasutuses.",
     "sounds": {
       "description": "Esita lühike vaikne heli, kui salvestamine algab ja kui see lõpeb.",
@@ -1210,6 +1215,7 @@
     "checkForUpdates": "Kontrolli värskendusi",
     "dictation": "Dikteerimine",
     "dictationHint": "Dikteerimiseks hoidke all {key}",
+    "dictationRetype": "Sisesta viimane dikteering uuesti",
     "dictationSettings": "Dikteerimise seaded…",
     "dictationTurnOn": "Lülita dikteerimine sisse…",
     "documentsSyncing": "{count, plural, one {1 dokument sünkroniseerub} other {{count} dokumenti sünkroniseerub}}",

@@ -669,6 +669,11 @@
     },
     "removeFailed": "Nie udało się usunąć modelu mowy. Spróbuj ponownie.",
     "removeModel": "Usuń",
+    "retype": {
+      "description": "Naciśnij {shortcut}, aby ponownie wpisać ostatnie dyktowanie w miejscu kursora. Jest przechowywane tylko w pamięci, dopóki jest w historii schowka.",
+      "taken": "Inna aplikacja używa skrótu {shortcut}. To samo oferuje menu Dyktowanie przy ikonie aplikacji stella.",
+      "title": "Skrót do ostatniego dyktowania"
+    },
     "shortcutTaken": "Skrótu {shortcut} używa inna aplikacja.",
     "sounds": {
       "description": "Odtwarzaj krótki, cichy dźwięk, gdy nagrywanie się zaczyna i gdy się kończy.",
@@ -1210,6 +1215,7 @@
     "checkForUpdates": "Sprawdź aktualizacje",
     "dictation": "Dyktowanie",
     "dictationHint": "Przytrzymaj {key}, aby dyktować",
+    "dictationRetype": "Wpisz ponownie ostatnie dyktowanie",
     "dictationSettings": "Ustawienia dyktowania…",
     "dictationTurnOn": "Włącz dyktowanie…",
     "documentsSyncing": "{count, plural, one {1 dokument synchronizowany} few {{count} dokumenty synchronizowane} many {{count} dokumentów synchronizowanych} other {{count} dokumentów synchronizowanych}}",

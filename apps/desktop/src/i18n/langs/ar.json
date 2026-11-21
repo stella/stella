@@ -669,6 +669,11 @@
     },
     "removeFailed": "تعذّرت إزالة نموذج الكلام. حاول مرة أخرى.",
     "removeModel": "إزالة",
+    "retype": {
+      "description": "اضغط {shortcut} لكتابة آخر إملاء مرة أخرى عند المؤشر. يُحتفظ به في الذاكرة فقط ما دام في سجل الحافظة.",
+      "taken": "يستخدم تطبيق آخر {shortcut}. توفر قائمة الإملاء في أيقونة stella الشيء نفسه.",
+      "title": "اختصار آخر إملاء"
+    },
     "shortcutTaken": "يستخدم تطبيق آخر {shortcut}.",
     "sounds": {
       "description": "تشغيل صوت قصير وهادئ عند بدء التسجيل وعند انتهائه.",
@@ -1210,6 +1215,7 @@
     "checkForUpdates": "التحقق من التحديثات",
     "dictation": "الإملاء",
     "dictationHint": "اضغط مع الاستمرار على {key} للإملاء",
+    "dictationRetype": "كتابة آخر إملاء مرة أخرى",
     "dictationSettings": "إعدادات الإملاء…",
     "dictationTurnOn": "تشغيل الإملاء…",
     "documentsSyncing": "{count, plural, zero {لا مستندات قيد المزامنة} one {مستند واحد قيد المزامنة} two {مستندان قيد المزامنة} few {{count} مستندات قيد المزامنة} many {{count} مستنداً قيد المزامنة} other {{count} مستند قيد المزامنة}}",

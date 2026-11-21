@@ -37,6 +37,7 @@ use crate::{
   dictation_microphone::{self, Choice, InputDevice},
   dictation_pauses::Segmenter,
   dictation_preview,
+  dictation_retype::{self, LastDictation, Request},
   dictation_sounds::{self, Cue},
   dictation_spelling,
   dictation_trace::{self, Cleanup, GlobeKey, Line, Outcome, Trace},
@@ -168,6 +169,12 @@ fn run(app: &AppHandle, commands: &Receiver<Command>) {
         if let Some(active) = active.as_mut() {
           active.capture.listen();
           active.sound_start(app);
+        }
+      }
+      Ok(Command::Retype(request)) => {
+        // A dictation recording now has the keyboard to itself.
+        if active.is_none() {
+          retype(app, request);
         }
       }
       Ok(Command::Cancel) => {
@@ -531,11 +538,22 @@ fn deliver(
   }
   let identifier = focus.and_then(|target| target.identifier.as_deref());
   // Kept before typing, so a dictation that cannot be typed is not lost.
-  let kept_in_history = clipboard::keep_dictation(
+  let kept = clipboard::keep_dictation(
     app,
     &dictation_cleanup::typed_text(text, cleaned),
     identifier,
   );
+  let kept_in_history = kept.is_some();
+  if let Some(history_id) = kept {
+    dictation::remember_last(
+      app,
+      LastDictation {
+        history_id,
+        transcript: text.to_string(),
+        cleaned: cleaned.map(<[Segment]>::to_vec),
+      },
+    );
+  }
   let mut focus_read = None;
   let typed = type_into_focus(app, text, cleaned, focus, &mut focus_read, moved);
   let result = typed.map_err(|failure| Failed {
@@ -543,6 +561,38 @@ fn deliver(
     kept_in_history,
   });
   (result, focus_read, kept_in_history)
+}
+
+/// Types the last dictation again where focus is now, through the same
+/// guards as a dictation's typing. A refusal is only logged: nothing new
+/// was kept, and the field shows that nothing was typed.
+fn retype(app: &AppHandle, request: Request) {
+  if request == Request::Tray {
+    thread::sleep(dictation_retype::TRAY_SETTLE);
+  }
+  let Some(last) = dictation::last_dictation(app) else {
+    tracing::info!("dictation retype: no last dictation in clipboard history");
+    return;
+  };
+  if !dictation_input::request_access() {
+    tracing::info!("dictation retype: no Accessibility access");
+    return;
+  }
+  // The app focused when it was asked for is the only one typed into.
+  let focus = dictation_focus::current(app);
+  let mut focus_read = None;
+  let mut moved = None;
+  match type_into_focus(
+    app,
+    &last.transcript,
+    last.cleaned.as_deref(),
+    focus.as_ref(),
+    &mut focus_read,
+    &mut moved,
+  ) {
+    Ok(()) => tracing::info!("dictation retype: typed"),
+    Err(failure) => tracing::info!(?failure, "dictation retype: nothing typed"),
+  }
 }
 
 /// A dictation that recorded sound and produced no words: a failure the
