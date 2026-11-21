@@ -1150,5 +1150,9 @@
   "tray.temporaryWorkingCopies": "Temporary working copies",
   "tray.transcribeRecording": "Transcribe a recording…",
   "tray.updateReady": "Update ready",
-  "tray.updatesManaged": "Updates managed by your organization"
+  "tray.updatesManaged": "Updates managed by your organization",
+  "dictation.destination.modelWithdrawn": "The model you chose is no longer offered. Choose another; until then, dictation is transcribed on this computer.",
+  "dictation.notice.chooseModel": "Choose model…",
+  "dictation.notice.modelBody": "Pick one in Settings → Dictation. This dictation was transcribed on this computer.",
+  "dictation.notice.modelTitle": "Your transcription model is no longer offered"
 }

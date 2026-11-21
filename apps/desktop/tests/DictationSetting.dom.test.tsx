@@ -750,7 +750,7 @@ test("without the stella AI decision only this computer is named and no models a
   expect(commands).not.toContain("dictation_get_cloud_models");
 });
 
-test("picking the shown model stores it when the stored one is no longer offered", async () => {
+test("a stored model no longer offered stays the choice until another is picked", async () => {
   const stored: unknown[] = [];
   const snapshot = {
     ...ENABLED_SNAPSHOT,
@@ -769,13 +769,18 @@ test("picking the shown model stores it when the stored one is no longer offered
     }
     return undefined;
   });
+  // Not shown as the default: the picker asks for a model and says why.
   await waitFor(() => {
     expect(
       view.getByRole("combobox", {
         name: defaultMessages.dictation.destination.model,
       }).textContent,
-    ).toContain("Voxtral Mini Transcribe");
+    ).toContain(defaultMessages.dictation.destination.chooseModel);
   });
+  expect(
+    view.getByText(defaultMessages.dictation.destination.modelWithdrawn),
+  ).toBeTruthy();
+  expect(stored).toEqual([]);
   const listbox = await openSelect(
     view,
     defaultMessages.dictation.destination.model,
