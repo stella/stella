@@ -57,8 +57,7 @@ const plans = pricingPlans.map((plan) => {
           yearlyTotal(plan.price.yearlyPerMonth),
           hreflang,
         );
-        return {
-          type: "paid" as const,
+        const periods = {
           monthly: {
             amount: formatPrice(plan.price.monthly, hreflang),
             note: t("pricing.billedMonthly"),
@@ -69,7 +68,18 @@ const plans = pricingPlans.map((plan) => {
               ? t("pricing.billedYearlyPerSeat", { total })
               : t("pricing.billedYearly", { total }),
           },
-          unit,
+        } as const satisfies Record<
+          BillingInterval,
+          { amount: string; note: string }
+        >;
+        return {
+          type: "paid" as const,
+          periods: billingIntervals.map((interval) => ({
+            interval,
+            amount: periods[interval].amount,
+            note: periods[interval].note,
+            unit,
+          })),
         };
       }
       default: {
@@ -236,12 +246,12 @@ const faqJsonLd = {
                       note={plan.prices.note}
                     />
                   ) : (
-                    billingIntervals.map((interval) => (
-                      <div data-interval={interval}>
+                    plan.prices.periods.map((period) => (
+                      <div data-interval={period.interval}>
                         <PricingPlanPrice
-                          amount={plan.prices[interval].amount}
-                          unit={plan.prices.unit}
-                          note={plan.prices[interval].note}
+                          amount={period.amount}
+                          unit={period.unit}
+                          note={period.note}
                         />
                       </div>
                     ))
