@@ -5,13 +5,12 @@ import PricingPlanPrice from "./PricingPlanPrice.astro";
 import {
   billingIntervals,
   formatPrice,
-  formatStorage,
   pricingPlans,
   yearlyTotal,
   type BillingInterval,
   type PricingPlanId,
 } from "../data/pricing";
-import { appUrl, selfHostingUrl } from "../data/site-nav";
+import { appUrl, contactHref, selfHostingUrl } from "../data/site-nav";
 import { defaultLocale, isLocale, locales } from "../i18n/config";
 import {
   catalogs,
@@ -21,7 +20,7 @@ import {
 } from "../i18n/utils";
 
 // One template renders /pricing and /<lang>/pricing. Prose comes from the
-// catalog (`pricing.*`); amounts and storage come from data/pricing.ts and are
+// catalog (`pricing.*`); amounts come from data/pricing.ts and are
 // formatted for the page's locale, so a translation cannot change a price.
 const rawLocale = Astro.currentLocale ?? defaultLocale;
 const locale = isLocale(rawLocale) ? rawLocale : defaultLocale;
@@ -53,6 +52,10 @@ const PLAN_COPY = {
       "pricing.plans.team.features.0",
       "pricing.plans.team.features.1",
     ],
+  },
+  enterprise: {
+    summary: "pricing.plans.enterprise.summary",
+    features: ["pricing.plans.enterprise.features.0"],
   },
 } as const satisfies Record<
   PricingPlanId,
@@ -87,13 +90,20 @@ const intervalLabels = {
 
 const plans = pricingPlans.map((plan) => {
   const perSeat = plan.seating.type === "perSeat";
-  const storage = formatStorage(plan.storageGb, hreflang);
-  const seatingLine = perSeat
-    ? t("pricing.membersPerSeat")
-    : t("pricing.members", { count: 1 });
-  const storageLine = perSeat
-    ? t("pricing.storagePerSeat", { storage })
-    : t("pricing.storage", { storage });
+  const seatingLines = (() => {
+    switch (plan.seating.type) {
+      case "single":
+        return [t("pricing.members", { count: 1 })];
+      case "perSeat":
+        return [t("pricing.membersPerSeat")];
+      case "agreed":
+        return [];
+      default: {
+        const exhaustive: never = plan.seating;
+        return exhaustive;
+      }
+    }
+  })();
   const unit = perSeat ? t("pricing.perSeatPerMonth") : t("pricing.perMonth");
   const planCopy = PLAN_COPY[plan.id];
 
@@ -104,6 +114,13 @@ const plans = pricingPlans.map((plan) => {
           type: "free" as const,
           amount: formatPrice(0, hreflang),
           note: t("pricing.plans.free.priceNote"),
+        };
+      }
+      case "onRequest": {
+        return {
+          type: "onRequest" as const,
+          amount: t("pricing.onRequest"),
+          note: t("pricing.plans.enterprise.priceNote"),
         };
       }
       case "paid": {
@@ -150,7 +167,9 @@ const plans = pricingPlans.map((plan) => {
       case "solo":
         return t("pricing.choosePlan", { plan: plan.name });
       case "team":
-        return t("pricing.startEvaluation");
+        return t("pricing.tryTeam");
+      case "enterprise":
+        return t("footer.contact");
       default: {
         const exhaustive: never = plan;
         return exhaustive;
@@ -162,9 +181,8 @@ const plans = pricingPlans.map((plan) => {
     id: plan.id,
     name: plan.name,
     summary: t(planCopy.summary),
-    seatingLine,
-    storageLine,
-    features: planCopy.features.map((key) => t(key)),
+    lines: [...seatingLines, ...planCopy.features.map((key) => t(key))],
+    href: plan.id === "enterprise" ? contactHref : appUrl,
     prices,
     cta,
   };
@@ -271,7 +289,7 @@ const faqJsonLd = {
 
       {/* ——— Plans ——— */}
       <section class="px-6 pb-6">
-        <div class="mx-auto grid max-w-300 gap-4 lg:grid-cols-3">
+        <div class="mx-auto grid max-w-300 gap-4 md:grid-cols-2 xl:grid-cols-4">
           {
             plans.map((plan, index) => (
               <article
@@ -294,7 +312,8 @@ const faqJsonLd = {
                 </p>
 
                 <div class="mt-6 min-h-[5.5rem]">
-                  {plan.prices.type === "free" ? (
+                  {plan.prices.type === "free" ||
+                  plan.prices.type === "onRequest" ? (
                     <PricingPlanPrice
                       amount={plan.prices.amount}
                       note={plan.prices.note}
@@ -313,14 +332,14 @@ const faqJsonLd = {
                 </div>
 
                 <a
-                  href={appUrl}
+                  href={plan.href}
                   class="plan-cta mt-6 inline-flex min-h-11 items-center justify-center rounded-[0.85rem] px-5 text-center text-sm font-medium"
                 >
                   {plan.cta}
                 </a>
 
                 <ul class="mt-6 space-y-3 border-t pt-6" style="border-color: var(--border)">
-                  {[plan.seatingLine, plan.storageLine, ...plan.features].map(
+                  {plan.lines.map(
                     (feature) => (
                       <li
                         class="flex items-start gap-2.5 text-sm leading-[1.7]"

@@ -197,9 +197,17 @@
     "membersPerSeat": "Tik daudz dalībnieku, cik nepieciešams, maksa par katru vietu",
     "metaDescription": "stella cenas: sāciet bez maksas un bez kartes, solo par fiksētu mēneša cenu, team par katru vietu. Tiesu prakses meklēšana un savas AI atslēgas katrā plānā.",
     "metaTitle": "Cenas: plāni free, solo un team | stella",
+    "onRequest": "Pēc pieprasījuma",
     "perMonth": "mēnesī",
     "perSeatPerMonth": "par vietu mēnesī",
     "plans": {
+      "enterprise": {
+        "features": {
+          "0": "Viss no plāna team"
+        },
+        "priceNote": "Noteikumi, kas saskaņoti ar jūsu biroju.",
+        "summary": "Lielākiem birojiem, kuriem vajadzīgi savi noteikumi."
+      },
       "free": {
         "features": {
           "0": "AI asistents un pakalpojumi ar nelielu mēneša apjomu",
@@ -219,17 +227,15 @@
       "team": {
         "features": {
           "0": "Pilnas AI asistenta un pakalpojumu iespējas godīgas lietošanas ietvaros",
-          "1": "7 dienu izmēģinājuma periods, karte nav nepieciešama"
+          "1": "Izmēģiniet plānu team pirms maksāšanas, karte nav nepieciešama"
         },
         "summary": "Juristu komandām, kas pie lietām strādā kopā."
       }
     },
     "signUpNote": "Vispirms reģistrējieties; maksas plānu izvēlēsieties lietotnē.",
-    "startEvaluation": "Sākt 7 dienu izmēģinājumu",
-    "storage": "{storage} krātuve",
-    "storagePerSeat": "{storage} krātuve katrai vietai",
     "subtitle": "Sāciet bez maksas un pārejiet uz augstāku plānu, kad darba kļūst vairāk. Katrā plānā ir tiesu prakses un tiesību aktu meklēšana, un katrs darbojas ar jūsu modeļu pakalpojumu sniedzēja atslēgu.",
     "title": "Plāni gan individuālam juristam, gan lielai komandai",
+    "tryTeam": "Izmēģināt team",
     "vatNote": "Cenas norādītas bez PVN. Uzņēmumiem un profesionāļiem."
   },
   "products": {

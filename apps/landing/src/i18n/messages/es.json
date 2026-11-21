@@ -197,9 +197,17 @@
     "membersPerSeat": "Tantos miembros como necesites, facturados por puesto",
     "metaDescription": "Precios de stella: empieza gratis sin tarjeta, solo a precio mensual fijo y team por puesto. Jurisprudencia y tus propias claves de IA en todos los planes.",
     "metaTitle": "Precios: planes free, solo y team | stella",
+    "onRequest": "A consultar",
     "perMonth": "al mes",
     "perSeatPerMonth": "por puesto al mes",
     "plans": {
+      "enterprise": {
+        "features": {
+          "0": "Todo lo del plan team"
+        },
+        "priceNote": "Condiciones acordadas con tu despacho.",
+        "summary": "Para despachos más grandes que necesitan condiciones propias."
+      },
       "free": {
         "features": {
           "0": "Asistente de IA y servicios con una pequeña asignación mensual",
@@ -219,17 +227,15 @@
       "team": {
         "features": {
           "0": "Asistente de IA y servicios completos, con uso razonable",
-          "1": "Evaluación de 7 días, sin tarjeta"
+          "1": "Prueba team antes de pagar, sin tarjeta"
         },
         "summary": "Para equipos jurídicos que trabajan juntos en sus asuntos."
       }
     },
     "signUpNote": "Primero regístrate; el plan de pago lo eliges en la aplicación.",
-    "startEvaluation": "Empezar una evaluación de 7 días",
-    "storage": "{storage} de almacenamiento",
-    "storagePerSeat": "{storage} de almacenamiento por puesto",
     "subtitle": "Empieza gratis y cambia de plan cuando crezca el trabajo. Todos los planes incluyen búsqueda de jurisprudencia y legislación y funcionan con la clave de tu propio proveedor de IA.",
     "title": "Planes para despachos de cualquier tamaño",
+    "tryTeam": "Probar team",
     "vatNote": "Precios sin IVA. Para empresas y profesionales."
   },
   "products": {

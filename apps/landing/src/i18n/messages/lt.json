@@ -197,9 +197,17 @@
     "membersPerSeat": "Tiek narių, kiek reikia, apmokestinama už vietą",
     "metaDescription": "stella kainos: pradėkite nemokamai be kortelės, solo – fiksuota mėnesio kaina, team – už vietą. Teismų praktikos paieška ir savi DI raktai kiekviename plane.",
     "metaTitle": "Kainos: free, solo ir team planai | stella",
+    "onRequest": "Pagal užklausą",
     "perMonth": "per mėnesį",
     "perSeatPerMonth": "vietai per mėnesį",
     "plans": {
+      "enterprise": {
+        "features": {
+          "0": "Viskas iš team plano"
+        },
+        "priceNote": "Sąlygos, suderintos su Jūsų kontora.",
+        "summary": "Didesnėms kontoroms, kurioms reikia savų sąlygų."
+      },
       "free": {
         "features": {
           "0": "DI asistentas ir paslaugos su nedidele mėnesio kvota",
@@ -219,17 +227,15 @@
       "team": {
         "features": {
           "0": "Visas DI asistentas ir paslaugos pagal sąžiningo naudojimo taisykles",
-          "1": "7 dienų bandomasis laikotarpis, kortelės nereikia"
+          "1": "Išbandykite team planą prieš mokėdami, kortelės nereikia"
         },
         "summary": "Teisininkų komandoms, kurios bylas veda kartu."
       }
     },
     "signUpNote": "Pirmiausia užsiregistruokite; mokamą planą pasirinksite programoje.",
-    "startEvaluation": "Pradėkite 7 dienų bandomąjį laikotarpį",
-    "storage": "{storage} saugyklos",
-    "storagePerSeat": "{storage} saugyklos vietai",
     "subtitle": "Pradėkite nemokamai ir pereikite prie aukštesnio plano, kai darbų padaugės. Kiekvienas planas apima teismų praktikos ir teisės aktų paiešką bei veikia su Jūsų modelių teikėjo raktu.",
     "title": "Planai tiek pavieniam teisininkui, tiek didelei komandai",
+    "tryTeam": "Išbandyti team",
     "vatNote": "Kainos nurodytos be PVM. Įmonėms ir profesionalams."
   },
   "products": {

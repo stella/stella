@@ -197,9 +197,17 @@
     "membersPerSeat": "Tylu członków, ilu potrzebujesz, z rozliczeniem za miejsce",
     "metaDescription": "Cennik aplikacji stella: zacznij za darmo bez karty, solo w stałej cenie miesięcznej, team za miejsce. Orzecznictwo i własne klucze AI w każdym planie.",
     "metaTitle": "Cennik: plany free, solo i team | stella",
+    "onRequest": "Na zapytanie",
     "perMonth": "miesięcznie",
     "perSeatPerMonth": "za miejsce miesięcznie",
     "plans": {
+      "enterprise": {
+        "features": {
+          "0": "Wszystko z planu team"
+        },
+        "priceNote": "Warunki uzgadniane z Twoją kancelarią.",
+        "summary": "Dla większych kancelarii, które potrzebują własnych warunków."
+      },
       "free": {
         "features": {
           "0": "Asystent AI i usługi z niewielkim miesięcznym limitem",
@@ -219,17 +227,15 @@
       "team": {
         "features": {
           "0": "Pełny asystent AI i usługi w ramach zasad uczciwego korzystania",
-          "1": "7-dniowy okres próbny bez karty"
+          "1": "Wypróbuj team przed zakupem, bez karty"
         },
         "summary": "Dla zespołów prawniczych, które wspólnie prowadzą sprawy."
       }
     },
     "signUpNote": "Najpierw się zarejestruj; płatny plan wybierzesz w aplikacji.",
-    "startEvaluation": "Rozpocznij 7-dniowy okres próbny",
-    "storage": "{storage} przestrzeni dyskowej",
-    "storagePerSeat": "{storage} przestrzeni dyskowej na miejsce",
     "subtitle": "Zacznij za darmo i przejdź na wyższy plan, gdy pracy przybędzie. Każdy plan obejmuje wyszukiwanie orzecznictwa i przepisów prawa oraz działa z Twoim własnym kluczem dostawcy modeli.",
     "title": "Plany dla praktyki każdej wielkości",
+    "tryTeam": "Wypróbuj team",
     "vatNote": "Ceny nie zawierają VAT. Dla firm i profesjonalistów."
   },
   "products": {

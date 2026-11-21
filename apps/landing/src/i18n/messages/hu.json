@@ -197,9 +197,17 @@
     "membersPerSeat": "Annyi tag, amennyire szüksége van, helyenkénti számlázással",
     "metaDescription": "A stella alkalmazás árai: kezdje ingyen, kártya nélkül; solo fix havidíjjal, team helyenként. Ítélkezési gyakorlat és saját AI-kulcsok minden díjcsomagban.",
     "metaTitle": "Árak: free, solo és team díjcsomagok | stella",
+    "onRequest": "Egyedi ajánlat",
     "perMonth": "havonta",
     "perSeatPerMonth": "helyenként havonta",
     "plans": {
+      "enterprise": {
+        "features": {
+          "0": "Minden, ami a team díjcsomagban"
+        },
+        "priceNote": "Az irodájával egyeztetett feltételek.",
+        "summary": "Nagyobb irodáknak, amelyeknek saját feltételekre van szükségük."
+      },
       "free": {
         "features": {
           "0": "AI-asszisztens és szolgáltatások kis havi kerettel",
@@ -219,17 +227,15 @@
       "team": {
         "features": {
           "0": "Teljes AI-asszisztens és szolgáltatások méltányos használat mellett",
-          "1": "7 napos próbaidőszak bankkártya nélkül"
+          "1": "Próbálja ki a team díjcsomagot fizetés előtt, bankkártya nélkül"
         },
         "summary": "Ügyeken közösen dolgozó jogi csapatoknak."
       }
     },
     "signUpNote": "Először regisztráljon; a fizetős díjcsomagot az alkalmazásban választja ki.",
-    "startEvaluation": "7 napos próbaidőszak indítása",
-    "storage": "{storage} tárhely",
-    "storagePerSeat": "{storage} tárhely helyenként",
     "subtitle": "Kezdje ingyen, és váltson nagyobb díjcsomagra, ahogy a munka nő. Minden díjcsomag tartalmazza az ítélkezési gyakorlat és a jogszabályok keresését, és működik saját modellszolgáltatói kulccsal.",
     "title": "Díjcsomagok bármilyen méretű praxishoz",
+    "tryTeam": "A team kipróbálása",
     "vatNote": "Az árak nem tartalmazzák az áfát. Vállalkozásoknak és szakembereknek."
   },
   "products": {

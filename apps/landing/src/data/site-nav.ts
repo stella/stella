@@ -50,7 +50,7 @@ const discordUrl = "https://discord.gg/8dZjmVFjTK";
 const xUrl = "https://x.com/stll_app";
 const linkedinUrl = "https://www.linkedin.com/company/stella-app";
 const statusUrl = "https://status.stll.app";
-const contactHref = "mailto:contact@stll.app";
+export const contactHref = "mailto:contact@stll.app";
 export const selfHostingUrl = `${githubUrl}/blob/main/docs/self-hosting.md`;
 
 export const resourceLinks = [

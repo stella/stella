@@ -197,9 +197,17 @@
     "membersPerSeat": "Tolik členů, kolik potřebujete, s platbou za místo",
     "metaDescription": "Ceník aplikace stella: začněte zdarma bez karty, solo za pevnou měsíční cenu, team za místo. Rešerše judikatury a vlastní klíče k AI v každém tarifu.",
     "metaTitle": "Ceník: tarify free, solo a team | stella",
+    "onRequest": "Na vyžádání",
     "perMonth": "měsíčně",
     "perSeatPerMonth": "za místo měsíčně",
     "plans": {
+      "enterprise": {
+        "features": {
+          "0": "Vše z tarifu team"
+        },
+        "priceNote": "Podmínky dohodnuté s vaší kanceláří.",
+        "summary": "Pro větší kanceláře, které potřebují vlastní podmínky."
+      },
       "free": {
         "features": {
           "0": "AI asistent a služby s malým měsíčním limitem",
@@ -219,17 +227,15 @@
       "team": {
         "features": {
           "0": "Plný AI asistent a služby podle zásad férového využívání",
-          "1": "7denní zkušební období bez platební karty"
+          "1": "Vyzkoušejte team před placením, bez platební karty"
         },
         "summary": "Pro právní týmy, které na spisech pracují společně."
       }
     },
     "signUpNote": "Nejprve se zaregistrujte, placený tarif zvolíte v aplikaci.",
-    "startEvaluation": "Zahájit 7denní zkušební období",
-    "storage": "{storage} úložiště",
-    "storagePerSeat": "{storage} úložiště na místo",
     "subtitle": "Začněte zdarma a přejděte na vyšší tarif, až práce poroste. Každý tarif zahrnuje vyhledávání v judikatuře a právních předpisech a funguje s vaším vlastním klíčem od poskytovatele modelů.",
     "title": "Tarify pro praxi jakékoli velikosti",
+    "tryTeam": "Vyzkoušet team",
     "vatNote": "Ceny jsou uvedeny bez DPH. Pro firmy a podnikatele."
   },
   "products": {
