@@ -317,6 +317,7 @@
     "title": "SharePoint un OneDrive"
   },
   "signedFile": {
+    "deliveryReceipt": "Elektroniskās lietas saņemšanas apstiprinājums",
     "layer": "Parakstu slānis {number, number}",
     "noReadableContent": "Priekšskatījumam nav pieejams lasāms saturs.",
     "noSigners": "Dati par parakstītājiem netika atrasti.",

@@ -9,6 +9,8 @@ import { previewTextFormatSchema } from "./preview-text";
  * establish which documents a signature covers.
  */
 export const signedDossierPreviewSchema = v.object({
+  /** Whether the container is a delivery receipt rather than a dossier. */
+  receipt: v.boolean(),
   documents: v.array(
     v.object({
       /** Stable for one file: the document's position in the container. */

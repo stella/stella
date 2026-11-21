@@ -129,6 +129,13 @@ const readDocument = async (
   });
 };
 
+// §3.1.2: a dossier profile's category is "electronic dossier", or "electronic
+// acknowledgement" for the delivery receipt an `.et3` file holds.
+const RECEIPT_CATEGORY = "electronic acknowledgement";
+
+const isReceipt = (profile: DocumentXmlNode | undefined) =>
+  first(profile, "E-category")?.text.trim().toLowerCase() === RECEIPT_CATEGORY;
+
 const signerNameStatedBy = (signature: DocumentXmlNode) =>
   childElements(signature, XMLDSIG_NAMESPACE, "Object")
     .flatMap((object) => named(object, "SignatureProfile"))
@@ -184,6 +191,7 @@ export const readEAktaDossier = async (
     return dossierLimit("The dossier holds too many signatures");
   }
   return Result.ok({
+    receipt: isReceipt(first(root, "DossierProfile")),
     documents: members,
     signers: readXadesSigners(signatures, "signature", signerNameStatedBy),
   });

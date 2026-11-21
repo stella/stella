@@ -735,6 +735,7 @@
     "useStella": "Použít stella"
   },
   "signedFile": {
+    "deliveryReceipt": "Doručenka k elektronickému spisu",
     "layer": "Vrstva podpisů {number, number}",
     "noReadableContent": "Pro náhled není k dispozici žádný čitelný obsah.",
     "noSigners": "Nebyly nalezeny žádné údaje o podepisujících.",

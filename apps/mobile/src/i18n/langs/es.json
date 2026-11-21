@@ -735,6 +735,7 @@
     "useStella": "Usar stella"
   },
   "signedFile": {
+    "deliveryReceipt": "Acuse de entrega de un expediente electrónico",
     "layer": "Capa de firmas {number, number}",
     "noReadableContent": "No hay contenido legible para la vista previa.",
     "noSigners": "No se encontraron datos de los firmantes.",

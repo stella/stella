@@ -626,6 +626,7 @@
   "signIn.subtitle": "Documents, case law, and review under control. Powered by AI.",
   "signIn.terms": "By continuing, you agree to our <terms>Terms of Service</terms>.",
   "signIn.useStella": "Use stella",
+  "signedFile.deliveryReceipt": "Delivery receipt for an electronic dossier",
   "signedFile.layer": "Signature layer {number, number}",
   "signedFile.noReadableContent": "No readable content is available for preview.",
   "signedFile.noSigners": "No signer details were found.",

@@ -456,6 +456,7 @@ const LEGAL_TEXT_READERS = {
   asicS: extractAsicText,
   eAkta: extractSignedDossierText,
   zep: extractSignedDossierText,
+  xadesZep: extractSignedDossierText,
   cades: extractCadesText,
   dataBox: extractDataBoxText,
 } satisfies Record<

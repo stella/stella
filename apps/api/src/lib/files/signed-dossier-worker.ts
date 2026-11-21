@@ -20,6 +20,7 @@ import {
   SignedDossierParseError,
 } from "@/api/lib/files/signed-dossier";
 import { signedDossierText } from "@/api/lib/files/signed-dossier-text";
+import { readXadesZepEnvelope } from "@/api/lib/files/xades-zep-envelope";
 import { readZepContainer } from "@/api/lib/files/zep-container";
 import { PDF_MIME_TYPE } from "@/api/mime-types";
 
@@ -34,6 +35,7 @@ type SignedDossierReadError =
 const readers = {
   eAkta: readEAktaDossier,
   zep: readZepContainer,
+  xadesZep: readXadesZepEnvelope,
 } satisfies Record<
   (typeof SIGNED_DOSSIER_FORMATS)[number]["kind"],
   (bytes: Uint8Array) => Promise<Result<SignedDossier, SignedDossierParseError>>
@@ -70,10 +72,11 @@ export const extractSignedDossierPreview = async ({
   if (parsed.isErr()) {
     return Result.err(parsed.error);
   }
-  const { documents, signers } = parsed.value;
+  const { receipt, documents, signers } = parsed.value;
   // Reserve room for every name, heading and potential clipping notice.
   const layoutChars =
     signedDossierText({
+      receipt,
       signers,
       documents: documents.map(({ fileName }, position) => ({
         id: documentId(position),
@@ -93,6 +96,7 @@ export const extractSignedDossierPreview = async ({
     return Result.err(texts.error);
   }
   return Result.ok({
+    receipt,
     signers,
     documents: texts.value.map(
       ({ fileName, mimeType: type, status, text, textFormat }, position) => ({
