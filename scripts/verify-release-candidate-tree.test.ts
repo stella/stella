@@ -766,7 +766,7 @@ test("every caller passes the full contract and a workflow token", async () => {
   const record = (value: unknown): value is Record<string, unknown> =>
     typeof value === "object" && value !== null && !Array.isArray(value);
   const invocation =
-    /\bbun\s+("[^"]*(?:tree_verifier|verify-release-candidate-tree)[^"]*")((?:\s+"[^"]*")*)(\s+--release-pr-head\s+"[^"]*")?/iu;
+    /\bbun(?:\s+--[\w-]+(?:=\S+)?)*\s+("[^"]*(?:tree_verifier|verify-release-candidate-tree)[^"]*")((?:\s+"[^"]*")*)(\s+--release-pr-head\s+"[^"]*")?/iu;
   const squashCallers: string[] = [];
   const files = git(root, "ls-files", ".github", "scripts")
     .split("\n")

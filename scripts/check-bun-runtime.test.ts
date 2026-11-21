@@ -165,6 +165,8 @@ test("finds Node launches in shell scripts, naming only explicit starts", () => 
           "./node_modules/.bin/vite --version",
           '"$PODS_ROOT/scripts/with-node.sh" bundle.mjs',
           "case $mode in vite) ;; esac",
+          "/usr/bin/node scripts/y.mjs",
+          "node scripts/x.mjs",
         ].join("\n"),
       }),
     ),
@@ -172,6 +174,8 @@ test("finds Node launches in shell scripts, naming only explicit starts", () => 
     "scripts/run.sh:5 script node node",
     "scripts/run.sh:8 script vite node",
     "scripts/run.sh:9 script with-node.sh node",
+    "scripts/run.sh:11 script node node",
+    "scripts/run.sh:12 script node node",
   ]);
 });
 
@@ -187,6 +191,7 @@ jobs:
         run: |
           echo "\${{ github.sha }}"
           node scripts/x.mjs
+          node scripts/x.mjs --again
       - name: Run on Bun
         run: bun scripts/x.mjs && bunx --bun --no-install wxt prepare
       - name: Fetch
@@ -200,7 +205,8 @@ jobs:
   expect(located(scan({ ".github/workflows/fixture.yml": workflow }))).toEqual([
     ".github/workflows/fixture.yml:7 job check: Set up Node setup-node node",
     ".github/workflows/fixture.yml:11 job check: Run node node",
-    ".github/workflows/fixture.yml:15 job check: Fetch wxt node",
+    ".github/workflows/fixture.yml:12 job check: Run node node",
+    ".github/workflows/fixture.yml:16 job check: Fetch wxt node",
   ]);
 });
 
@@ -224,6 +230,9 @@ test("finds spawned Node commands and Playwright web servers", () => {
     "scripts/spawn.ts:2 spawn node node",
     "scripts/spawn.ts:3 spawn turbo node",
     "scripts/spawn.ts:5 spawn tsdown node",
+    "scripts/spawn.ts:10 spawn vite node",
+    "scripts/spawn.ts:11 spawn vite node",
+    "scripts/spawn.ts:12 spawn npm node",
     "scripts/playwright.config.ts:1 webServer.command vite node",
     "scripts/tool.mjs:1 shebang node node",
   ]);

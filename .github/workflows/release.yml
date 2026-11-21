@@ -170,7 +170,9 @@ jobs:
             jq -e --arg sha "$RELEASE_SHA" --arg repo "$GITHUB_REPOSITORY" --arg title "chore: release v$file_version" \
               'any(.[][]; .head.sha == $sha and .head.repo.full_name == $repo and .title == $title)' <<< "$pulls" >/dev/null
             release_base="$(git merge-base "$RELEASE_SHA" origin/main)"
-            bun "$RELEASE_CANDIDATE_TREE_VERIFIER" "$release_base" "$RELEASE_SHA" "$GITHUB_REPOSITORY"
+            # The candidate checkout is the working directory: Bun loads
+            # none of its bunfig.toml or .env.
+            bun --no-env-file --config=/dev/null "$RELEASE_CANDIDATE_TREE_VERIFIER" "$release_base" "$RELEASE_SHA" "$GITHUB_REPOSITORY"
             echo "rc_ref=$RELEASE_REF" >> "$GITHUB_OUTPUT"
           else
             rc_tags="$(git tag --points-at "$RELEASE_SHA" --list "v${file_version}-rc.*" --sort=-v:refname)"

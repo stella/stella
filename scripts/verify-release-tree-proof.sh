@@ -224,7 +224,9 @@ else
   # Main may be merged into the release branch without rewriting its history.
   main=$(git merge-base "$sha" origin/main)
   candidate_tree_verifier="${RELEASE_CANDIDATE_TREE_VERIFIER:-$(dirname "${BASH_SOURCE[0]}")/verify-release-candidate-tree.mjs}"
-  GH_RETRY_SCRIPT="$gh_retry_script" bun "$candidate_tree_verifier" "$main" "$proof" "$repo" || refuse 'release PR changes executable or unbound build input'
+  # Bun would load bunfig.toml and .env from the working directory, which can
+  # be a candidate checkout; the verifier reads neither.
+  GH_RETRY_SCRIPT="$gh_retry_script" bun --no-env-file --config=/dev/null "$candidate_tree_verifier" "$main" "$proof" "$repo" || refuse 'release PR changes executable or unbound build input'
   relation=pr-head
 fi
 if [[ "$sha" != "$proof" && -n "${GITHUB_STEP_SUMMARY:-}" ]]; then

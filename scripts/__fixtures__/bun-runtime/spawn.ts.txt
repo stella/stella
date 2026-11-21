@@ -5,3 +5,8 @@ spawnSync(process.execPath, ["x", "--bun", "turbo"]);
 spawnSync(process.execPath, ["x", "tsdown"]);
 const value = row["node"];
 run(["bun", "--bun", "vite"]);
+const supportedRuntimes = ["node", "bun"];
+expect(channels).toEqual(["npm", "native"]);
+Bun.spawnSync(["bun", "vite", "build"]);
+execFileSync("bun", ["vite", "build"]);
+Bun.spawn({ cmd: ["npm", "run", "build"] });
