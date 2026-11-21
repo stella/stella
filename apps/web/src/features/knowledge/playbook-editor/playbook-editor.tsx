@@ -346,12 +346,17 @@ const PlaybookEditorLoader = ({
     host.type === "pane" ? host.tabId : null,
     playbookId,
   );
+  const [prevParkedWritePending, setPrevParkedWritePending] =
+    useState(parkedWritePending);
   const [parkedSeed, setParkedSeed] = useState(() =>
     parkedWritePending ? ("waiting" as const) : ("ready" as const),
   );
   // Reopening waits for the old owner; parking an active form must not unmount it.
-  if (parkedSeed === "waiting" && !parkedWritePending) {
-    setParkedSeed("ready");
+  if (prevParkedWritePending !== parkedWritePending) {
+    setPrevParkedWritePending(parkedWritePending);
+    if (parkedSeed === "waiting" && !parkedWritePending) {
+      setParkedSeed("ready");
+    }
   }
   const detailOptions = playbookDetailOptions(organizationId, playbookId);
   // The gate is computed just before the form takes its initial values: at
@@ -382,8 +387,13 @@ const PlaybookEditorLoader = ({
   // The form has now been filled from the outdated copy. Record that, so a
   // later refetch cannot unmount the form and lose what the user typed.
   const latchedGate = latchedSeedGate(seedState.gate, seed);
-  if (latchedGate !== null) {
-    setSeedState({ reloadKey: seedState.reloadKey, gate: latchedGate });
+  const seedTrigger = `${seedState.reloadKey}:${detailQuery.dataUpdatedAt}:${detailQuery.fetchStatus}`;
+  const [prevSeedTrigger, setPrevSeedTrigger] = useState("");
+  if (prevSeedTrigger !== seedTrigger) {
+    setPrevSeedTrigger(seedTrigger);
+    if (latchedGate !== null) {
+      setSeedState({ reloadKey: seedState.reloadKey, gate: latchedGate });
+    }
   }
 
   const refetchDetail = () => {
