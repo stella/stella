@@ -243,6 +243,7 @@
       "available": "La version {version} est disponible.",
       "install": "Installer et redémarrer",
       "installing": "Installation de la version {version}. stella desktop redémarrera une fois l'installation terminée.",
+      "installInProgress": "Une mise à jour est en cours d’installation.",
       "deferred": "La version {version} attend tant que des documents ouverts sont en cours de modification. Une fois terminé, vérifiez à nouveau pour l'installer, sinon elle s'installera lors de la prochaine vérification automatique.",
       "checkFailed": "stella desktop n'a pas pu vérifier les mises à jour.",
       "installFailed": "stella desktop n'a pas pu installer la mise à jour.",

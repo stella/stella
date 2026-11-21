@@ -47,8 +47,7 @@ export const AppVersionRow = ({
   };
 
   // A check in flight shows as loading, which already blocks a second one.
-  const installingVersion =
-    check.status === "installing" ? check.version : undefined;
+  const installing = check.status === "installing";
   return (
     <SettingsRow
       description={versionLabel}
@@ -79,12 +78,8 @@ export const AppVersionRow = ({
       title={t("stellaDesktop")}
     >
       <Button
-        disabled={installingVersion !== undefined}
-        disabledReason={
-          installingVersion === undefined
-            ? undefined
-            : t("updates.installing", { version: installingVersion })
-        }
+        disabled={installing}
+        disabledReason={installing ? t("updates.installInProgress") : undefined}
         loading={check.status === "checking"}
         onClick={() => {
           void runCheck();

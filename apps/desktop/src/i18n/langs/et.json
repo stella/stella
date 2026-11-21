@@ -243,6 +243,7 @@
       "available": "Saadaval on versioon {version}.",
       "install": "Installi ja taaskäivita",
       "installing": "Installitakse versiooni {version}. Seejärel taaskäivitub stella desktop.",
+      "installInProgress": "Värskendust installitakse.",
       "deferred": "Versioon {version} ootab, kuni avatud dokumente muudetakse. Kui olete lõpetanud, kontrollige uuesti, et see installida, muidu installitakse see järgmisel automaatsel kontrollil.",
       "checkFailed": "stella desktop ei saanud värskendusi kontrollida.",
       "installFailed": "stella desktop ei saanud värskendust installida.",

@@ -243,6 +243,7 @@
       "available": "Version {version} is available.",
       "install": "Install and restart",
       "installing": "Installing version {version}. stella desktop restarts when it is done.",
+      "installInProgress": "An update is being installed.",
       "deferred": "Version {version} waits while documents are open for editing. When you finish, check again to install it, or it installs at the next automatic check.",
       "checkFailed": "stella desktop could not check for updates.",
       "installFailed": "stella desktop could not install the update.",

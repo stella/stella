@@ -243,6 +243,7 @@
       "available": "Pieejama versija {version}.",
       "install": "Instalēt un restartēt",
       "installing": "Notiek versijas {version} instalēšana. Pēc tam stella desktop tiks restartēta.",
+      "installInProgress": "Notiek atjauninājuma instalēšana.",
       "deferred": "Versija {version} gaida, kamēr tiek rediģēti atvērtie dokumenti. Kad pabeigsiet, pārbaudiet vēlreiz, lai to instalētu, citādi tā tiks instalēta nākamajā automātiskajā pārbaudē.",
       "checkFailed": "stella desktop nevarēja pārbaudīt atjauninājumus.",
       "installFailed": "stella desktop nevarēja instalēt atjauninājumu.",

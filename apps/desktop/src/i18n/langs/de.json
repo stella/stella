@@ -243,6 +243,7 @@
       "available": "Version {version} ist verfügbar.",
       "install": "Installieren und neu starten",
       "installing": "Version {version} wird installiert. stella desktop startet danach neu.",
+      "installInProgress": "Eine Aktualisierung wird installiert.",
       "deferred": "Version {version} wartet, solange geöffnete Dokumente bearbeitet werden. Prüfen Sie danach erneut, um sie zu installieren, oder sie wird bei der nächsten automatischen Prüfung installiert.",
       "checkFailed": "stella desktop konnte nicht nach Aktualisierungen suchen.",
       "installFailed": "stella desktop konnte die Aktualisierung nicht installieren.",

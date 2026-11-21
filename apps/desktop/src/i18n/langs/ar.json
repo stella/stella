@@ -243,6 +243,7 @@
       "available": "الإصدار {version} متاح.",
       "install": "التثبيت وإعادة التشغيل",
       "installing": "جارٍ تثبيت الإصدار {version}. سيُعاد تشغيل stella desktop عند الانتهاء.",
+      "installInProgress": "جارٍ تثبيت تحديث.",
       "deferred": "ينتظر الإصدار {version} ما دامت المستندات المفتوحة قيد التحرير. عند الانتهاء، تحقّق مجددًا لتثبيته، وإلا فسيُثبَّت عند التحقق التلقائي التالي.",
       "checkFailed": "تعذّر على stella desktop التحقق من التحديثات.",
       "installFailed": "تعذّر على stella desktop تثبيت التحديث.",

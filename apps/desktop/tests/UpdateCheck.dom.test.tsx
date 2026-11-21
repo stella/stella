@@ -138,6 +138,7 @@ test("an available update is offered and installs through the updater", async ()
   // cannot act; clicking it starts nothing.
   const checkButton = view.getByRole("button", {
     name: defaultMessages.tray.checkForUpdates,
+    description: messages.installInProgress,
   });
   expect(checkButton.getAttribute("aria-disabled")).toBe("true");
   fireEvent.click(checkButton);

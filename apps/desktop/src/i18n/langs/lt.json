@@ -243,6 +243,7 @@
       "available": "Galima versija {version}.",
       "install": "Įdiegti ir paleisti iš naujo",
       "installing": "Diegiama versija {version}. Baigus stella desktop pasileis iš naujo.",
+      "installInProgress": "Diegiamas naujinimas.",
       "deferred": "Versija {version} laukia, kol redaguojami atidaryti dokumentai. Baigę patikrinkite dar kartą, kad ją įdiegtumėte, kitaip ji bus įdiegta per kitą automatinį patikrinimą.",
       "checkFailed": "stella desktop nepavyko patikrinti naujinimų.",
       "installFailed": "stella desktop nepavyko įdiegti naujinimo.",

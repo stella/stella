@@ -243,6 +243,7 @@
       "available": "Elérhető a(z) {version} verzió.",
       "install": "Telepítés és újraindítás",
       "installing": "A(z) {version} verzió telepítése folyamatban. A stella desktop ezután újraindul.",
+      "installInProgress": "Egy frissítés telepítése folyamatban van.",
       "deferred": "A(z) {version} verzió vár, amíg megnyitott dokumentumokat szerkeszt. Ha végzett, ellenőrizze újra a telepítéshez, különben a következő automatikus ellenőrzéskor települ.",
       "checkFailed": "A stella desktop nem tudta ellenőrizni a frissítéseket.",
       "installFailed": "A stella desktop nem tudta telepíteni a frissítést.",
