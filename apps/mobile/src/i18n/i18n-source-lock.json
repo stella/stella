@@ -738,5 +738,9 @@
   "chat.dictationPaste": "Paste dictation",
   "chat.dictationKeep": "Keep dictation",
   "chat.dictateHoldHint": "Tap to dictate, or hold to dictate until you let go.",
-  "chat.dictationNoSignal": "The microphone gives no signal. Check that it is not muted or used by another app."
+  "chat.dictationNoSignal": "The microphone gives no signal. Check that it is not muted or used by another app.",
+  "chat.dictationKeptModelWithdrawn": "The model you picked is no longer offered. Pick one in Settings → Dictation, then retry.",
+  "chat.dictationOpenSettings": "Open Settings",
+  "settings.dictationModelWithdrawn": "No longer offered",
+  "settings.dictationModelWithdrawnHint": "The model you picked is no longer offered. Pick another; until then, a dictation goes only to a model of the same provider, region and retention, and otherwise waits on this phone as not transcribed."
 }

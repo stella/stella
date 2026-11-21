@@ -1,5 +1,3 @@
-export type ReleaseKind = "major" | "minor" | "patch";
-
 export type ChangelogReleaseEntry<T> =
   | { type: "maintenance"; releases: [T, ...T[]] }
   | { type: "release"; release: T };
@@ -13,15 +11,16 @@ const MAINTENANCE_RELEASES_TITLE = "Maintenance releases";
 export const isStellaReleaseTag = (tagName: string) =>
   STELLA_RELEASE_TAG_PATTERN.test(tagName);
 
-export const getReleaseKind = (tagName: string): ReleaseKind => {
-  const [, minor, patch] = tagName.replace(/^v/u, "").split(".").map(Number);
+/** A release whose note is headed "Maintenance release" carries no product headline. */
+export const isMaintenanceRelease = (title: string | null) =>
+  title === MAINTENANCE_RELEASE_TITLE;
 
-  if (patch !== 0) {
-    return "patch";
-  }
-
-  return minor === 0 ? "major" : "minor";
-};
+/**
+ * A feature release is any release, patch or not, whose note opens with a
+ * real product headline: a `#` heading other than the maintenance title.
+ */
+export const isFeatureRelease = (title: string | null): title is string =>
+  title !== null && !isMaintenanceRelease(title);
 
 export const getMaintenanceReleaseTitle = (releaseCount: number) =>
   releaseCount === 1 ? MAINTENANCE_RELEASE_TITLE : MAINTENANCE_RELEASES_TITLE;
@@ -47,7 +46,7 @@ export const groupMaintenanceReleases = <T>(
   const entries: ChangelogReleaseEntry<T>[] = [];
 
   for (const release of releases) {
-    if (getTitle(release) !== MAINTENANCE_RELEASE_TITLE) {
+    if (!isMaintenanceRelease(getTitle(release))) {
       entries.push({ type: "release", release });
       continue;
     }

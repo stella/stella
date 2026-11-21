@@ -1,5 +1,0 @@
-{
-  "metric": "cross-handler-imports",
-  "delta": 1,
-  "reason": "Resolve answers a decision it cannot find with the coverage snapshot's reconciled-listing verdict; the case-law coverage handler owns that stored answer, and resolve reads it through its one exported reader rather than a second copy of the query."
-}

@@ -1,6 +1,7 @@
 import { expect, test } from "bun:test";
 import * as v from "valibot";
 
+import { DECISION_BODY_TEXT_SOURCE } from "@stll/api-contract/case-law-body-source";
 import { DECISION_READ_RESOLUTION } from "@stll/api-contract/case-law-decision-resolution";
 import { noDecisionReviewFound } from "@stll/api-contract/case-law-reviews";
 import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
@@ -52,6 +53,7 @@ const readOf = () =>
     documentAstSource: null,
     fulltext: "Soud návrh zamítl pro opožděnost podání.",
     sections: null,
+    bodySource: { textSource: DECISION_BODY_TEXT_SOURCE.HOST },
     sourceUrl: "https://example.test/decision",
     sourceAttributionUrl: "https://example.test/decision",
     documentUrl: "https://example.test/decision.pdf",

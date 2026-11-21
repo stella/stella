@@ -162,11 +162,10 @@ const InstalledSkillResourcePanel = ({
   // Reset the editor when the underlying tab identity or server content
   // changes (a key-reset belongs on the parent panel, outside this batch).
   // Adjusting state during render avoids the extra commit + cascading render.
-  const [lastTabId, setLastTabId] = useState(tab.id);
-  const [lastTabContent, setLastTabContent] = useState(tab.content);
-  if (tab.id !== lastTabId || tab.content !== lastTabContent) {
-    setLastTabId(tab.id);
-    setLastTabContent(tab.content);
+  const tabSyncKey = `${tab.id}\0${tab.content}`;
+  const [prevTabSyncKey, setPrevTabSyncKey] = useState(tabSyncKey);
+  if (prevTabSyncKey !== tabSyncKey) {
+    setPrevTabSyncKey(tabSyncKey);
     setEditing(false);
     setDraft(tab.content);
   }
