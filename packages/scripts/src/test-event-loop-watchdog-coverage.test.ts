@@ -9,11 +9,13 @@ const GUARD = "test-event-loop-watchdog";
 const ROOT = path.resolve(import.meta.dirname, "../../..");
 const WATCHDOG = "packages/scripts/src/test-event-loop-watchdog.ts";
 const WORKSPACE_PRELOAD = `../../${WATCHDOG}`;
-const ROOT_PRELOAD = `./${WATCHDOG}`;
 
 // The API runner supervises its own batches: each has a wall-clock budget
 // (apps/api/scripts/test-process-supervisor.ts) and buffers its output, so the
 // silent-gap measurement that sets the watchdog's limit does not cover it.
+// Root `bun test` runs (CI's pooled static checks) are not workspace tasks:
+// each check has its own budget, and some block on a bounded spawnSync for
+// minutes, so the root bunfig.toml does not load the watchdog.
 const EXEMPT = {
   "apps/api": "its runner bounds every batch with a wall-clock budget",
 } as const satisfies Record<string, string>;
@@ -74,11 +76,10 @@ test("every workspace test run loads the event-loop watchdog before its own prel
   expect(violations).toEqual([]);
 });
 
-test("a bun test run from the repository root loads the event-loop watchdog", () => {
-  expect(
-    firstPreload(readFileSync(path.join(ROOT, "bunfig.toml"), "utf-8")),
-  ).toBe(ROOT_PRELOAD);
-  expect(existsSync(path.join(ROOT, WATCHDOG))).toBe(true);
+test("the preload every workspace lists resolves to the watchdog", () => {
+  expect(existsSync(path.join(ROOT, "packages", "ui", WORKSPACE_PRELOAD))).toBe(
+    true,
+  );
 });
 
 test("every exempt workspace exists and runs tests", () => {

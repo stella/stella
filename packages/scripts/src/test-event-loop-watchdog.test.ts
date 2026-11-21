@@ -70,7 +70,9 @@ test("descendants cover the whole tree under the test process and nothing else",
       " 10    12",
     ].join("\n"),
   );
-  expect(descendantPids(10, children).toSorted()).toEqual([11, 12, 13]);
+  expect(descendantPids(10, children).toSorted((a, b) => a - b)).toEqual([
+    11, 12, 13,
+  ]);
   expect(descendantPids(14, children)).toEqual([]);
 });
 
