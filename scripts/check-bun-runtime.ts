@@ -600,8 +600,26 @@ const SOURCE_FILE = /\.(?:[cm]?[jt]sx?)$/u;
  * Only a command counts: the first argument of a spawn call or of a
  * repository wrapper named `run…` or `command`, or a `cmd:` field.
  */
-const ARRAY_PREFIX =
-  /(?<=(?:\b(?:spawn|spawnSync|execFile|execFileSync|run\w*|command)\(|\bcmd:)\s*)\[\s*((?:(?:"[^"\n]*"|'[^'\n]*')\s*,\s*)*(?:"[^"\n]*"|'[^'\n]*'))/gu;
+const COMMAND_ARRAY =
+  /(?:\b(?:spawn|spawnSync|execFile|execFileSync|run\w*|command)\(|\bcmd:)\s*\[/gu;
+/** One string literal and the comma after it, read from a fixed position. */
+const LIST_LITERAL = /\s*("[^"\n]*"|'[^'\n]*')\s*(,?)/uy;
+
+/** The string literals an argument list starts with, read one at a time. */
+const literalPrefix = (source: string, from: number): string[] => {
+  const words: string[] = [];
+  LIST_LITERAL.lastIndex = from;
+  for (;;) {
+    const match = LIST_LITERAL.exec(source);
+    if (match === null) {
+      return words;
+    }
+    words.push((match[1] ?? "").slice(1, -1));
+    if (match[2] === "") {
+      return words;
+    }
+  }
+};
 /** `spawn("node", [...])`, `execFileSync("bunx", [...])` and the like. */
 const PROGRAM_CALL =
   /\(\s*(["'])(node|npx|npm|bunx|bun)\1\s*,\s*(\[\s*(?:(?:"[^"\n]*"|'[^'\n]*')\s*,?\s*)*)/gu;
@@ -640,9 +658,9 @@ const spawnFindings = (scan: ScanContext): Finding[] =>
         where: "spawn",
       });
       const commands: { index: number; words: string[] }[] = [
-        ...[...source.matchAll(ARRAY_PREFIX)].map((match) => ({
+        ...[...source.matchAll(COMMAND_ARRAY)].map((match) => ({
           index: match.index,
-          words: literalWords(match[1] ?? ""),
+          words: literalPrefix(source, match.index + match[0].length),
         })),
         ...[...source.matchAll(PROGRAM_CALL)].map((match) => ({
           index: match.index,
