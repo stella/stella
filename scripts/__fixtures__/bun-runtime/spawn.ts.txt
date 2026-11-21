@@ -1,0 +1,7 @@
+// spawn("node", ["ignored.js"])
+Bun.spawnSync(["node", script]);
+execFileSync("bunx", ["--no-install", "turbo", "run"]);
+spawnSync(process.execPath, ["x", "--bun", "turbo"]);
+spawnSync(process.execPath, ["x", "tsdown"]);
+const value = row["node"];
+run(["bun", "--bun", "vite"]);

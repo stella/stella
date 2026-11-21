@@ -1,7 +1,8 @@
 /**
- * Every JavaScript process a package script starts runs on Bun, the runtime
+ * Every JavaScript process the repository starts runs on Bun, the runtime
  * the service images run (`CMD ["bun", …]` in apps/web/Dockerfile and
- * apps/api/Dockerfile).
+ * apps/api/Dockerfile): package scripts, shell scripts, workflow steps,
+ * spawned commands, Playwright web servers and interpreter lines.
  *
  * npm executables start with `#!/usr/bin/env node`, so a bare `vite` in a
  * package script starts Node even under `bun run`. `bun --bun <bin>` runs the
@@ -27,10 +28,45 @@ const NODE_PROGRAMS = new Set([NODE, "npx", "npm"]);
 const BUN_RUNTIME_FLAGS = new Set(["--bun", "-b"]);
 
 /**
- * Executables that stay on Node, with the failure that keeps them there.
- * An entry no package script uses fails the check, so the list only shrinks.
+ * Launches that stay on Node, keyed `<file>: <program>`, with why Bun cannot
+ * run them. An entry nothing uses fails the check, so the list only shrinks.
  */
-export const NODE_RUNTIME_EXCEPTIONS: Readonly<Record<string, string>> = {};
+export const NODE_RUNTIME_EXCEPTIONS: Readonly<Record<string, string>> = {
+  ".github/workflows/ci.yml: job ci-browser: Setup Bun: node":
+    "Installs Bun inside the Playwright image, where Node is the only runtime.",
+  ".github/workflows/ci.yml: job ci-browser: Setup Bun: npm":
+    "Installs Bun inside the Playwright image, where Node is the only runtime.",
+  ".github/workflows/publish-npm.yml: job pack: Canary the exact packed CLI against production: node":
+    "The packed CLI is checked on Node, the runtime of its npm consumers.",
+  ".github/workflows/publish-npm.yml: job pack: Set up Node for the CLI smoke test: setup-node":
+    "The packed CLI is checked on Node, the runtime of its npm consumers.",
+  ".github/workflows/publish-npm.yml: job pack: Smoke-test the packed CLI under plain Node: node":
+    "The packed CLI is checked on Node, the runtime of its npm consumers.",
+  ".oxlint-plugins/__tests__/canonical-rule-id.test.ts: spawn: node":
+    "Compares the oxlint rule catalog under Node, where editor integrations load it, with Bun's.",
+  ".oxlint-plugins/__tests__/public-case-law-db-boundary.test.ts: spawn: node":
+    "Loads the lint plugin under Node, where editor integrations run oxlint plugins.",
+  "apps/mobile/scripts/widget-bundle.test.ts: spawn: node":
+    "Loads the widget Metro config the way the Xcode phase does, on `$NODE_BINARY`.",
+  "apps/mobile/scripts/xcode-widget-bundle.sh: script: with-node.sh":
+    "An Xcode build phase: React Native's helper runs `$NODE_BINARY` from ios/.xcode.env, the interpreter the whole native iOS build, its bundle phase included, uses.",
+  "scripts/capability-shard-pack.test.ts: spawn: node":
+    "The packed CLI is checked on Node, the runtime of its npm consumers.",
+  "scripts/check-oxlint-node-loader.sh: script: oxlint":
+    "Proves the oxlint configs load through oxlint's Node launcher, the one editor integrations start.",
+  "scripts/check-published-exports.ts: spawn: node":
+    "Loads each published package on Node, the runtime of its npm consumers.",
+  "scripts/ci-static-checks.ts: spawn: node":
+    "Records the runner's Node version in the static-check toolchain key: the RuleTester and loader checks still run on it.",
+  "scripts/cli-runtime-pack.test.ts: spawn: node":
+    "The packed CLI is checked on Node, the runtime of its npm consumers.",
+  "scripts/install-packed-cli.test.ts: spawn: node":
+    "The packed CLI is checked on Node, the runtime of its npm consumers.",
+  "scripts/lint-oxlint-fixtures.sh: script: node":
+    "oxlint's RuleTester refuses Bun (\"`RuleTester` is not supported on ... other runtimes\"): it needs Node's raw AST transfer.",
+  "scripts/offline-check-policy.test.ts: spawn: node":
+    "An argv the offline-check policy must reject; it is classified, never spawned.",
+};
 
 const SCRIPT = "script";
 
@@ -149,10 +185,17 @@ const CWD_FLAG = "--cwd";
 
 type LaunchContext = {
   executables: ReadonlySet<string>;
+  /**
+   * Executables a bare command word resolves to: package scripts and
+   * Playwright run with the package's `node_modules/.bin` on PATH; shell
+   * scripts and workflow steps start no package executable by name.
+   */
+  onPath: ReadonlySet<string>;
   /** Script names of the package in a directory relative to the root. */
   scriptsIn: (directory: string) => ReadonlySet<string>;
-  /** The directory the command starts in, relative to the root. */
-  directory: string;
+  /** The directory the command starts in, relative to the root; undefined
+   * once the shell computes it. */
+  directory: string | undefined;
 };
 
 /** A literal directory, or undefined when the shell computes it. */
@@ -201,6 +244,38 @@ const bunLaunch = (
   return [];
 };
 
+/** Executables started by path from `node_modules/.bin`. */
+const BIN_PATH = /(?:^|\/)node_modules\/\.bin\/([^/]+)$/u;
+/** React Native's Xcode helper: it runs the script on `$NODE_BINARY`. */
+const NODE_BINARY_WRAPPER = "with-node.sh";
+
+/** The launch one simple command makes, given its words past prefixes. */
+const commandLaunches = (
+  [program, ...args]: readonly string[],
+  context: LaunchContext,
+): Launch[] => {
+  if (program === undefined) {
+    return [];
+  }
+  const bin = BIN_PATH.exec(program)?.[1];
+  if (bin !== undefined) {
+    return [{ program: bin, runs: NODE }];
+  }
+  if (path.posix.basename(program) === NODE_BINARY_WRAPPER) {
+    return [{ program: NODE_BINARY_WRAPPER, runs: NODE }];
+  }
+  if (NODE_PROGRAMS.has(program)) {
+    return [{ program, runs: NODE }];
+  }
+  if (program === "bunx") {
+    return bunxLaunch(args);
+  }
+  if (program === BUN) {
+    return bunLaunch(args, context);
+  }
+  return context.onPath.has(program) ? [{ program, runs: NODE }] : [];
+};
+
 /** The JavaScript programs a shell command starts, and their runtime. */
 export const launches = (command: string, context: LaunchContext): Launch[] => {
   const found: Launch[] = [];
@@ -221,23 +296,14 @@ export const launches = (command: string, context: LaunchContext): Launch[] => {
       case "control-flow":
         break;
       case "command": {
-        const [program, ...args] = programWords(event.words);
-        if (program === undefined) {
-          break;
-        }
-        if (program === "cd") {
+        const words = programWords(event.words);
+        if (words.at(0) === "cd") {
           directory =
             directory === undefined
               ? undefined
-              : literalDirectory(directory, args.at(0));
-        } else if (NODE_PROGRAMS.has(program)) {
-          found.push({ program, runs: NODE });
-        } else if (program === "bunx") {
-          found.push(...bunxLaunch(args));
-        } else if (program === BUN && directory !== undefined) {
-          found.push(...bunLaunch(args, { ...context, directory }));
-        } else if (context.executables.has(program)) {
-          found.push({ program, runs: NODE });
+              : literalDirectory(directory, words.at(1));
+        } else {
+          found.push(...commandLaunches(words, { ...context, directory }));
         }
         break;
       }
@@ -249,18 +315,68 @@ export const launches = (command: string, context: LaunchContext): Launch[] => {
   return found;
 };
 
+/** Where a launch is written: a file, the line, and what it belongs to. */
 export type Finding = {
   file: string;
   line: number;
-  script: string;
+  /** The script, step or call the launch is part of. */
+  where: string;
 } & Launch;
+
+const lineAt = (source: string, index: number): number =>
+  source.slice(0, index).split("\n").length;
 
 const scriptLine = (source: string, name: string): number => {
   const scripts = source.indexOf('"scripts"');
   const index = source.indexOf(`${JSON.stringify(name)}:`, scripts);
   return index === -1
     ? panic(`script ${name} not found in package.json source`)
-    : source.slice(0, index).split("\n").length;
+    : lineAt(source, index);
+};
+
+/** Whether one source line, read on its own, makes `launch`. */
+const lineLaunches = (
+  line: string,
+  launch: Launch,
+  context: LaunchContext,
+): boolean | undefined => {
+  const events = lexShell(line);
+  if (events.some(({ type }) => type === "unparsed")) {
+    return undefined;
+  }
+  return events.some(
+    (event) =>
+      event.type === "command" &&
+      commandLaunches(programWords(event.words), context).some(
+        ({ program, runs }) =>
+          program === launch.program && runs === launch.runs,
+      ),
+  );
+};
+
+/**
+ * The first line at or after `from` that makes `launch` outside a comment,
+ * so a finding points at the command that starts it. A line the shell cannot
+ * read alone (a continued quote) counts when it names the program.
+ */
+const launchLine = (
+  source: string,
+  launch: Launch,
+  { from, context }: { from: number; context: LaunchContext },
+): number => {
+  const word = new RegExp(
+    `(?:^|[\\s;&|("'\`/])${launch.program.replaceAll(/[.*+?^${}()|[\]\\]/gu, "\\$&")}(?=$|[\\s;&|)"'\`])`,
+    "u",
+  );
+  const lines = source.split("\n");
+  const start = lineAt(source, from) - 1;
+  const index = lines.findIndex(
+    (line, at) =>
+      at >= start &&
+      !line.trimStart().startsWith("#") &&
+      (lineLaunches(line, launch, context) ?? word.test(line)),
+  );
+  return index === -1 ? start + 1 : index + 1;
 };
 
 /** Script names by package directory, read once each. */
@@ -279,51 +395,339 @@ const packageScripts = (root: string) => {
   };
 };
 
+type ScanContext = {
+  root: string;
+  executables: ReadonlySet<string>;
+  scriptsIn: (directory: string) => ReadonlySet<string>;
+  /** Tracked files, repo-relative. */
+  files: readonly string[];
+};
+
+/** Package scripts that start a program on Node. */
+const packageScriptFindings = (scan: ScanContext): Finding[] =>
+  [".", ...workspaceDirectories(scan.root)].flatMap((directory) => {
+    const file = path.join(directory, "package.json");
+    const source = readFileSync(path.join(scan.root, file), "utf-8");
+    const scripts = readManifest(path.join(scan.root, file))["scripts"];
+    if (!isRecord(scripts)) {
+      return [];
+    }
+    const context = { ...scan, onPath: scan.executables, directory };
+    return Object.entries(scripts).flatMap(([script, command]) =>
+      typeof command === "string"
+        ? launches(command, context).map((launch) => ({
+            file,
+            line: scriptLine(source, script),
+            where: `scripts.${script}`,
+            ...launch,
+          }))
+        : [],
+    );
+  });
+
+const NOTHING_ON_PATH: ReadonlySet<string> = new Set();
+const IGNORED_PATH = /(?:^|\/)(?:node_modules|fixtures|__fixtures__|dist)\//u;
+const SHELL_SCRIPT = /\.(?:sh|bash)$/u;
+
+/** Repository shell scripts that start a program on Node. */
+const shellScriptFindings = (scan: ScanContext): Finding[] =>
+  scan.files
+    .filter((file) => SHELL_SCRIPT.test(file) && !IGNORED_PATH.test(file))
+    .flatMap((file) => {
+      const source = readFileSync(path.join(scan.root, file), "utf-8");
+      let from = 0;
+      const context = { ...scan, onPath: NOTHING_ON_PATH, directory: "." };
+      return launches(source, context).map((launch) => {
+        const line = launchLine(source, launch, { from, context });
+        from = source
+          .split("\n")
+          .slice(0, line - 1)
+          .join("\n").length;
+        return { file, line, where: "script", ...launch };
+      });
+    });
+
+const WORKFLOW =
+  /^\.github\/(?:workflows\/[^/]+\.ya?ml|actions\/.+\/action\.ya?ml)$/u;
+const BASH_SHELLS = new Set(["bash", "sh"]);
+/** GitHub substitutes an expression before the shell reads the script. */
+const EXPRESSION = /\$\{\{.*?\}\}/gsu;
+
+type WorkflowStep = { step: Record<string, unknown>; where: string };
+
+const workflowSteps = (document: unknown): WorkflowStep[] => {
+  if (!isRecord(document)) {
+    return [];
+  }
+  const leafSteps = (steps: unknown, where: string): WorkflowStep[] =>
+    Array.isArray(steps)
+      ? steps.flatMap((step, index) => {
+          if (!isRecord(step)) {
+            return [];
+          }
+          if ("parallel" in step) {
+            return leafSteps(step["parallel"], where);
+          }
+          const name =
+            typeof step["name"] === "string" ? step["name"] : `#${index}`;
+          return [{ step, where: `${where}: ${name}` }];
+        })
+      : [];
+  const runs = document["runs"];
+  if (isRecord(runs)) {
+    return leafSteps(runs["steps"], "composite");
+  }
+  const jobs = isRecord(document["jobs"]) ? document["jobs"] : {};
+  const workflowShell = defaultShell(document);
+  return Object.entries(jobs).flatMap(([job, definition]) => {
+    if (!isRecord(definition)) {
+      return [];
+    }
+    const runsOn = JSON.stringify(definition["runs-on"] ?? "");
+    const shell =
+      defaultShell(definition) ??
+      workflowShell ??
+      (runsOn.includes("windows") ? "pwsh" : "bash");
+    return leafSteps(definition["steps"], `job ${job}`).map(
+      ({ step, where }) => ({
+        step: { shell, ...step },
+        where,
+      }),
+    );
+  });
+};
+
+const defaultShell = (scope: Record<string, unknown>): string | undefined => {
+  const defaults = scope["defaults"];
+  const run = isRecord(defaults) ? defaults["run"] : undefined;
+  const shell = isRecord(run) ? run["shell"] : undefined;
+  return typeof shell === "string" ? shell : undefined;
+};
+
+/** Workflow and composite action steps that set up or start Node. */
+const workflowFindings = (scan: ScanContext): Finding[] =>
+  scan.files
+    .filter((file) => WORKFLOW.test(file))
+    .flatMap((file) => {
+      const source = readFileSync(path.join(scan.root, file), "utf-8");
+      return workflowSteps(Bun.YAML.parse(source)).flatMap(
+        ({ step, where }) => {
+          const uses = step["uses"];
+          if (
+            typeof uses === "string" &&
+            uses.startsWith("actions/setup-node@")
+          ) {
+            return [
+              {
+                file,
+                line: lineAt(source, source.indexOf(uses)),
+                where,
+                program: "setup-node",
+                runs: NODE,
+              },
+            ];
+          }
+          const run = step["run"];
+          const shell =
+            typeof step["shell"] === "string" ? step["shell"] : "bash";
+          if (
+            typeof run !== "string" ||
+            !BASH_SHELLS.has(shell.split(" ")[0] ?? "")
+          ) {
+            return [];
+          }
+          const first =
+            run.split("\n").find((line) => line.trim() !== "") ?? "";
+          const from = Math.max(source.indexOf(first.trim()), 0);
+          const context = { ...scan, onPath: NOTHING_ON_PATH, directory: "." };
+          return launches(
+            run.replaceAll(EXPRESSION, "GITHUB_EXPRESSION"),
+            context,
+          ).map((launch) => ({
+            file,
+            line: launchLine(source, launch, { from, context }),
+            where,
+            ...launch,
+          }));
+        },
+      );
+    });
+
+const SOURCE_FILE = /\.(?:[cm]?[jt]sx?)$/u;
+/** The string literals an array literal starts with, in order. */
+const ARRAY_PREFIX =
+  /(?<![\w$)\]])\[\s*((?:(?:"[^"\n]*"|'[^'\n]*')\s*,\s*)*(?:"[^"\n]*"|'[^'\n]*'))/gu;
+/** `spawn("node", [...])`, `execFileSync("bunx", [...])` and the like. */
+const PROGRAM_CALL =
+  /\(\s*(["'])(node|npx|bunx)\1\s*,\s*(\[\s*(?:(?:"[^"\n]*"|'[^'\n]*')\s*,?\s*)*)/gu;
+/** `spawn(process.execPath, ["x", ...])`: Bun's own `bun x`. */
+const EXEC_PATH_CALL =
+  /process\.execPath\s*,\s*(\[\s*(?:(?:"[^"\n]*"|'[^'\n]*')\s*,?\s*)*)/gu;
+const SPAWNED_PROGRAMS = new Set([NODE, "npx", "bunx", BUN]);
+
+/** The values of the string literals in an argument list, in order. */
+const literalWords = (list: string): string[] =>
+  [...list.matchAll(/"[^"\n]*"|'[^'\n]*'/gu)].map(([literal]) =>
+    literal.slice(1, -1),
+  );
+
+const COMMENT = /\/\*[\s\S]*?\*\/|(?<=^|\s)\/\/[^\n]*/gu;
+
+/** Blanks comments, keeping every offset and line where it was. */
+const blankComments = (source: string): string =>
+  source.replaceAll(COMMENT, (comment) => comment.replaceAll(/[^\n]/gu, " "));
+
+/** TypeScript and JavaScript that spawn Node or a Node executable. */
+const spawnFindings = (scan: ScanContext): Finding[] =>
+  scan.files
+    .filter((file) => SOURCE_FILE.test(file) && !IGNORED_PATH.test(file))
+    .flatMap((file) => {
+      const source = blankComments(
+        readFileSync(path.join(scan.root, file), "utf-8"),
+      );
+      if (!/["'](?:node|npx|bunx|x)["']/u.test(source)) {
+        return [];
+      }
+      const context = { ...scan, onPath: NOTHING_ON_PATH, directory: "." };
+      const at = (index: number) => ({
+        file,
+        line: lineAt(source, index),
+        where: "spawn",
+      });
+      const commands: { index: number; words: string[] }[] = [
+        ...[...source.matchAll(ARRAY_PREFIX)].map((match) => ({
+          index: match.index,
+          words: literalWords(match[1] ?? ""),
+        })),
+        ...[...source.matchAll(PROGRAM_CALL)].map((match) => ({
+          index: match.index,
+          words: [match[2] ?? "", ...literalWords(match[3] ?? "")],
+        })),
+        ...[...source.matchAll(EXEC_PATH_CALL)].map((match) => ({
+          index: match.index,
+          words: [BUN, ...literalWords(match[1] ?? "")],
+        })),
+      ];
+      return commands
+        .filter(({ words }) => SPAWNED_PROGRAMS.has(words[0] ?? ""))
+        .flatMap(({ index, words }) =>
+          commandLaunches(words, context).map((launch) => ({
+            ...at(index),
+            ...launch,
+          })),
+        );
+    });
+
+const PLAYWRIGHT_CONFIG = /(?:^|\/)playwright[^/]*\.config\.[cm]?[jt]s$/u;
+const WEB_SERVER_COMMAND = /\bcommand:\s*(["'`])((?:(?!\1)[^\\]|\\.)*)\1/gu;
+
+/** Playwright web servers whose command starts a program on Node. */
+const playwrightFindings = (scan: ScanContext): Finding[] =>
+  scan.files
+    .filter((file) => PLAYWRIGHT_CONFIG.test(file) && !IGNORED_PATH.test(file))
+    .flatMap((file) => {
+      const source = readFileSync(path.join(scan.root, file), "utf-8");
+      let directory = path.dirname(file);
+      while (
+        directory !== "." &&
+        !existsSync(path.join(scan.root, directory, "package.json"))
+      ) {
+        directory = path.dirname(directory);
+      }
+      return [...source.matchAll(WEB_SERVER_COMMAND)].flatMap((match) =>
+        launches(
+          (match[2] ?? "").replaceAll(/\$\{[^}]*\}/gu, "TEMPLATE_VALUE"),
+          {
+            ...scan,
+            onPath: scan.executables,
+            directory,
+          },
+        ).map((launch) => ({
+          file,
+          line: lineAt(source, match.index),
+          where: "webServer.command",
+          ...launch,
+        })),
+      );
+    });
+
+/** Repository files that name Node as their interpreter. */
+const shebangFindings = (scan: ScanContext): Finding[] =>
+  scan.files
+    .filter((file) => SOURCE_FILE.test(file) && !IGNORED_PATH.test(file))
+    .flatMap((file) => {
+      const head = readFileSync(path.join(scan.root, file), "utf-8").slice(
+        0,
+        200,
+      );
+      return SHEBANG.test(head.split("\n", 1)[0] ?? "")
+        ? [{ file, line: 1, where: "shebang", program: NODE, runs: NODE }]
+        : [];
+    });
+
+const trackedFiles = (root: string): string[] => {
+  const result = Bun.spawnSync(["git", "ls-files", "-z"], { cwd: root });
+  return result.exitCode === 0
+    ? result.stdout.toString().split("\0").filter(Boolean)
+    : panic(`git ls-files failed: ${result.stderr.toString()}`);
+};
+
+/**
+ * Exception key: the file, the script, step or call, and the program it
+ * starts on Node, so an exception never covers a launch added beside it.
+ */
+export const exceptionKey = ({
+  file,
+  where,
+  program,
+}: Pick<Finding, "file" | "where" | "program">) =>
+  `${file}: ${where}: ${program}`;
+
 type ScanResult = { findings: Finding[]; unusedExceptions: string[] };
 
-/** Every package script command that starts a program on Node. */
-export const scanPackageScripts = (
+type ScanOptions = {
+  exceptions?: Readonly<Record<string, string>>;
+  /** Tracked files; defaults to `git ls-files` in `root`. */
+  files?: readonly string[];
+};
+
+/** Every launch on Node the repository writes, outside the exceptions. */
+export const scanRepository = (
   root: string,
-  exceptions: Readonly<Record<string, string>> = NODE_RUNTIME_EXCEPTIONS,
+  {
+    exceptions = NODE_RUNTIME_EXCEPTIONS,
+    files = trackedFiles(root),
+  }: ScanOptions = {},
 ): ScanResult => {
-  const executables = packageExecutables(root);
-  const scriptsIn = packageScripts(root);
-  const findings: Finding[] = [];
+  const scan: ScanContext = {
+    root,
+    executables: packageExecutables(root),
+    scriptsIn: packageScripts(root),
+    files,
+  };
   const usedExceptions = new Set<string>();
-  for (const directory of [".", ...workspaceDirectories(root)]) {
-    const file = path.join(directory, "package.json");
-    const source = readFileSync(path.join(root, file), "utf-8");
-    const scripts = readManifest(path.join(root, file))["scripts"];
-    if (!isRecord(scripts)) {
-      continue;
+  const findings = [
+    ...packageScriptFindings(scan),
+    ...shellScriptFindings(scan),
+    ...workflowFindings(scan),
+    ...spawnFindings(scan),
+    ...playwrightFindings(scan),
+    ...shebangFindings(scan),
+  ].filter((finding) => {
+    if (finding.runs === BUN) {
+      return false;
     }
-    const context = { executables, scriptsIn, directory };
-    for (const [script, command] of Object.entries(scripts)) {
-      if (typeof command !== "string") {
-        continue;
-      }
-      for (const { program, runs } of launches(command, context)) {
-        if (runs === BUN) {
-          continue;
-        }
-        if (runs === NODE && Object.hasOwn(exceptions, program)) {
-          usedExceptions.add(program);
-          continue;
-        }
-        findings.push({
-          file,
-          line: scriptLine(source, script),
-          script,
-          program,
-          runs,
-        });
-      }
+    const key = exceptionKey(finding);
+    if (finding.runs === NODE && Object.hasOwn(exceptions, key)) {
+      usedExceptions.add(key);
+      return false;
     }
-  }
+    return true;
+  });
   return {
     findings,
     unusedExceptions: Object.keys(exceptions).filter(
-      (program) => !usedExceptions.has(program),
+      (key) => !usedExceptions.has(key),
     ),
   };
 };
@@ -343,33 +747,35 @@ export const dockerCmdRuntime = (dockerfile: string): string => {
     : panic("Dockerfile has no exec-form CMD");
 };
 
+const fix = ({ program, runs }: Launch): string => {
+  switch (runs) {
+    case NODE:
+      return program === NODE || program === "npx" || program === "setup-node"
+        ? "run it with Bun"
+        : `run it as \`bun --bun ${program}\``;
+    case SCRIPT:
+      return `a package script of that name runs instead; run it as \`bunx --bun ${program}\``;
+    case BUN:
+      return "";
+    default:
+      runs satisfies never;
+      return panic(`unknown runner ${String(runs)}`);
+  }
+};
+
 if (import.meta.main) {
-  const { findings, unusedExceptions } = scanPackageScripts(ROOT);
+  const { findings, unusedExceptions } = scanRepository(ROOT);
   const enforced = findings.filter(({ file, line }) =>
     guardEnforcesLine({ guard: GUARD, file, line }),
   );
-  for (const { file, line, script, program, runs } of enforced) {
-    switch (runs) {
-      case NODE:
-        console.error(
-          `${file}:${line}: scripts.${script} starts ${program} on Node; run it as \`bun --bun ${program}\``,
-        );
-        break;
-      case SCRIPT:
-        console.error(
-          `${file}:${line}: scripts.${script} runs the package script ${program}, not the executable; run it as \`bunx --bun ${program}\``,
-        );
-        break;
-      case BUN:
-        break;
-      default:
-        runs satisfies never;
-        panic(`unknown runner ${String(runs)}`);
-    }
-  }
-  for (const program of unusedExceptions) {
+  for (const finding of enforced) {
     console.error(
-      `scripts/check-bun-runtime.ts: no package script starts ${program} on Node; remove its exception`,
+      `${finding.file}:${finding.line}: ${finding.where} starts ${finding.program} on Node; ${fix(finding)}`,
+    );
+  }
+  for (const key of unusedExceptions) {
+    console.error(
+      `scripts/check-bun-runtime.ts: nothing starts ${key} on Node any more; remove its exception`,
     );
   }
   process.exitCode = enforced.length + unusedExceptions.length > 0 ? 1 : 0;
