@@ -7,7 +7,10 @@ import {
   type ConversionContent,
   conversionContent,
 } from "@/api/lib/files/conversion-content";
-import type { ConvertibleMime } from "@/api/lib/files/pdf-derivative-policy";
+import {
+  type ConvertibleMime,
+  isConvertibleMimeType,
+} from "@/api/lib/files/pdf-derivative-policy";
 import {
   compoundFileWithStreams,
   iworkPackage,
@@ -85,15 +88,20 @@ const SAMPLES = {
   () => Promise<Uint8Array> | Uint8Array
 >;
 
+const SAMPLE_TYPES: readonly ConvertibleMime[] = Object.keys(SAMPLES).filter(
+  isConvertibleMimeType,
+);
+
 describe("conversion content", () => {
-  test.each(Object.entries(SAMPLES))(
+  test("has a sample of every convertible type", () => {
+    expect(SAMPLE_TYPES).toHaveLength(Object.keys(SAMPLES).length);
+  });
+
+  test.each(SAMPLE_TYPES)(
     "%s converts when its bytes are that format",
-    async (mime, build) => {
+    async (mime) => {
       expect(
-        await contentMatchesConvertibleMime(
-          mime as keyof typeof SAMPLES,
-          await build(),
-        ),
+        await contentMatchesConvertibleMime(mime, await SAMPLES[mime]()),
       ).toBe(true);
     },
   );
@@ -116,8 +124,7 @@ describe("conversion content", () => {
     "%s converts under its own type only",
     async (_name, build, ownType: ConvertibleMime | null) => {
       const bytes = await build();
-      for (const [mime] of Object.entries(SAMPLES)) {
-        const declared = mime as keyof typeof SAMPLES;
+      for (const declared of SAMPLE_TYPES) {
         // Plain text and CSV convert any content; tested below.
         if (declared === "text/plain" || declared === "text/csv") {
           continue;

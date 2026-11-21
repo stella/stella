@@ -236,10 +236,13 @@ const ooxmlContent = (
   if (Result.isError(mainContentType)) {
     return "unrecognised";
   }
-  const [, openXmlFamily, macroFamily] =
-    OOXML_MAIN_CONTENT_TYPE.exec(
-      mainContentType.value?.trim().toLowerCase() ?? "",
-    ) ?? [];
+  const main = OOXML_MAIN_CONTENT_TYPE.exec(
+    mainContentType.value?.trim().toLowerCase() ?? "",
+  );
+  if (main === null) {
+    return "unrecognised";
+  }
+  const [, openXmlFamily, macroFamily] = main;
   return (
     OOXML_FAMILY_CONTENT.get(openXmlFamily ?? macroFamily ?? "") ??
     "unrecognised"
