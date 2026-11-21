@@ -1,0 +1,59 @@
+[
+  {
+    "name": "a dictated word is written as learned",
+    "text": "Poslal jsem to dvorakovi včera.",
+    "fixes": [{ "from": "dvorakovi", "to": "Dvořákovi" }],
+    "expected": "Poslal jsem to Dvořákovi včera."
+  },
+  {
+    "name": "the match ignores case and keeps a sentence's capital",
+    "text": "Novacek přijde zítra.",
+    "fixes": [{ "from": "novacek", "to": "nováček" }],
+    "expected": "Nováček přijde zítra."
+  },
+  {
+    "name": "the longest phrase wins over one of its words",
+    "text": "Ask jon smith and smith.",
+    "fixes": [
+      { "from": "smith", "to": "Smyth" },
+      { "from": "jon smith", "to": "Jon Smyth" }
+    ],
+    "expected": "Ask Jon Smyth and Smyth."
+  },
+  {
+    "name": "only whole words change",
+    "text": "kubicek and kubicekova",
+    "fixes": [{ "from": "kubicek", "to": "Kubíček" }],
+    "expected": "Kubíček and kubicekova"
+  },
+  {
+    "name": "a hyphenated word is one word",
+    "text": "Novak-Hill signed.",
+    "fixes": [{ "from": "novak", "to": "Novák" }],
+    "expected": "Novak-Hill signed."
+  },
+  {
+    "name": "punctuation between the words of a phrase stops it",
+    "text": "jon, smith",
+    "fixes": [{ "from": "jon smith", "to": "Jon Smyth" }],
+    "expected": "jon, smith"
+  },
+  {
+    "name": "spaces between the words of a phrase are taken with it",
+    "text": "call jon  smith now",
+    "fixes": [{ "from": "jon smith", "to": "Jon Smyth" }],
+    "expected": "call Jon Smyth now"
+  },
+  {
+    "name": "a curly apostrophe matches a straight one",
+    "text": "o’brien called",
+    "fixes": [{ "from": "o'brien", "to": "O'Brien" }],
+    "expected": "O'Brien called"
+  },
+  {
+    "name": "no fixes leave the text alone",
+    "text": "Nothing to change here.",
+    "fixes": [],
+    "expected": "Nothing to change here."
+  }
+]

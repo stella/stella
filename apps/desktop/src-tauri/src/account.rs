@@ -1184,6 +1184,9 @@ pub async fn account_disconnect(
   if let Some(account) = &account {
     crate::transcribe_history::erase_account(&app, account.local_data_namespace())
       .await;
+    // So do the learned dictation fixes kept here; the server keeps the
+    // member's own list.
+    crate::dictation_learned::erase_account(&account.local_data_namespace());
   }
   *BROWSER_CONNECTION
     .lock()

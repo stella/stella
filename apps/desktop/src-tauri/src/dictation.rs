@@ -41,6 +41,7 @@ use crate::{
   dictation_app_settings::{self, AppSetting, RecentApp},
   dictation_cloud::{self, CloudModels, Destination},
   dictation_context::{self, Sharing},
+  dictation_fix,
   dictation_focus::{self, FocusTarget},
   dictation_hold_key::{self, Action, Gesture, HoldChoice},
   dictation_language::{self, Choice, LanguageSnapshot},
@@ -73,6 +74,9 @@ const SOUNDS_PREFERENCE_FILE_NAME: &str = "dictation-sounds";
 /// On unless the user turned it off: a shortcut types the last dictation
 /// again.
 const RETYPE_SHORTCUT_PREFERENCE_FILE_NAME: &str = "dictation-retype-shortcut";
+/// On unless the user turned it off: a shortcut opens the panel that fixes
+/// the words of a dictation.
+const FIX_SHORTCUT_PREFERENCE_FILE_NAME: &str = "dictation-fix-shortcut";
 /// The key dictation listens for; absent: this computer's default.
 const HOLD_KEY_PREFERENCE_FILE_NAME: &str = "dictation-hold-key";
 const MAX_MODEL_ID_BYTES: usize = 128;
@@ -233,11 +237,15 @@ pub struct DictationSnapshot {
   retype_shortcut: bool,
   retype_keys: ShortcutKeys,
   retype_shortcut_taken: bool,
+  /// The same for the shortcut that fixes a dictation's words.
+  fix_shortcut: bool,
+  fix_keys: ShortcutKeys,
+  fix_shortcut_taken: bool,
 }
 
-/// Whether the shortcut that types the last dictation again is registered.
+/// Whether one of dictation's own shortcuts is registered.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum RetypeListening {
+enum ShortcutListening {
   None,
   Registered,
   /// The OS refused it: another app holds the combination.
@@ -277,7 +285,9 @@ struct Inner {
   hold_key_waiting: bool,
   listening: Listening,
   retype_shortcut: bool,
-  retype_listening: RetypeListening,
+  retype_listening: ShortcutListening,
+  fix_shortcut: bool,
+  fix_listening: ShortcutListening,
   /// Only in memory, and only while clipboard history holds it.
   last: Option<LastDictation>,
   /// Forgets the last dictation once clipboard history no longer holds it.
@@ -316,6 +326,10 @@ impl DictationState {
     )
     .read()
     .as_deref()
+      != Some(DISABLED_VALUE);
+    let fix_shortcut = DevicePreference::in_app_data(FIX_SHORTCUT_PREFERENCE_FILE_NAME)
+      .read()
+      .as_deref()
       != Some(DISABLED_VALUE);
     let shared = |file_name: &str| {
       DevicePreference::in_app_data(file_name).read().as_deref() == Some(ENABLED_VALUE)
@@ -371,7 +385,9 @@ impl DictationState {
       hold_key_waiting: false,
       listening: Listening::None,
       retype_shortcut,
-      retype_listening: RetypeListening::None,
+      retype_listening: ShortcutListening::None,
+      fix_shortcut,
+      fix_listening: ShortcutListening::None,
       last: None,
       history_listener: None,
       listener_generation: 0,
@@ -421,7 +437,10 @@ impl DictationState {
       hold_key_waiting: inner.hold_key_waiting,
       retype_shortcut: inner.retype_shortcut,
       retype_keys: ShortcutKeys::of(&dictation_retype::shortcut()),
-      retype_shortcut_taken: inner.retype_listening == RetypeListening::Taken,
+      retype_shortcut_taken: inner.retype_listening == ShortcutListening::Taken,
+      fix_shortcut: inner.fix_shortcut,
+      fix_keys: ShortcutKeys::of(&dictation_fix::shortcut()),
+      fix_shortcut_taken: inner.fix_listening == ShortcutListening::Taken,
     }
   }
 
@@ -1002,6 +1021,50 @@ fn listen_for_hold_key(
   Listening::None
 }
 
+/// The tray's "fix last dictation".
+pub fn fix_from_tray(app: &AppHandle) {
+  dictation_fix::request(app, Request::Tray);
+}
+
+fn on_fix_shortcut(app: &AppHandle, _shortcut: &Shortcut, event: ShortcutEvent) {
+  if event.state == ShortcutState::Pressed {
+    dictation_fix::request(app, Request::Shortcut);
+  }
+}
+
+/// Registers the shortcut that fixes a dictation's words, while the speaker
+/// wants it.
+fn listen_for_fix(app: &AppHandle) {
+  if !app
+    .state::<DictationState>()
+    .update(|inner| inner.fix_shortcut)
+  {
+    return;
+  }
+  let listening = match app
+    .global_shortcut()
+    .on_shortcut(dictation_fix::shortcut(), on_fix_shortcut)
+  {
+    Ok(()) => ShortcutListening::Registered,
+    Err(error) => {
+      tracing::warn!(%error, "dictation fix shortcut could not be registered");
+      ShortcutListening::Taken
+    }
+  };
+  change(app, |inner| inner.fix_listening = listening);
+}
+
+fn unlisten_fix(app: &AppHandle) {
+  let listening = change(app, |inner| {
+    std::mem::replace(&mut inner.fix_listening, ShortcutListening::None)
+  });
+  if listening == ShortcutListening::Registered
+    && let Err(error) = app.global_shortcut().unregister(dictation_fix::shortcut())
+  {
+    tracing::warn!(%error, "dictation fix shortcut could not be released");
+  }
+}
+
 fn on_retype_shortcut(app: &AppHandle, _shortcut: &Shortcut, event: ShortcutEvent) {
   if event.state == ShortcutState::Pressed {
     request_retype(app, Request::Shortcut);
@@ -1021,10 +1084,10 @@ fn listen_for_retype(app: &AppHandle) {
     .global_shortcut()
     .on_shortcut(dictation_retype::shortcut(), on_retype_shortcut)
   {
-    Ok(()) => RetypeListening::Registered,
+    Ok(()) => ShortcutListening::Registered,
     Err(error) => {
       tracing::warn!(%error, "dictation retype shortcut could not be registered");
-      RetypeListening::Taken
+      ShortcutListening::Taken
     }
   };
   change(app, |inner| inner.retype_listening = listening);
@@ -1032,9 +1095,9 @@ fn listen_for_retype(app: &AppHandle) {
 
 fn unlisten_retype(app: &AppHandle) {
   let listening = change(app, |inner| {
-    std::mem::replace(&mut inner.retype_listening, RetypeListening::None)
+    std::mem::replace(&mut inner.retype_listening, ShortcutListening::None)
   });
-  if listening == RetypeListening::Registered
+  if listening == ShortcutListening::Registered
     && let Err(error) = app
       .global_shortcut()
       .unregister(dictation_retype::shortcut())
@@ -1070,6 +1133,10 @@ fn start(app: &AppHandle) {
   }
   listen(app);
   listen_for_retype(app);
+  listen_for_fix(app);
+  // Learned fixes made on the speaker's other devices, and any made here
+  // while offline.
+  crate::dictation_learned::sync_soon(app);
   let history_app = app.clone();
   let history_listener = app.listen(crate::clipboard::HISTORY_EVENT, move |_event| {
     forget_last_unless_held(&history_app);
@@ -1080,6 +1147,7 @@ fn start(app: &AppHandle) {
 fn stop(app: &AppHandle) {
   unlisten(app);
   unlisten_retype(app);
+  unlisten_fix(app);
   // Dropping the sender ends the engine thread and with it the worker.
   let history_listener = change(app, |inner| {
     inner.commands = None;
@@ -1200,6 +1268,33 @@ pub fn dictation_set_sounds(
     stored_switch(enabled),
     |inner| inner.sounds = enabled,
   )?;
+  Ok(read_snapshot(&app, &state))
+}
+
+/// Whether a shortcut opens the panel that fixes a dictation's words.
+/// Applies at once while dictation runs.
+#[tauri::command]
+pub fn dictation_set_fix_shortcut(
+  app: AppHandle,
+  state: State<'_, DictationState>,
+  enabled: bool,
+) -> Result<DictationSnapshot, String> {
+  if !available(&app) {
+    return Err("dictation is not available on this computer".to_string());
+  }
+  let changed = change_preference(
+    &app,
+    FIX_SHORTCUT_PREFERENCE_FILE_NAME,
+    stored_switch(enabled),
+    |inner| std::mem::replace(&mut inner.fix_shortcut, enabled) != enabled,
+  )?;
+  if changed && state.update(|inner| inner.commands.is_some()) {
+    if enabled {
+      listen_for_fix(&app);
+    } else {
+      unlisten_fix(&app);
+    }
+  }
   Ok(read_snapshot(&app, &state))
 }
 
@@ -1694,7 +1789,9 @@ mod tests {
       hold_key_waiting: false,
       listening: Listening::None,
       retype_shortcut: true,
-      retype_listening: RetypeListening::None,
+      retype_listening: ShortcutListening::None,
+      fix_shortcut: true,
+      fix_listening: ShortcutListening::None,
       last: None,
       history_listener: None,
       listener_generation: 0,
@@ -1713,10 +1810,27 @@ mod tests {
       snapshot["retypeKeys"],
       serde_json::to_value(ShortcutKeys::of(&dictation_retype::shortcut())).unwrap()
     );
-    state.update(|inner| inner.retype_listening = RetypeListening::Taken);
+    state.update(|inner| inner.retype_listening = ShortcutListening::Taken);
     let taken =
       serde_json::to_value(state.snapshot(true, false, Vec::new(), true)).unwrap();
     assert_eq!(taken["retypeShortcutTaken"], true);
+  }
+
+  #[test]
+  fn the_fix_shortcut_is_on_and_names_its_keys() {
+    let state = state(true);
+    let snapshot =
+      serde_json::to_value(state.snapshot(true, false, Vec::new(), true)).unwrap();
+    assert_eq!(snapshot["fixShortcut"], true);
+    assert_eq!(snapshot["fixShortcutTaken"], false);
+    assert_eq!(
+      snapshot["fixKeys"],
+      serde_json::to_value(ShortcutKeys::of(&dictation_fix::shortcut())).unwrap()
+    );
+    state.update(|inner| inner.fix_listening = ShortcutListening::Taken);
+    let taken =
+      serde_json::to_value(state.snapshot(true, false, Vec::new(), true)).unwrap();
+    assert_eq!(taken["fixShortcutTaken"], true);
   }
 
   #[test]

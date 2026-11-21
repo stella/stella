@@ -605,6 +605,30 @@
       "transcription": "Prevod zlyhal. Skúste to znova."
     },
     "failureKeptInHistory": "Text nájdete v histórii schránky.",
+    "fix": {
+      "description": "Označte v ľubovoľnej aplikácii slová, ktoré diktát napísal zle, a stlačte {shortcut}. Potom napíšete, ako sa píšu. stella prečíta označený text, len keď skratku stlačíte.",
+      "taken": "Skratku {shortcut} používa iná aplikácia. To isté ponúka ponuka Diktovanie pri ikone aplikácie stella.",
+      "title": "Skratka na opravu diktátu"
+    },
+    "fixPanel": {
+      "cancel": "Zrušiť",
+      "dictatedAs": "Nadiktované ako",
+      "hint": "stella tieto slová v ďalších diktátoch napíše takto, na všetkých vašich zariadeniach.",
+      "notSaved": "Opravu sa nepodarilo uložiť. Skontrolujte, či je stella pripojená k vášmu účtu.",
+      "nothing": "Najprv v aplikácii označte chybné slová alebo ich napíšte sem.",
+      "pick": "Vyberte chybné slová z posledného diktátu:",
+      "refused": {
+        "empty": "Vyplňte obe polia.",
+        "lineBreak": "Oprava je jeden riadok textu.",
+        "same": "Slová sú už napísané takto.",
+        "tooLong": "Na jednu opravu je to príliš dlhé.",
+        "tooManyWords": "Oprava môže mať najviac tri slová."
+      },
+      "save": "Uložiť",
+      "saving": "Ukladá sa…",
+      "title": "Opraviť nadiktované slovo",
+      "writtenAs": "Správne"
+    },
     "groups": {
       "cleanup": "Úprava",
       "shortcut": "Skratka",
@@ -625,6 +649,18 @@
       "description": "Automaticky sa použijú jazyky zobrazenia a klávesníc tohto počítača. Ak ich je viac, každé slovo sa rozpozná v jazyku, v ktorom ho vyslovíte.",
       "noResults": "Nenašli sa žiadne jazyky",
       "title": "Jazyk diktovania"
+    },
+    "learned": {
+      "delete": "Vymazať, čo sa stella naučila",
+      "description": "Keď nadiktované slovo opravíte dvakrát rovnako alebo ho opravíte skratkou {shortcut}, stella ho v ďalších diktátoch napíše takto. Synchronizuje sa do vašich ďalších zariadení; vidíte ich len vy.",
+      "empty": "Zatiaľ žiadne naučené opravy.",
+      "failed": "Zmenu sa nepodarilo uložiť.",
+      "fix": "{from} → {to}",
+      "group": "Naučené opravy",
+      "retry": "Skúsiť znova",
+      "title": "Opravy naučené z vašich úprav",
+      "unreadable": "To, čo sa stella naučila, sa nedá načítať.",
+      "working": "Ukladá sa…"
     },
     "lede": "Podržte <key>{shortcut}</key> a hovorte. Text sa zobrazí tam, kde píšete.",
     "microphone": {
@@ -1256,6 +1292,7 @@
     "activityResume": "Pokračovať v zázname",
     "checkForUpdates": "Skontrolovať aktualizácie",
     "dictation": "Diktovanie",
+    "dictationFix": "Opraviť posledný diktát…",
     "dictationHint": "Na diktovanie podržte {key}",
     "dictationRetype": "Napísať posledný diktát znova",
     "dictationSettings": "Nastavenia diktovania…",

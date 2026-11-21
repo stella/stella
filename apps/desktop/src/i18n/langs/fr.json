@@ -605,6 +605,30 @@
       "transcription": "La transcription a échoué. Réessayez."
     },
     "failureKeptInHistory": "Le texte se trouve dans l’historique du presse-papiers.",
+    "fix": {
+      "description": "Sélectionnez dans n’importe quelle app les mots qu’une dictée a mal écrits et appuyez sur {shortcut} pour indiquer leur orthographe. stella lit la sélection uniquement quand vous appuyez sur le raccourci.",
+      "taken": "Une autre app utilise {shortcut}. Le menu Dictée de l’icône stella propose la même chose.",
+      "title": "Raccourci pour corriger une dictée"
+    },
+    "fixPanel": {
+      "cancel": "Annuler",
+      "dictatedAs": "Dicté",
+      "hint": "stella écrira ces mots ainsi dans vos prochaines dictées, sur tous vos appareils.",
+      "notSaved": "La correction n’a pas pu être enregistrée. Vérifiez que stella est connecté à votre compte.",
+      "nothing": "Sélectionnez d’abord les mots erronés dans l’app, ou saisissez-les ici.",
+      "pick": "Choisissez les mots erronés de votre dernière dictée :",
+      "refused": {
+        "empty": "Remplissez les deux champs.",
+        "lineBreak": "Une correction tient sur une seule ligne.",
+        "same": "Les mots sont déjà écrits ainsi.",
+        "tooLong": "C’est trop long pour une correction.",
+        "tooManyWords": "Une correction compte au plus trois mots."
+      },
+      "save": "Enregistrer",
+      "saving": "Enregistrement…",
+      "title": "Corriger un mot dicté",
+      "writtenAs": "Orthographe correcte"
+    },
     "groups": {
       "cleanup": "Correction",
       "shortcut": "Raccourci",
@@ -625,6 +649,18 @@
       "description": "Automatique utilise les langues d’affichage et de clavier de cet ordinateur. S’il y en a plusieurs, chaque mot est reconnu dans la langue où vous le prononcez.",
       "noResults": "Aucune langue trouvée",
       "title": "Langue de dictée"
+    },
+    "learned": {
+      "delete": "Supprimer ce que stella a appris",
+      "description": "Quand vous corrigez un mot dicté deux fois de la même façon, ou avec {shortcut}, stella l’écrit ainsi dans les dictées suivantes. Synchronisé avec vos autres appareils ; vous seul les voyez.",
+      "empty": "Aucune correction apprise pour l’instant.",
+      "failed": "La modification n’a pas pu être enregistrée.",
+      "fix": "{from} → {to}",
+      "group": "Corrections apprises",
+      "retry": "Réessayer",
+      "title": "Corrections apprises de vos modifications",
+      "unreadable": "Ce que stella a appris n’a pas pu être lu.",
+      "working": "Enregistrement…"
     },
     "lede": "Maintenez <key>{shortcut}</key> et parlez. Le texte apparaît là où vous écrivez.",
     "microphone": {
@@ -1256,6 +1292,7 @@
     "activityResume": "Reprendre l’enregistrement",
     "checkForUpdates": "Vérifier les mises à jour",
     "dictation": "Dictée",
+    "dictationFix": "Corriger la dernière dictée…",
     "dictationHint": "Maintenez {key} pour dicter",
     "dictationRetype": "Retaper la dernière dictée",
     "dictationSettings": "Réglages de la dictée…",

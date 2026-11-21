@@ -605,6 +605,30 @@
       "transcription": "Die Umwandlung ist fehlgeschlagen. Versuchen Sie es erneut."
     },
     "failureKeptInHistory": "Der Text ist im Zwischenablageverlauf.",
+    "fix": {
+      "description": "Markieren Sie in einer beliebigen App die Wörter, die ein Diktat falsch geschrieben hat, und drücken Sie {shortcut}, um die richtige Schreibweise einzugeben. stella liest die Markierung nur, wenn Sie das Kürzel drücken.",
+      "taken": "Eine andere App verwendet {shortcut}. Das Menü Diktieren am stella-Symbol bietet dasselbe.",
+      "title": "Tastenkürzel zum Korrigieren eines Diktats"
+    },
+    "fixPanel": {
+      "cancel": "Abbrechen",
+      "dictatedAs": "Diktiert als",
+      "hint": "stella schreibt diese Wörter in Ihren nächsten Diktaten so, auf allen Ihren Geräten.",
+      "notSaved": "Die Korrektur konnte nicht gespeichert werden. Prüfen Sie, ob stella mit Ihrem Konto verbunden ist.",
+      "nothing": "Markieren Sie zuerst die falschen Wörter in der App oder geben Sie sie hier ein.",
+      "pick": "Wählen Sie die falschen Wörter aus Ihrem letzten Diktat:",
+      "refused": {
+        "empty": "Füllen Sie beide Felder aus.",
+        "lineBreak": "Eine Korrektur ist eine Textzeile.",
+        "same": "Die Wörter sind bereits so geschrieben.",
+        "tooLong": "Das ist für eine Korrektur zu lang.",
+        "tooManyWords": "Eine Korrektur umfasst höchstens drei Wörter."
+      },
+      "save": "Speichern",
+      "saving": "Wird gespeichert…",
+      "title": "Diktiertes Wort korrigieren",
+      "writtenAs": "Richtig geschrieben"
+    },
     "groups": {
       "cleanup": "Überarbeitung",
       "shortcut": "Tastenkürzel",
@@ -625,6 +649,18 @@
       "description": "Automatisch verwendet die Sprachen der Anzeige und Tastaturen dieses Computers. Sind es mehrere, wird jedes Wort in der Sprache erkannt, in der Sie es sprechen.",
       "noResults": "Keine Sprachen gefunden",
       "title": "Diktiersprache"
+    },
+    "learned": {
+      "delete": "Gelerntes löschen",
+      "description": "Wenn Sie ein diktiertes Wort zweimal gleich korrigieren oder mit {shortcut} korrigieren, schreibt stella es in späteren Diktaten so. Wird mit Ihren anderen Geräten synchronisiert; nur Sie sehen es.",
+      "empty": "Noch nichts gelernt.",
+      "failed": "Die Änderung konnte nicht gespeichert werden.",
+      "fix": "{from} → {to}",
+      "group": "Gelernte Korrekturen",
+      "retry": "Erneut versuchen",
+      "title": "Aus Ihren Korrekturen gelernt",
+      "unreadable": "Was stella gelernt hat, konnte nicht gelesen werden.",
+      "working": "Wird gespeichert…"
     },
     "lede": "Halten Sie <key>{shortcut}</key> gedrückt und sprechen Sie. Der Text erscheint dort, wo Sie gerade schreiben.",
     "microphone": {
@@ -1256,6 +1292,7 @@
     "activityResume": "Aufzeichnung fortsetzen",
     "checkForUpdates": "Nach Aktualisierungen suchen",
     "dictation": "Diktieren",
+    "dictationFix": "Letztes Diktat korrigieren…",
     "dictationHint": "Zum Diktieren {key} gedrückt halten",
     "dictationRetype": "Letztes Diktat erneut eingeben",
     "dictationSettings": "Diktiereinstellungen…",

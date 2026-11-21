@@ -50,6 +50,7 @@ import { DictationCustomWords } from "./DictationCustomWords";
 import { DictationDestination } from "./DictationDestination";
 import type { DictationDestinationValue } from "./DictationDestination";
 import { DictationInputFix } from "./DictationInputFix";
+import { DictationLearnedFixes } from "./DictationLearnedFixes";
 import { DictationMicrophoneRow } from "./DictationMicrophone";
 import { DictationWhileDictatingRows } from "./DictationWhileDictating";
 import type { WhileDictating } from "./DictationWhileDictating";
@@ -118,6 +119,11 @@ export type DictationSnapshot = {
     | null;
   /** Whether the failed dictation's text is in clipboard history. */
   failureKeptInHistory: boolean;
+  /** Whether a shortcut opens the panel that fixes a dictation's words,
+   *  its keys, and whether another app holds them. */
+  fixKeys: ShortcutKeys;
+  fixShortcut: boolean;
+  fixShortcutTaken: boolean;
   /** The key dictation listens for, and what this computer offers. */
   holdKey: HoldKey;
   holdKeys: HoldKey[];
@@ -548,6 +554,14 @@ const DictationPage = ({
             onChange={setCustomWords}
             words={snapshot.customWords}
           />
+          <DictationLearnedFixes
+            shortcut={formatShortcut({
+              keys: snapshot.fixKeys,
+              layout,
+              locale,
+              platform: DESKTOP_PLATFORM,
+            })}
+          />
           {/* With stella AI the model is not needed, but a downloaded one
               can still be removed. */}
           {(snapshot.destination === "local" ||
@@ -640,6 +654,19 @@ const DictationShortcutSection = ({
           platform: DESKTOP_PLATFORM,
         })}
         taken={snapshot.retypeShortcutTaken}
+      />
+      <DictationFixRow
+        checked={snapshot.fixShortcut}
+        onChange={(enabled) => {
+          change("dictation_set_fix_shortcut", { enabled });
+        }}
+        shortcut={formatShortcut({
+          keys: snapshot.fixKeys,
+          layout,
+          locale,
+          platform: DESKTOP_PLATFORM,
+        })}
+        taken={snapshot.fixShortcutTaken}
       />
     </SettingsSection>
   );
@@ -797,6 +824,41 @@ const DictationRetypeRow = ({
           : t("description", { shortcut })
       }
       id="dictation-retype"
+      title={t("title")}
+    >
+      <Switch
+        aria-describedby={ids.description}
+        aria-labelledby={ids.label}
+        checked={checked}
+        onCheckedChange={onChange}
+      />
+    </SettingsRow>
+  );
+};
+
+/** The shortcut that opens the panel fixing a dictation's words; the tray
+ *  offers the same whether or not it is on. */
+const DictationFixRow = ({
+  checked,
+  onChange,
+  shortcut,
+  taken,
+}: {
+  checked: boolean;
+  onChange: (enabled: boolean) => void;
+  shortcut: string;
+  taken: boolean;
+}) => {
+  const t = useTranslations("dictation.fix");
+  const ids = settingsRowIds("dictation-fix");
+  return (
+    <SettingsRow
+      description={
+        checked && taken
+          ? t("taken", { shortcut })
+          : t("description", { shortcut })
+      }
+      id="dictation-fix"
       title={t("title")}
     >
       <Switch

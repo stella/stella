@@ -605,6 +605,30 @@
       "transcription": "Transcription failed. Try again."
     },
     "failureKeptInHistory": "The text is in clipboard history.",
+    "fix": {
+      "description": "Select the words a dictation got wrong in any app and press {shortcut} to write how they are spelled. stella reads the selection only when you press it.",
+      "taken": "Another app is using {shortcut}. The Dictation menu of the stella icon offers the same.",
+      "title": "Shortcut to fix a dictation"
+    },
+    "fixPanel": {
+      "cancel": "Cancel",
+      "dictatedAs": "Dictated as",
+      "hint": "stella will write these words this way in your next dictations, on all your devices.",
+      "notSaved": "The fix could not be saved. Check that stella is connected to your account.",
+      "nothing": "Select the wrong words in the app first, or type them here.",
+      "pick": "Pick the wrong words from your last dictation:",
+      "refused": {
+        "empty": "Fill in both fields.",
+        "lineBreak": "A fix is one line of text.",
+        "same": "The words are already written this way.",
+        "tooLong": "That is too long for one fix.",
+        "tooManyWords": "A fix takes at most three words."
+      },
+      "save": "Save",
+      "saving": "Saving…",
+      "title": "Fix a dictated word",
+      "writtenAs": "Written as"
+    },
     "groups": {
       "cleanup": "Clean up",
       "shortcut": "Shortcut",
@@ -625,6 +649,18 @@
       "description": "Automatic uses this computer’s display and keyboard languages. With more than one, each word is recognized in the language you speak it in.",
       "noResults": "No languages found",
       "title": "Dictation language"
+    },
+    "learned": {
+      "delete": "Delete what stella learned",
+      "description": "When you correct a dictated word the same way twice, or fix it with {shortcut}, stella writes it that way in later dictations. Synced to your other devices; only you can see them.",
+      "empty": "No fixes learned yet.",
+      "failed": "The change could not be saved.",
+      "fix": "{from} → {to}",
+      "group": "Learned fixes",
+      "retry": "Try again",
+      "title": "Fixes learned from your corrections",
+      "unreadable": "What stella learned could not be read.",
+      "working": "Saving…"
     },
     "lede": "Hold <key>{shortcut}</key> and speak. The text appears where you are typing.",
     "microphone": {
@@ -1256,6 +1292,7 @@
     "activityResume": "Resume recording",
     "checkForUpdates": "Check for updates",
     "dictation": "Dictation",
+    "dictationFix": "Fix last dictation…",
     "dictationHint": "Hold {key} to dictate",
     "dictationRetype": "Type last dictation again",
     "dictationSettings": "Dictation settings…",
