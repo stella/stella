@@ -482,7 +482,7 @@ export default eslintCompatPlugin({
         return {
           before() {
             const text = context.sourceCode.text;
-            return text.includes("<select") || text.includes("Select");
+            return /<\s*select\b|Select/u.test(text);
           },
           Program(program) {
             selectLocals = new Set();
