@@ -605,8 +605,10 @@ test.each([".asice", ".asics"])(
     ).toBeTruthy();
     // A converted document reads as formatted text, never as its Markdown
     // source; a text file keeps its characters and line breaks as written.
+    // The Markdown renderer loads on first use, so the heading may follow
+    // the member list by a render.
     expect(
-      mounted.getByRole("heading", { name: "Share purchase agreement" }),
+      await mounted.findByRole("heading", { name: "Share purchase agreement" }),
     ).toBeTruthy();
     expect(mounted.getByText("2. Purchase price")).toBeTruthy();
     expect(mounted.getByText("The enclosed submission")).toBeTruthy();
