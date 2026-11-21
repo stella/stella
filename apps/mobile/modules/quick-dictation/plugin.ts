@@ -135,7 +135,7 @@ const STRING_CATALOG_TYPE = "text.json.xcstrings";
  * has no folder of its own, so its files are named from the project's
  * root; the extension's group is its folder.
  */
-export const addQuickDictationFiles = (
+const addQuickDictationFiles = (
   project: XcodeProject,
   { appGroup, widgetsTarget }: { appGroup: string; widgetsTarget: string },
 ) => {
