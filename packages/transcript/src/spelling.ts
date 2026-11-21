@@ -1,10 +1,10 @@
 /**
  * Spells custom words and a matter's names the way they are written after a
  * transcript comes back. The twin of the desktop's local spelling pass
- * (`apps/desktop/src-tauri/src/dictation_spelling.rs`), so the same words
- * change the same way, with one addition: a Czech or Slovak case ending,
- * or an English possessive, on a name keeps the ending, so "dvoraka" of
- * "Dvořák" reads "Dvořáka".
+ * (`apps/desktop/src-tauri/src/dictation_spelling.rs`): both pass the cases
+ * in `spelling.fixtures.json`, so the same words change the same way. A
+ * Czech or Slovak case ending, or an English possessive, on a name keeps
+ * the ending, so "dvoraka" of "Dvořák" reads "Dvořáka".
  *
  * A word or phrase is replaced only when it is close to one custom word and
  * to no other: the same letters with other case, diacritics, apostrophes or
