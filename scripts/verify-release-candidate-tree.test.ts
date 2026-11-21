@@ -124,7 +124,7 @@ const withCandidate = (
     verify(
       Bun.spawnSync(
         [
-          "node",
+          process.execPath,
           verifier,
           git(directory, "merge-base", candidate, "main"),
           candidate,
@@ -424,7 +424,7 @@ const GITHUB_SIGNATURE = {
 
 // Answers the verifier's signature query from the recorded fixture, as the
 // GitHub CLI would. The fixture's path is written into the stub itself.
-const fakeGithubCli = (signaturesPath: string) => `#!/usr/bin/env node
+const fakeGithubCli = (signaturesPath: string) => `#!/usr/bin/env bun
 const { readFileSync } = require("node:fs");
 const query = process.argv.find((arg) => arg.startsWith("query=")) ?? "";
 const signatures = JSON.parse(readFileSync(${JSON.stringify(signaturesPath)}, "utf8"));
@@ -595,7 +595,7 @@ const withReleaseRange = (
       );
     }
     verify(
-      Bun.spawnSync(["node", verifier, ...args], {
+      Bun.spawnSync([process.execPath, verifier, ...args], {
         cwd: directory,
         env: {
           ...environment,
@@ -766,7 +766,7 @@ test("every caller passes the full contract and a workflow token", async () => {
   const record = (value: unknown): value is Record<string, unknown> =>
     typeof value === "object" && value !== null && !Array.isArray(value);
   const invocation =
-    /\bnode\s+("[^"]*(?:tree_verifier|verify-release-candidate-tree)[^"]*")((?:\s+"[^"]*")*)(\s+--release-pr-head\s+"[^"]*")?/iu;
+    /\bbun\s+("[^"]*(?:tree_verifier|verify-release-candidate-tree)[^"]*")((?:\s+"[^"]*")*)(\s+--release-pr-head\s+"[^"]*")?/iu;
   const squashCallers: string[] = [];
   const files = git(root, "ls-files", ".github", "scripts")
     .split("\n")
