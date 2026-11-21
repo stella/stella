@@ -336,7 +336,7 @@ describe("new-device-login location", () => {
     expect(text).toMatchInlineSnapshot(`
       "NEW SIGN-IN TO YOUR ACCOUNT
 
-      A new device just signed in to your account.
+      Someone just signed in to your account from a new device or location.
 
       Device: Firefox on Linux
 
@@ -374,7 +374,7 @@ describe("new-device-login location", () => {
     expect(text).toMatchInlineSnapshot(`
       "NEW SIGN-IN TO YOUR ACCOUNT
 
-      A new device just signed in to your account.
+      Someone just signed in to your account from a new device or location.
 
       Device: Firefox on Linux
 

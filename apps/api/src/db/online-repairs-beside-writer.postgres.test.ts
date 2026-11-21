@@ -831,6 +831,19 @@ const SEEDS = {
     `INSERT INTO account_audit_logs (id, user_id, event_type, resource_id, group_id) VALUES ('${ID}', 'user', 'organization.created', 'org', '${ID_2}')`,
     { scoped: true },
   ),
+  session_sign_ins_location_check: noRowSeed(
+    "session_sign_ins",
+    "session_sign_ins_location_check",
+    `INSERT INTO session_sign_ins (session_id, location_kind) VALUES ('session', 'unknown')`,
+    {
+      parents: async (client) => {
+        await exec(client, [
+          FIXTURE_USER,
+          `INSERT INTO "session" (id, token, user_id, expires_at, updated_at) VALUES ('session', 'session-token', 'user', now() + interval '1 day', now())`,
+        ]);
+      },
+    },
+  ),
   "client-invoice-tenant-key": {
     kind: "no-row-work",
     tables: ["invoices"],

@@ -22,7 +22,7 @@
   },
   "newDeviceLogin": {
     "action": "Vaata sisselogitud seadmeid",
-    "body": "Teie kontole logiti just sisse uuest seadmest.",
+    "body": "Teie kontole logiti just sisse uuest seadmest või uuest asukohast.",
     "device": "Seade",
     "deviceName": {
       "browserOnOs": "{browser} operatsioonisüsteemis {os}",

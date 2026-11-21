@@ -22,7 +22,7 @@
   },
   "newDeviceLogin": {
     "action": "Sprawdź zalogowane urządzenia",
-    "body": "Na Twoje konto właśnie zalogowano się z nowego urządzenia.",
+    "body": "Na Twoje konto właśnie zalogowano się z nowego urządzenia lub nowej lokalizacji.",
     "device": "Urządzenie",
     "deviceName": {
       "browserOnOs": "{browser} w systemie {os}",
