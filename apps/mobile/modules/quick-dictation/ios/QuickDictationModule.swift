@@ -35,9 +35,11 @@ public class QuickDictationModule: Module {
       QuickDictationStore.save(Data(configuration.utf8))
     }
 
+    // The activity is ended first: ending it reads its name from the
+    // configuration this then clears.
     AsyncFunction("clear") { () async in
-      QuickDictationStore.clear()
       await QuickDictationSession.shared.cancel()
+      QuickDictationStore.clear()
     }
 
     AsyncFunction("phase") { () async -> String in

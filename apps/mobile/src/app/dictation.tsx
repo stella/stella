@@ -57,10 +57,26 @@ import type { QuickDictationText } from "@/state/quick-dictation";
 const DictationScreen = () => {
   const { state } = useSession();
   const [attempt, setAttempt] = useState(0);
+  // Whether the last try failed with the recording still here: it waits for
+  // a retry while the sheet is open, and goes as the sheet closes. A retry
+  // remounts the loader, so this outlives each try.
+  const failed = useRef(false);
+  useEffect(
+    () => () => {
+      if (failed.current) {
+        void discardQuickDictation().catch(() => undefined);
+      }
+    },
+    [],
+  );
   return state.status === "signed-in" ? (
     <DictationLoader
       key={attempt}
+      onFailed={() => {
+        failed.current = true;
+      }}
       onRetry={() => {
+        failed.current = false;
         setAttempt((count) => count + 1);
       }}
       source={state.source}
@@ -84,9 +100,11 @@ type Reading =
   | { readonly type: "failed"; readonly signedOut: boolean };
 
 const DictationLoader = ({
+  onFailed,
   onRetry,
   source,
 }: {
+  onFailed: () => void;
   onRetry: () => void;
   source: AccessTokenSource;
 }) => {
@@ -97,7 +115,12 @@ const DictationLoader = ({
   );
   return (
     <Suspense fallback={<Transcribing />}>
-      <LoadedDictation onRetry={onRetry} reading={reading} source={source} />
+      <LoadedDictation
+        onFailed={onFailed}
+        onRetry={onRetry}
+        reading={reading}
+        source={source}
+      />
     </Suspense>
   );
 };
@@ -116,10 +139,12 @@ const Transcribing = () => {
 };
 
 const LoadedDictation = ({
+  onFailed,
   onRetry,
   reading,
   source,
 }: {
+  onFailed: () => void;
   onRetry: () => void;
   reading: Promise<Reading>;
   source: AccessTokenSource;
@@ -137,16 +162,11 @@ const LoadedDictation = ({
     }
   }, [end, read, source]);
 
-  // A recording that could not be transcribed waits for a retry while the
-  // sheet is open, and goes as it closes.
-  useEffect(
-    () => () => {
-      if (failed) {
-        void discardQuickDictation().catch(() => undefined);
-      }
-    },
-    [failed],
-  );
+  useEffect(() => {
+    if (failed) {
+      onFailed();
+    }
+  }, [failed, onFailed]);
 
   const close = () => {
     router.back();
