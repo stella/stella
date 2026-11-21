@@ -115,6 +115,20 @@ type SkillEditorProps = {
   skillId: string;
 };
 
+const resolveSkillMetadataDraft = ({
+  draft,
+  next,
+  previous,
+}: {
+  draft: Parameters<typeof rebaseSkillMetadataDraft>[0]["draft"];
+  next: Parameters<typeof rebaseSkillMetadataDraft>[0]["next"];
+  previous:
+    Parameters<typeof rebaseSkillMetadataDraft>[0]["previous"] | undefined;
+}) =>
+  previous === undefined
+    ? skillMetadataDraft(next)
+    : rebaseSkillMetadataDraft({ draft, next, previous });
+
 export function SkillEditor({ skillId }: SkillEditorProps) {
   const t = useTranslations();
   const tSkills = useTranslations("knowledge.agentSkills");
@@ -195,21 +209,21 @@ export function SkillEditor({ skillId }: SkillEditorProps) {
   // render: fields the user has not edited follow it, unsaved edits in the
   // others survive. The command defaults to the slugified name, so it reads as
   // /skill-name until the user edits or clears it; it persists on blur.
-  if (detail.data && detail.data !== lastDetailData) {
-    setLastDetailData(detail.data);
-    const rebased =
-      lastDetailData === undefined
-        ? skillMetadataDraft(detail.data)
-        : rebaseSkillMetadataDraft({
-            draft: { command, description, enabled, invocation, name },
-            next: detail.data,
-            previous: lastDetailData,
-          });
-    setName(rebased.name);
-    setDescription(rebased.description);
-    setEnabled(rebased.enabled);
-    setInvocation(rebased.invocation);
-    setCommand(rebased.command);
+  const nextDetailData = detail.data ?? lastDetailData;
+  if (nextDetailData !== lastDetailData) {
+    setLastDetailData(nextDetailData);
+    if (nextDetailData !== undefined) {
+      const rebased = resolveSkillMetadataDraft({
+        draft: { command, description, enabled, invocation, name },
+        next: nextDetailData,
+        previous: lastDetailData,
+      });
+      setName(rebased.name);
+      setDescription(rebased.description);
+      setEnabled(rebased.enabled);
+      setInvocation(rebased.invocation);
+      setCommand(rebased.command);
+    }
   }
 
   const resources: SkillResource[] = detail.data ? detail.data.resources : [];
