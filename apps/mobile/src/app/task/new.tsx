@@ -168,6 +168,7 @@ const NewTaskForm = ({ source }: { source: AccessTokenSource }) => {
           value={name}
         />
         <DictateButton
+          field="task"
           matterId={matterId ?? undefined}
           onBusyChange={setDictating}
           onText={field.insert}
