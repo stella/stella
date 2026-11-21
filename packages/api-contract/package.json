@@ -125,6 +125,7 @@
     "./case-law-launch-readiness": "./src/case-law-launch-readiness.ts",
     "./case-law-reading-languages": "./src/case-law-reading-languages.ts",
     "./case-law-body-source": "./src/case-law-body-source.ts",
+    "./case-law-body-source-shape": "./src/case-law-body-source-shape.ts",
     "./case-law-judges": "./src/case-law-judges.ts",
     "./case-law-jurisdictions": "./src/case-law-jurisdictions.ts",
     "./case-law-source-languages": "./src/case-law-source-languages.ts",
