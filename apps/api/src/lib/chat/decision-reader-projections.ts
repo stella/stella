@@ -1,5 +1,6 @@
 import * as v from "valibot";
 
+import { decisionBodySourceSchema } from "@stll/api-contract/case-law-body-source";
 import { COURT_TIER_LABELS } from "@stll/api-contract/case-law-court-tiers";
 import { extractionWarningsSchema } from "@stll/api-contract/case-law-extraction-warnings";
 import {
@@ -11,11 +12,9 @@ import { PROVISION_LINK_STATUS_TYPES } from "@stll/api-contract/provision-link-s
 import { DECISION_PRIMARY_REFERENCE_TYPES } from "@stll/legal-ast/decision-identifier";
 import { blockSchema } from "@stll/legal-ast/document-ast";
 
-import { decisionBodySourceProjection } from "./decision-body-source-projection";
-
 const readerMetadataSchema = v.strictObject({
   extractionWarnings: extractionWarningsSchema,
-  bodySource: v.optional(decisionBodySourceProjection),
+  bodySource: v.optional(decisionBodySourceSchema),
   decisionId: v.string(),
   caseNumber: v.string(),
   caseNumberType: v.picklist(DECISION_PRIMARY_REFERENCE_TYPES),
