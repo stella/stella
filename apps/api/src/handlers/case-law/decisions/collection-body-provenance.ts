@@ -18,7 +18,7 @@ import { sortDeep } from "@/api/lib/sort-deep";
 import type { CollectionPublication } from "./compose-collection-document";
 
 type Contribution = CollectionPublicationProvenance["contribution"];
-export type BodyPublicationProvenance = CollectionPublicationProvenance & {
+type BodyPublicationProvenance = CollectionPublicationProvenance & {
   contribution: typeof COLLECTION_PUBLICATION_CONTRIBUTION.BODY;
 };
 

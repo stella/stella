@@ -40,7 +40,7 @@ import type {
   LoadedCollectionPublication,
 } from "./compose-collection-document";
 
-export const COLLECTION_DETAIL_MAX_BYTES = 1024 * 1024;
+const COLLECTION_DETAIL_MAX_BYTES = 1024 * 1024;
 const COLLECTION_SNAPSHOT_MAX_BYTES = 8 * 1024 * 1024;
 const COLLECTION_READ_MAX_BYTES = 32 * 1024 * 1024;
 const COLLECTION_READ_TIMEOUT_MS = 30_000;
@@ -103,7 +103,7 @@ type CollectionSelection = Awaited<
 >;
 type StoredCollectionPublication = CollectionSelection["rows"][number];
 
-export const collectionPublicationOf = (
+const collectionPublicationOf = (
   row: StoredCollectionPublication,
 ): CollectionPublication | null => {
   if (row.sourceUrl === null) {
