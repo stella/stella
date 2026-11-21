@@ -16,6 +16,8 @@ afterEach(() => {
 });
 
 afterAll(async () => {
+  // React work a last test left scheduled runs while the page still exists.
+  await act(async () => {});
   await GlobalRegistrator.unregister();
 });
 
