@@ -35,18 +35,22 @@ use crate::{
 
 /// The window hears how a save to a matter is getting on.
 const PROGRESS_EVENT: &str = "transcribe-save-progress";
-/// The most text a save takes: the transcript or the cleaned-up text.
+/// The most bytes of cleaned-up text a save takes.
 const MAX_TEXT_BYTES: usize = 8 * 1024 * 1024;
-const MAX_TITLE_CHARS: usize = 200;
-/// The contract's bounds on what a folder is filed with.
+const MAX_TITLE_UNITS: usize = 200;
+/// The contract's bounds on what a folder is filed with, in UTF-16 code
+/// units.
 const MAX_DOCUMENT_NAME_CHARS: usize = 220;
 const MAX_LABEL_CHARS: usize = 100;
-const MAX_MARKDOWN_CHARS: usize = 1_200_000;
+const MAX_MARKDOWN_UNITS: usize = 1_200_000;
 const MAX_INSTRUCTIONS: usize = 200;
-const MAX_INSTRUCTION_CHARS: usize = 2000;
+const MAX_INSTRUCTION_UNITS: usize = 2000;
 /// A transcript is at most four hours, in at most this many paragraphs.
+/// The API counts text in UTF-16 code units, as JavaScript strings do.
 const MAX_PARAGRAPHS: usize = 2000;
-const MAX_PARAGRAPH_CHARS: usize = 10_000;
+const MAX_PARAGRAPH_UNITS: usize = 10_000;
+/// The most text all paragraphs carry together: four hours of speech.
+const MAX_TRANSCRIPT_UNITS: usize = 1_000_000;
 const MAX_START_MS: u64 = 4 * 60 * 60 * 1000;
 /// How long one PUT of the recording may run: the largest matter document
 /// on a link of about one megabit, as the web app and the CLI allow.
@@ -70,28 +74,34 @@ pub struct Cleaned {
   instructions: Vec<String>,
 }
 
-fn chars(text: &str) -> usize {
-  text.chars().count()
+/// How the API counts a text's length: in UTF-16 code units, as
+/// JavaScript strings do, so a character outside the Basic Multilingual
+/// Plane counts twice.
+fn utf16_units(text: &str) -> usize {
+  text.encode_utf16().count()
 }
 
 fn bounded_name(text: &str, max: usize, what: &str) -> Result<(), String> {
-  let length = chars(text.trim());
+  let length = utf16_units(text.trim());
   if length == 0 || length > max {
     return Err(format!("the {what} is empty or too long"));
   }
   Ok(())
 }
 
+/// The transcript within every bound the API checks, so a save the API
+/// would refuse is refused here, before the recording is prepared.
 fn valid_paragraphs(paragraphs: &[Paragraph]) -> Result<(), String> {
   let total = paragraphs
     .iter()
-    .map(|paragraph| paragraph.text.len())
+    .map(|paragraph| utf16_units(&paragraph.text))
     .sum::<usize>();
   if paragraphs.is_empty()
     || paragraphs.len() > MAX_PARAGRAPHS
-    || total > MAX_TEXT_BYTES
+    || total > MAX_TRANSCRIPT_UNITS
     || paragraphs.iter().any(|paragraph| {
-      paragraph.start_ms > MAX_START_MS || chars(&paragraph.text) > MAX_PARAGRAPH_CHARS
+      paragraph.start_ms > MAX_START_MS
+        || utf16_units(&paragraph.text) > MAX_PARAGRAPH_UNITS
     })
   {
     return Err("the transcript is empty or too large to save".to_string());
@@ -100,14 +110,14 @@ fn valid_paragraphs(paragraphs: &[Paragraph]) -> Result<(), String> {
 }
 
 fn valid_cleaned(cleaned: &Cleaned) -> Result<(), String> {
-  let markdown = chars(cleaned.markdown.trim());
+  let markdown = utf16_units(cleaned.markdown.trim());
   if markdown == 0
-    || markdown > MAX_MARKDOWN_CHARS
+    || markdown > MAX_MARKDOWN_UNITS
     || cleaned.markdown.len() > MAX_TEXT_BYTES
     || cleaned.instructions.len() > MAX_INSTRUCTIONS
     || cleaned.instructions.iter().any(|instruction| {
-      let length = chars(instruction.trim());
-      length == 0 || length > MAX_INSTRUCTION_CHARS
+      let length = utf16_units(instruction.trim());
+      length == 0 || length > MAX_INSTRUCTION_UNITS
     })
   {
     return Err("the cleaned-up text is empty or too large to save".to_string());
@@ -115,8 +125,18 @@ fn valid_cleaned(cleaned: &Cleaned) -> Result<(), String> {
   Ok(())
 }
 
+/// The title cut to the API's bound in UTF-16 code units, never inside
+/// a character.
 fn title(text: &str) -> String {
-  text.trim().chars().take(MAX_TITLE_CHARS).collect()
+  let mut units = 0;
+  text
+    .trim()
+    .chars()
+    .take_while(|character| {
+      units += character.len_utf16();
+      units <= MAX_TITLE_UNITS
+    })
+    .collect()
 }
 
 /// A `.docx` file name from what the window suggested, without path
@@ -266,7 +286,7 @@ const fn include_audio_by_default() -> bool {
 
 fn valid_folder_request(request: &SaveFolderRequest) -> Result<(), String> {
   valid_id(&request.matter_id)?;
-  bounded_name(&request.title, MAX_TITLE_CHARS, "title")?;
+  bounded_name(&request.title, MAX_TITLE_UNITS, "title")?;
   valid_paragraphs(&request.paragraphs)?;
   bounded_name(
     &request.transcript_name,
@@ -415,9 +435,9 @@ pub enum SavedAudio {
   Saved { file_name: String },
   /// It is larger than a matter document may be, so it was left out.
   TooLarge { max_bytes: u64 },
-  /// It could not be uploaded or filed; the documents were saved.
+  /// It could not be uploaded or filed; `files` lists what was saved.
   Failed,
-  /// The window no longer holds it, so only the documents were saved.
+  /// The window no longer holds it, so it was not saved.
   Missing,
   /// The window did not ask for it.
   NotIncluded,
@@ -811,6 +831,27 @@ mod tests {
     for request in invalid {
       assert!(valid_folder_request(&request).is_err(), "{request:?}");
     }
+    // The paragraphs' total is bounded as the API counts it, in UTF-16
+    // code units, not only paragraph by paragraph.
+    let paragraphs = |count: usize, text: &str| {
+      (0..count)
+        .map(|index| Paragraph {
+          start_ms: u64::try_from(index).unwrap(),
+          text: text.to_string(),
+        })
+        .collect::<Vec<_>>()
+    };
+    let full = "x".repeat(MAX_PARAGRAPH_UNITS);
+    assert!(valid_paragraphs(&paragraphs(100, &full)).is_ok());
+    assert!(valid_paragraphs(&paragraphs(101, &full)).is_err());
+    // A character outside the Basic Multilingual Plane is two units.
+    let astral = "\u{1F600}".repeat(MAX_PARAGRAPH_UNITS / 2);
+    assert!(valid_paragraphs(&paragraphs(1, &astral)).is_ok());
+    assert!(valid_paragraphs(&paragraphs(1, &format!("{astral}x"))).is_err());
+    assert_eq!(
+      utf16_units(&title(&"\u{1F600}".repeat(MAX_TITLE_UNITS))),
+      MAX_TITLE_UNITS
+    );
     // The webview never names a path, and unknown fields are refused.
     assert!(
       serde_json::from_value::<SaveFolderRequest>(serde_json::json!({
