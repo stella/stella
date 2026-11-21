@@ -337,7 +337,7 @@ describe("cleaning up a dictation", () => {
     });
 
     expect(result.unwrap()).toBe("1. Call the client");
-    expect(sent.map(({ body }) => JSON.parse(String(body)))).toEqual([
+    expect(sent.map(({ body }): unknown => JSON.parse(String(body)))).toEqual([
       {
         transcript: "first call the client",
         locale: "en",
