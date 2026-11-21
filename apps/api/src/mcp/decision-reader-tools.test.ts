@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import * as v from "valibot";
 
+import type { DecisionBodySource } from "@stll/api-contract/case-law-body-source";
 import { noDecisionReviewFound } from "@stll/api-contract/case-law-reviews";
 import { PROVISION_LINK_STATUS_TYPES } from "@stll/api-contract/provision-link-status";
 import { blockSchema } from "@stll/legal-ast/document-ast";
@@ -150,6 +151,55 @@ const preview = typedCall(
 );
 
 describe("decision reader tool contracts", () => {
+  test("reader outputs keep the decision's link as their one publisher link", async () => {
+    const collection = {
+      id: "af6c7d89-41ab-42ba-814e-b657703584ed",
+      name: "Test collection",
+      adapterKey: "cz-ns-sbirka",
+      allowsDerivedAi: true,
+    };
+    const bodySource = {
+      textSource: "collection",
+      source: collection,
+      sourceUrl: "https://example.test/collection",
+      retrievedAt: "2026-01-01T00:00:00.000Z",
+      extent: "complete",
+      provenance: {
+        coverage: "all",
+        totalCount: 1,
+        omittedCount: 0,
+        records: [
+          {
+            extent: "complete",
+            source: collection,
+            sourceDocumentId: "post-1",
+            sourceUrl: "https://example.test/collection/post-1",
+            retrievedAt: null,
+            contribution: "body",
+          },
+        ],
+      },
+    } satisfies DecisionBodySource;
+    const base = sourceOf();
+    const context = contextWith({
+      readDecisionReaderSource: async () =>
+        await Promise.resolve({
+          ...base,
+          decision: { ...base.decision, bodySource },
+        }),
+    });
+    for (const result of [
+      await open({ args: { decision_id: id }, context }),
+      await blocks({ args: { decision_id: id }, context }),
+    ]) {
+      if (result.status !== "success") {
+        throw new Error("Expected a reader output");
+      }
+      const serialized = JSON.stringify(result.data);
+      expect(serialized).toContain('"bodySource"');
+      expect(serialized).not.toContain('"sourceUrl"');
+    }
+  });
   test("reader output schemas remain within the host schema budget", () => {
     const HOST_SCHEMA_MAX_CHARS = 4000;
     for (const output of Object.values(DECISION_READER_TOOL_SET.outputs)) {

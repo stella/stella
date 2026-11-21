@@ -1,6 +1,6 @@
 import * as v from "valibot";
 
-import { decisionBodySourceSchema } from "@stll/api-contract/case-law-body-source";
+import { linklessDecisionBodySourceSchema } from "@stll/api-contract/case-law-body-source";
 import { COURT_TIER_LABELS } from "@stll/api-contract/case-law-court-tiers";
 import { extractionWarningsSchema } from "@stll/api-contract/case-law-extraction-warnings";
 import {
@@ -14,7 +14,8 @@ import { blockSchema } from "@stll/legal-ast/document-ast";
 
 const readerMetadataSchema = v.strictObject({
   extractionWarnings: extractionWarningsSchema,
-  bodySource: v.optional(decisionBodySourceSchema),
+  // The decision's own link is the one publisher link (`url`).
+  bodySource: v.optional(linklessDecisionBodySourceSchema),
   decisionId: v.string(),
   caseNumber: v.string(),
   caseNumberType: v.picklist(DECISION_PRIMARY_REFERENCE_TYPES),

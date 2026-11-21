@@ -144,6 +144,57 @@ export const decisionBodySourceSchema = v.variant("textSource", [
 
 export type DecisionBodySource = v.InferOutput<typeof decisionBodySourceSchema>;
 
+const [completePublication, sectionPublication, unclassifiedPublication] =
+  collectionPublicationSchema.options;
+const [hostBodySource, collectionBodySource] = decisionBodySourceSchema.options;
+
+/**
+ * Collection attribution for outputs whose one publisher link is the
+ * decision's own: the canonical shape without its publication URLs.
+ */
+export const linklessDecisionBodySourceSchema = v.variant("textSource", [
+  hostBodySource,
+  v.strictObject({
+    ...v.omit(collectionBodySource, ["sourceUrl", "provenance"]).entries,
+    provenance: collectionBodyProvenanceSchemaOf(
+      v.variant("extent", [
+        v.omit(completePublication, ["sourceUrl"]),
+        v.omit(sectionPublication, ["sourceUrl"]),
+        v.omit(unclassifiedPublication, ["sourceUrl"]),
+      ]),
+    ),
+  }),
+]);
+
+export type LinklessDecisionBodySource = v.InferOutput<
+  typeof linklessDecisionBodySourceSchema
+>;
+
+/** Drops every collection publication URL; the host branch has none. */
+export const withoutCollectionLinks = (
+  bodySource: DecisionBodySource,
+): LinklessDecisionBodySource => {
+  switch (bodySource.textSource) {
+    case DECISION_BODY_TEXT_SOURCE.HOST:
+      return bodySource;
+    case DECISION_BODY_TEXT_SOURCE.COLLECTION: {
+      const { sourceUrl: _sourceUrl, provenance, ...body } = bodySource;
+      return {
+        ...body,
+        provenance: {
+          ...provenance,
+          records: provenance.records.map(
+            ({ sourceUrl: _publicationUrl, ...record }) => record,
+          ),
+        },
+      };
+    }
+    default:
+      bodySource satisfies never;
+      return panic("Unhandled decision body source");
+  }
+};
+
 /** Host metadata rights never become broader when a collection supplies text. */
 export const decisionBodyAllowsDerivedAi = ({
   source,

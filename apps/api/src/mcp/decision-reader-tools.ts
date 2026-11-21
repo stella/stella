@@ -1,6 +1,7 @@
 import { panic, Result } from "better-result";
 import * as v from "valibot";
 
+import { withoutCollectionLinks } from "@stll/api-contract/case-law-body-source";
 import {
   decisionParagraphFragment,
   type DecisionParagraphRange,
@@ -67,7 +68,7 @@ const withheldReason = {
 const metadataOf = ({ decision }: ReaderSource) => ({
   extractionWarnings: decision.extractionWarnings,
   ...(decision.bodySource.textSource === "collection"
-    ? { bodySource: decision.bodySource }
+    ? { bodySource: withoutCollectionLinks(decision.bodySource) }
     : {}),
   decisionId: decision.id,
   caseNumber: decision.caseNumber.slice(0, 256),
