@@ -177,6 +177,7 @@
     "./data-box": "./src/data-box.ts",
     "./email-mime-types": "./src/email-mime-types.ts",
     "./document-format": "./src/document-format.ts",
+    "./converted-document-formats": "./src/converted-document-formats.ts",
     "./entity-views": "./src/entity-views.ts",
     "./feedback": "./src/feedback.ts",
     "./entity-reference": "./src/entity-reference.ts",
