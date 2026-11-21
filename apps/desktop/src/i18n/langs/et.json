@@ -113,7 +113,7 @@
         "app": "Milline rakendus on esiplaanil, iga paari sekundi järel",
         "browserTitles": "Brauseri vahekaartide pealkirjad, ainult teie lubatud brauserites",
         "calls": "Kõnedes veedetud aeg, kui te seda välja ei lülita",
-        "details": "Akende pealkirjad ja dokumentide nimed, kui te neid välja ei lülita"
+        "details": "Akende pealkirjad ja Macis iga avatud dokumendi täielik tee koos kaustadega, kui te neid välja ei lülita"
       },
       "recordedTitle": "Mida salvestatakse",
       "sent": {

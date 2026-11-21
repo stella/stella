@@ -113,7 +113,7 @@
         "app": "Kura lietotne ir priekšplānā, ik pēc dažām sekundēm",
         "browserTitles": "Pārlūkprogrammas cilņu nosaukumi, tikai jūsu atļautajās pārlūkprogrammās",
         "calls": "Zvanos pavadītais laiks, ja vien to neizslēdzat",
-        "details": "Logu virsraksti un dokumentu nosaukumi, ja vien tos neizslēdzat"
+        "details": "Logu virsraksti un Mac datorā katra atvērtā dokumenta pilns ceļš ar mapēm, ja vien tos neizslēdzat"
       },
       "recordedTitle": "Kas tiek ierakstīts",
       "sent": {

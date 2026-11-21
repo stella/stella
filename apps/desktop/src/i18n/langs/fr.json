@@ -113,7 +113,7 @@
         "app": "L'app au premier plan, toutes les quelques secondes",
         "browserTitles": "Titres des onglets du navigateur, seulement dans les navigateurs que vous autorisez",
         "calls": "Temps passé en appel, sauf si vous le désactivez",
-        "details": "Titres de fenêtres et noms de documents, sauf si vous les désactivez"
+        "details": "Titres de fenêtres et, sur Mac, le chemin complet de chaque document ouvert, dossiers compris, sauf si vous les désactivez"
       },
       "recordedTitle": "Ce qui est enregistré",
       "sent": {

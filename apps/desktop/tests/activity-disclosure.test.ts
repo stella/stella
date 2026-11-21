@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import * as fc from "fast-check";
 import { readFileSync } from "node:fs";
 import path from "node:path";
 
@@ -11,6 +12,7 @@ import {
   desktopTimeEntryBatchItemSchema,
   desktopTimeEntryBatchSchema,
 } from "@stll/api-contract/desktop-time-entries";
+import { assertProperty } from "@stll/property-testing";
 
 import {
   ACTIVITY_RECORDED,
@@ -20,6 +22,8 @@ import type {
   ActivityRecordedFact,
   ActivitySentFact,
 } from "../src/activity/activity-disclosure";
+import { cardDraftEntry } from "../src/activity/billing-draft-logic";
+import type { MatchedSegment } from "../src/activity/day-review-logic";
 
 // Setup and the Activity window tell the user what Activity records and what
 // leaves the computer. Each field the native side keeps per stretch of time,
@@ -172,6 +176,23 @@ const factsOf = (groups: Record<string, FieldGroup<string>>) =>
       .flat(),
   );
 
+const MATTER_ID = "00000000-0000-4000-8000-000000000001";
+
+const segmentWith = (document: string): MatchedSegment => ({
+  appIdentifier: "app",
+  appName: "App",
+  call: false,
+  confidence: "strong",
+  document,
+  drafted: false,
+  endMs: 60_000,
+  evidence: [],
+  matter: null,
+  matterId: MATTER_ID,
+  startMs: 0,
+  windowTitle: null,
+});
+
 describe("the activity disclosure", () => {
   const every: Record<string, FieldGroup<string>>[] = [
     RECORDED_FIELDS,
@@ -195,5 +216,36 @@ describe("the activity disclosure", () => {
     const backed = factsOf(SENT_FIELDS);
     backed.delete(NOT_ABOUT_THE_DAY);
     expect([...backed].toSorted()).toEqual([...ACTIVITY_SENT].toSorted());
+  });
+
+  // A segment keeps a document's full local path; the drafts fact names
+  // only document names, so a draft must never carry the folders.
+  test("a stella AI draft sends a document's name, never its folders", () => {
+    const part = fc.stringMatching(/^[^\\/\p{Cc}]{1,12}$/u);
+    assertProperty(
+      "activity-disclosure.draft-sends-document-names-not-paths",
+      fc.property(
+        fc.array(part, { maxLength: 5, minLength: 1 }),
+        fc.constantFrom("/", "\\"),
+        (parts, separator) => {
+          const entry = cardDraftEntry({
+            captureDetails: true,
+            date: "2026-11-01",
+            matterId: MATTER_ID,
+            suggestion: {
+              apps: [{ durationMs: 1, identifier: "app", name: "App" }],
+              roundedTenths: 5,
+              segments: [segmentWith(separator + parts.join(separator))],
+            },
+            timezone: "Europe/Prague",
+          });
+          const names = entry.evidence?.documentNames ?? [];
+          expect(names).toHaveLength(1);
+          for (const name of names) {
+            expect(name).not.toMatch(/[\\/]/u);
+          }
+        },
+      ),
+    );
   });
 });

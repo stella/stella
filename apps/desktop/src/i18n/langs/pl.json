@@ -113,7 +113,7 @@
         "app": "Która aplikacja jest na pierwszym planie, co kilka sekund",
         "browserTitles": "Tytuły kart przeglądarki, tylko w przeglądarkach, na które zezwolisz",
         "calls": "Czas rozmów, chyba że to wyłączysz",
-        "details": "Tytuły okien i nazwy dokumentów, chyba że je wyłączysz"
+        "details": "Tytuły okien i na Macu pełna ścieżka każdego otwartego dokumentu, łącznie z folderami, chyba że je wyłączysz"
       },
       "recordedTitle": "Co jest zapisywane",
       "sent": {

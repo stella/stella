@@ -113,7 +113,7 @@
         "app": "Which app is in front, every few seconds",
         "browserTitles": "Browser tab titles, only in browsers you allow",
         "calls": "Time on calls, unless you turn it off",
-        "details": "Window titles and document names, unless you turn them off"
+        "details": "Window titles and, on a Mac, the full path of each open document, folders included, unless you turn them off"
       },
       "recordedTitle": "What is recorded",
       "sent": {

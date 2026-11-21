@@ -113,7 +113,7 @@
         "app": "Welche App im Vordergrund ist, alle paar Sekunden",
         "browserTitles": "Browser-Tab-Titel, nur in Browsern, die Sie zulassen",
         "calls": "Zeit in Anrufen, solange Sie es nicht abschalten",
-        "details": "Fenster- und Dokumentnamen, solange Sie sie nicht abschalten"
+        "details": "Fenstertitel und auf dem Mac der vollständige Pfad jedes geöffneten Dokuments samt Ordnern, solange Sie sie nicht abschalten"
       },
       "recordedTitle": "Was aufgezeichnet wird",
       "sent": {

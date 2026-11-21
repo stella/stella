@@ -113,7 +113,7 @@
         "app": "Melyik alkalmazás van előtérben, néhány másodpercenként",
         "browserTitles": "Böngészőlapok címeit, csak az Ön által engedélyezett böngészőkben",
         "calls": "A hívásokkal töltött időt, hacsak ki nem kapcsolja",
-        "details": "Ablakcímeket és dokumentumneveket, hacsak ki nem kapcsolja"
+        "details": "Ablakcímeket és Macen minden megnyitott dokumentum teljes elérési útját, a mappákkal együtt, hacsak ki nem kapcsolja"
       },
       "recordedTitle": "Mit rögzít",
       "sent": {

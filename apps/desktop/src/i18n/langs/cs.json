@@ -113,7 +113,7 @@
         "app": "Která aplikace je v popředí, každých pár sekund",
         "browserTitles": "Názvy karet prohlížeče, jen v prohlížečích, které povolíte",
         "calls": "Čas v hovorech, pokud to nevypnete",
-        "details": "Názvy oken a dokumentů, dokud je nevypnete"
+        "details": "Názvy oken a na Macu celá cesta ke každému otevřenému dokumentu včetně složek, dokud je nevypnete"
       },
       "recordedTitle": "Co se zaznamenává",
       "sent": {

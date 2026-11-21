@@ -113,7 +113,7 @@
         "app": "Kuri programa yra priekyje, kas kelias sekundes",
         "browserTitles": "Naršyklės kortelių pavadinimai, tik jūsų leistose naršyklėse",
         "calls": "Pokalbiuose praleistas laikas, nebent tai išjungsite",
-        "details": "Langų pavadinimai ir dokumentų pavadinimai, nebent juos išjungsite"
+        "details": "Langų pavadinimai ir „Mac“ kompiuteryje visas kiekvieno atverto dokumento kelias su aplankais, nebent juos išjungsite"
       },
       "recordedTitle": "Kas įrašoma",
       "sent": {

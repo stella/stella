@@ -113,7 +113,7 @@
         "app": "Qué aplicación está en primer plano, cada pocos segundos",
         "browserTitles": "Títulos de pestañas del navegador, solo en los navegadores que permitas",
         "calls": "Tiempo en llamadas, salvo que lo desactives",
-        "details": "Títulos de ventanas y nombres de documentos, salvo que los desactives"
+        "details": "Títulos de ventanas y, en Mac, la ruta completa de cada documento abierto, carpetas incluidas, salvo que los desactives"
       },
       "recordedTitle": "Qué se registra",
       "sent": {

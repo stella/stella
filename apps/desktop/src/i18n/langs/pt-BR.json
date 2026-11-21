@@ -113,7 +113,7 @@
         "app": "Qual app está em primeiro plano, a cada poucos segundos",
         "browserTitles": "Títulos das abas do navegador, só nos navegadores que você permitir",
         "calls": "Tempo em chamadas, a menos que você desative",
-        "details": "Títulos de janelas e nomes de documentos, a menos que você os desative"
+        "details": "Títulos de janelas e, no Mac, o caminho completo de cada documento aberto, com as pastas, a menos que você os desative"
       },
       "recordedTitle": "O que é registrado",
       "sent": {
