@@ -141,9 +141,7 @@ export const learnFrom = (
     );
     const known = next.find((fix) => phraseKey(fix.from) === fromKey);
     const updated =
-      known === undefined
-        ? { from, to, seen: 1, status: "learning" as const }
-        : sighted(known, to);
+      known === undefined ? firstSighting(from, to) : sighted(known, to);
     next = [...next.filter((fix) => fix !== known), updated];
   }
   next = next.map((fix) =>
@@ -185,8 +183,10 @@ export const applyLearnedFixes = (
         return [];
       }
       const leading = leadingWords(rest, keys.length);
-      return leading !== undefined &&
-        leading.words.every((word, at) => wordKey(word) === keys[at])
+      const same = leading?.words.every(
+        (word, at) => wordKey(word) === keys[at],
+      );
+      return leading !== undefined && same === true
         ? [{ to, taken: leading.taken }]
         : [];
     });
@@ -205,6 +205,13 @@ export const applyLearnedFixes = (
   }
   return out;
 };
+
+const firstSighting = (from: string, to: string): LearnedFix => ({
+  from,
+  to,
+  seen: 1,
+  status: "learning",
+});
 
 const contradicted = (fix: LearnedFix): LearnedFix =>
   fix.status === "off" ? fix : { ...fix, status: "contradicted" };
@@ -278,9 +285,16 @@ const asWritten = (words: readonly Word[], text: string): string => {
     : phrase;
 };
 
+/** Quotes, brackets and spaces between a sentence's end and its first word. */
+const SKIPPED_BEFORE_WORD = /^["'“”„‘’«»([\s]$/u;
+
 /** Whether the word at `offset` begins a sentence: at the start, after a line break or a sentence's end. */
 const startsSentence = (text: string, offset: number): boolean => {
-  const before = text.slice(0, offset).replace(/["'“”„‘’«»([\s]+$/u, "");
+  let end = offset;
+  while (end > 0 && SKIPPED_BEFORE_WORD.test(text.charAt(end - 1))) {
+    end -= 1;
+  }
+  const before = text.slice(0, end);
   return (
     before === "" ||
     /[.!?…]$/u.test(before) ||
