@@ -1,0 +1,7 @@
+{
+  "path": "/v1/desktop/dictation/learned-fixes",
+  "maxFixes": 30,
+  "maxTextLength": 48,
+  "maxWords": 3,
+  "maxChangesPerRequest": 50
+}

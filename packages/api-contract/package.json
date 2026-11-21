@@ -143,6 +143,7 @@
     "./desktop-dictation-cleanup": "./src/desktop-dictation-cleanup.ts",
     "./desktop-dictation-cleanup.plausibility": "./src/desktop-dictation-cleanup.plausibility.json",
     "./desktop-dictation-transcription": "./src/desktop-dictation-transcription.ts",
+    "./dictation-learned-fixes": "./src/dictation-learned-fixes.ts",
     "./desktop-feature-access": "./src/desktop-feature-access.ts",
     "./desktop-handoff": "./src/desktop-handoff.ts",
     "./mobile-client": "./src/mobile-client.ts",

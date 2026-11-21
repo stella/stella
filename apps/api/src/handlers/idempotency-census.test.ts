@@ -116,6 +116,12 @@ const ROOT_MUTATION_DISPOSITIONS = {
     type: "non-replay",
     reason: "current-state",
   },
+  // Deleting what dictation learned bumps the generation once more; a repeat
+  // leaves nothing learned, as the first did.
+  "DELETE /v1/dictation/learned-fixes": {
+    type: "non-replay",
+    reason: "current-state",
+  },
   "DELETE /v1/document-types/:documentTypeId": {
     type: "non-replay",
     reason: "current-state",
@@ -645,6 +651,12 @@ const ROOT_MUTATION_DISPOSITIONS = {
     reason: "current-state",
   },
   "POST /v1/dictation/cleanup": {
+    type: "non-replay",
+    reason: "current-state",
+  },
+  // Each change carries its own id and is applied once, so a repeat answers
+  // the current fixes.
+  "POST /v1/dictation/learned-fixes": {
     type: "non-replay",
     reason: "current-state",
   },

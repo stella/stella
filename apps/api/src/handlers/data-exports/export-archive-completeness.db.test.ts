@@ -292,6 +292,7 @@ const TABLE_CLASSIFICATIONS = {
   desktopRunnerRuns: FORMAT_SCOPE_EXCLUSION,
   desktopRunners: FORMAT_SCOPE_EXCLUSION,
   desktopTimeEntryBatches: FORMAT_SCOPE_EXCLUSION,
+  dictationLearnedFixes: FORMAT_SCOPE_EXCLUSION,
   documentCounters: FORMAT_SCOPE_EXCLUSION,
   documentProcessingRuns: FORMAT_SCOPE_EXCLUSION,
   documentReferenceCounters: FORMAT_SCOPE_EXCLUSION,

@@ -8,6 +8,14 @@ import {
   readDesktopDictationModels,
   transcribeDesktopDictation,
 } from "./desktop-transcription";
+import changeLearnedFixes from "./learned-fixes/change";
+import clearLearnedFixes from "./learned-fixes/clear";
+import {
+  changeDesktopLearnedFixes,
+  clearDesktopLearnedFixes,
+  listDesktopLearnedFixes,
+} from "./learned-fixes/desktop";
+import listLearnedFixes from "./learned-fixes/list";
 import memberCleanup from "./member-cleanup";
 import models from "./models";
 import recordingCleanup from "./recording-cleanup";
@@ -16,6 +24,11 @@ import transcribe from "./transcribe";
 export const dictationRoute = routes(
   {
     "/cleanup": { POST: memberCleanup },
+    "/learned-fixes": {
+      GET: listLearnedFixes,
+      POST: changeLearnedFixes,
+      DELETE: clearLearnedFixes,
+    },
     "/models": { GET: models },
     "/transcribe": { POST: transcribe },
   },
@@ -27,6 +40,11 @@ export const dictationRoute = routes(
 export const desktopDictationRoute = routes(
   {
     "/cleanup": { POST: cleanup },
+    "/learned-fixes": {
+      GET: listDesktopLearnedFixes,
+      POST: changeDesktopLearnedFixes,
+      DELETE: clearDesktopLearnedFixes,
+    },
     "/models": { GET: readDesktopDictationModels },
     "/recording-cleanup": { POST: recordingCleanup },
     "/transcribe": { POST: transcribeDesktopDictation },

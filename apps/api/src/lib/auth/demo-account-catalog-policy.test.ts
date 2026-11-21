@@ -60,6 +60,7 @@ const RESOURCE_WRITE_ACCOUNT_ACCESS = {
   legalReaderAnnotation: ACCOUNT_ACCESS.sandbox,
   savedSearch: ACCOUNT_ACCESS.sandbox,
   searchHistory: ACCOUNT_ACCESS.sandbox,
+  dictationLearnedFix: ACCOUNT_ACCESS.sandbox,
   conflictCheck: ACCOUNT_ACCESS.sandbox,
 } as const satisfies Record<keyof typeof statements, AccountAccess>;
 
