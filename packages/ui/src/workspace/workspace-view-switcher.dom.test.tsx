@@ -18,17 +18,13 @@ const { WorkspaceViewSwitcher } =
   await import("../../../workspace-ui/src/view-switcher");
 
 // happy-dom lays nothing out. Each measured tab is 100px wide, the overflow
-// trigger 24px, and the row the tabs share is `ROW_WIDTH` wide, so the
+// trigger 24px, and the row the tabs share is `rowWidth` wide, so the
 // policy has real numbers to split on.
 const TAB_WIDTH = 100;
 const TRIGGER_WIDTH = 24;
 let rowWidth = 250;
 
 const originalRect = HTMLElement.prototype.getBoundingClientRect;
-const originalClientWidth = Object.getOwnPropertyDescriptor(
-  HTMLElement.prototype,
-  "clientWidth",
-);
 const rect = (width: number) => new DOMRect(0, 0, width, 32);
 HTMLElement.prototype.getBoundingClientRect = function getBoundingClientRect(
   this: HTMLElement,
@@ -41,26 +37,38 @@ HTMLElement.prototype.getBoundingClientRect = function getBoundingClientRect(
   }
   return originalRect.call(this);
 };
-Object.defineProperty(HTMLElement.prototype, "clientWidth", {
-  configurable: true,
-  get(this: HTMLElement) {
-    return this.parentElement?.dataset["slot"] === "workspace-view-switcher"
-      ? rowWidth
-      : 0;
-  },
-});
 
+// The row the tabs share is the strip's first child; its observer reports
+// `rowWidth` as the row's content box, the way a browser's would.
+const isRow = (target: Element) =>
+  target.parentElement instanceof HTMLElement &&
+  target.parentElement.dataset["slot"] === "workspace-view-switcher";
 const observers = new Set<() => void>();
 class ResizeObserverStub implements ResizeObserver {
+  private readonly targets = new Set<Element>();
   private readonly notify: () => void;
   constructor(callback: ResizeObserverCallback) {
-    this.notify = () => callback([], this);
+    this.notify = () =>
+      callback(
+        Array.from(this.targets, (target) => ({
+          borderBoxSize: [],
+          contentBoxSize: [],
+          contentRect: rect(isRow(target) ? rowWidth : 0),
+          devicePixelContentBoxSize: [],
+          target,
+        })),
+        this,
+      );
   }
-  observe() {
+  observe(target: Element) {
+    this.targets.add(target);
     observers.add(this.notify);
+    // A browser reports every observed element once after `observe`.
+    queueMicrotask(this.notify);
   }
   unobserve() {}
   disconnect() {
+    this.targets.clear();
     observers.delete(this.notify);
   }
 }
@@ -75,15 +83,6 @@ afterEach(() => {
 
 afterAll(async () => {
   HTMLElement.prototype.getBoundingClientRect = originalRect;
-  if (originalClientWidth) {
-    Object.defineProperty(
-      HTMLElement.prototype,
-      "clientWidth",
-      originalClientWidth,
-    );
-  } else {
-    Reflect.deleteProperty(HTMLElement.prototype, "clientWidth");
-  }
   globalThis.ResizeObserver = previousResizeObserver;
   Reflect.set(globalThis, "IS_REACT_ACT_ENVIRONMENT", previousActEnvironment);
   await unregisterDomEnvironment();

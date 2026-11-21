@@ -153,6 +153,7 @@ export const WorkspaceViewSwitcher = <View extends WorkspaceViewSwitcherItem>({
   const {
     container: stripContainer,
     containerRef,
+    measured,
     measureRef,
     visibleCount,
   } = useInlineOverflow({ activeIndex: pinnedIndex, itemCount: views.length });
@@ -228,6 +229,7 @@ export const WorkspaceViewSwitcher = <View extends WorkspaceViewSwitcherItem>({
           )}
           <WorkspaceViewTabsMeasure
             activeViewId={activeViewId}
+            measured={measured}
             measureRef={measureRef}
             renderIcon={renderIcon}
             reserveActionSpace={reserveActionSpace}
@@ -285,12 +287,14 @@ export const WorkspaceViewSwitcher = <View extends WorkspaceViewSwitcherItem>({
  */
 const WorkspaceViewTabsMeasure = <View extends WorkspaceViewSwitcherItem>({
   activeViewId,
+  measured,
   measureRef,
   renderIcon,
   reserveActionSpace,
   views,
 }: {
   activeViewId: string;
+  measured: boolean;
   measureRef: (element: HTMLElement | null) => void;
   renderIcon: (view: View) => React.ReactNode;
   reserveActionSpace: boolean;
@@ -299,6 +303,7 @@ const WorkspaceViewTabsMeasure = <View extends WorkspaceViewSwitcherItem>({
   <div
     aria-hidden="true"
     className="pointer-events-none invisible absolute start-0 top-0 size-0 overflow-hidden"
+    data-measured={measured ? "" : undefined}
     data-slot="workspace-view-measure"
     inert
   >

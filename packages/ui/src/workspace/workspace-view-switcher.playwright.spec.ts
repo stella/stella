@@ -44,9 +44,12 @@ const openFixture = async (
 };
 
 const expectIndicatorToTrackTab = async (page: Page, tabIndex: number) => {
-  const tabs = page.locator('[data-slot="tabs-tab"]');
+  // The visible strip only: the switcher also draws an inert, hidden copy of
+  // its tabs to measure them by.
+  const tabList = page.getByRole("tablist");
+  const tabs = tabList.locator('[data-slot="tabs-tab"]');
   const toolbar = page.locator("[data-workspace-switcher] > [dir]");
-  const indicator = page.locator('[data-slot="tab-indicator"]');
+  const indicator = tabList.locator('[data-slot="tab-indicator"]');
 
   await expect
     .poll(async () => {
@@ -150,6 +153,7 @@ test.describe("workspace view switcher chrome", () => {
       // Every view is a tab or a menu item, once.
       await more.click();
       const items = page.getByRole("menuitem");
+      await expect(items.first()).toBeVisible();
       expect((await items.count()) + shownCount).toBe(4);
       const lastName = isRTL ? "المراسلات" : "Correspondence";
       await page.getByRole("menuitem", { name: lastName }).click();
