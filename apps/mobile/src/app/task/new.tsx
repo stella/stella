@@ -114,6 +114,7 @@ const NewTaskForm = ({ source }: { source: AccessTokenSource }) => {
         source,
       });
       if (Result.isOk(created)) {
+        field.learn(name.trim());
         changed("tasks");
         router.back();
         return;

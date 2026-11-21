@@ -13,6 +13,9 @@ platform APIs. Invalid inputs return `better-result` errors.
 - `@stll/transcript/spelling`: custom words and names spelled as written where a
   transcript comes close, as the desktop spells them after local transcription,
   keeping Czech and Slovak case endings.
+- `@stll/transcript/corrections`: fixes learned from how a person corrects
+  dictated words: word diff of the dictated text against the text sent, two
+  matching sightings to apply, never after a contradiction.
 
 `detectKeptIntervals` treats each dBFS sample as the following fixed-width
 interval. Samples at or below the threshold are silence; `-Infinity` is valid.

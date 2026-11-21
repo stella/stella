@@ -24,6 +24,8 @@ import type {
 import { randomUUID } from "expo-crypto";
 import { useLocale } from "use-intl";
 
+import { applyLearnedFixes } from "@stll/transcript/corrections";
+import type { LearnedFix } from "@stll/transcript/corrections";
 import { respell } from "@stll/transcript/spelling";
 
 import {
@@ -51,6 +53,7 @@ import {
 import type { ChunkWatch } from "@/state/dictation-chunks";
 import { retriesByItself } from "@/state/dictation-kept";
 import type { DictationField, PieceFailure } from "@/state/dictation-kept";
+import { readLearnedFixes } from "@/state/dictation-learned";
 import {
   chosenModelId,
   DEFAULT_DICTATION_PREFERENCES,
@@ -124,6 +127,8 @@ type DictationSetup = {
   readonly source: AccessTokenSource;
   readonly preferences: DictationPreferences;
   readonly vocabulary: readonly string[];
+  /** The fixes learned from the person's corrections on this phone. */
+  readonly learned: readonly LearnedFix[];
 };
 
 /**
@@ -781,9 +786,10 @@ type Gathered =
 
 /**
  * The finished dictation's text: its pieces joined in order, cleaned up
- * when the person turned that on, and the matter's names spelled as written
- * where the model came close; or nothing, when nothing was heard; or its
- * pieces to keep, when one could not be transcribed.
+ * when the person turned that on, with the fixes learned from their
+ * corrections, and the matter's names spelled as written where the model
+ * came close; or nothing, when nothing was heard; or its pieces to keep,
+ * when one could not be transcribed.
  */
 const gatherText = async (current: Run): Promise<Gathered> => {
   const outcomes = await Promise.all(current.pieces);
@@ -828,7 +834,7 @@ const gatherText = async (current: Run): Promise<Gathered> => {
   return {
     type: "text",
     dictated: {
-      text: respell(text, setup.vocabulary),
+      text: respell(applyLearnedFixes(text, setup.learned), setup.vocabulary),
       names: setup.vocabulary,
     },
     partly,
@@ -931,8 +937,15 @@ const readSetup = async (
   preferences: DictationPreferences,
   terms: () => Promise<string[]>,
 ): Promise<DictationSetup> => {
-  const vocabulary = await terms().catch(() => []);
-  return { source, preferences, vocabulary };
+  const session = source.session();
+  const [vocabulary, learned] = await Promise.all([
+    terms().catch(() => []),
+    // Fixes the phone cannot read are not applied; the text stays as heard.
+    session === undefined
+      ? []
+      : readLearnedFixes(deviceAccountStore, session).catch(() => []),
+  ]);
+  return { source, preferences, vocabulary, learned };
 };
 
 /**

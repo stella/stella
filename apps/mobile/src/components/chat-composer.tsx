@@ -165,6 +165,7 @@ export const ChatComposer = ({
       mode,
     );
     if (accepted) {
+      field.learn(message);
       setDraft("");
       files.clear();
     }
@@ -187,6 +188,7 @@ export const ChatComposer = ({
       },
     );
     if (accepted) {
+      field.learn(message);
       setDraft("");
       files.clear();
     }
@@ -208,6 +210,7 @@ export const ChatComposer = ({
         );
       })
     ) {
+      field.learn(message);
       setDraft("");
     }
   };

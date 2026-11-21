@@ -216,7 +216,9 @@ const ChatMessageEdit = ({
         }
       }
       const outcome = await onSend(draft);
-      if (outcome.type === "refused" && open.current) {
+      if (outcome.type === "accepted") {
+        field.learn(draft.text);
+      } else if (open.current) {
         setSending(false);
         setNotice(outcome.notice);
       }

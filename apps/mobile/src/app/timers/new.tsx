@@ -69,6 +69,7 @@ const NewTimerForm = ({ source }: { source: AccessTokenSource }) => {
         source,
       });
       if (Result.isOk(started)) {
+        field.learn(description.trim());
         changed("timers");
         router.back();
         return;
