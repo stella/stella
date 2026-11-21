@@ -257,10 +257,6 @@
       "reason": "Requires a desktop-edit-sessions fixture that grows persisted inputs at a fixed response window; pending read harness coverage."
     },
     {
-      "id": "GET /v1/desktop/dictation/learned-fixes",
-      "reason": "Reads one member's single row of at most 30 short fixes; the response size is fixed by that cap, not by stored data."
-    },
-    {
       "id": "GET /v1/desktop/feature-access",
       "reason": "Requires a desktop fixture that grows persisted inputs at a fixed response window; pending read harness coverage."
     },
@@ -287,10 +283,6 @@
     {
       "id": "GET /v1/dev/seed-firm-knowledge",
       "reason": "Requires a dev fixture that grows persisted inputs at a fixed response window; pending read harness coverage."
-    },
-    {
-      "id": "GET /v1/dictation/learned-fixes",
-      "reason": "Reads one member's single row of at most 30 short fixes; the response size is fixed by that cap, not by stored data."
     },
     {
       "id": "GET /v1/document-types",
