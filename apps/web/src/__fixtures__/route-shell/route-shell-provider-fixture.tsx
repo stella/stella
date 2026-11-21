@@ -349,6 +349,10 @@ const installFixtureNetwork = () => {
       if (pathname === "/api/auth/organization/get-active-member-role") {
         return Response.json({ role: "owner" });
       }
+      // The settings navigation counts sign-ins waiting for review.
+      if (pathname === "/api/auth/session-sign-ins") {
+        return Response.json({ sessions: [] });
+      }
       if (pathname === "/v1/me/professional-use") {
         if (professionalUseState.status === "required") {
           return Response.json({ status: "required" });

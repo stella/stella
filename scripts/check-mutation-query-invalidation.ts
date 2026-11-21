@@ -11,6 +11,7 @@ import {
   generateMutationQueryCensus,
   type MutationQueryCensus,
   revisionTree,
+  ROUTE_READER_HELPERS,
 } from "./mutation-query-census.ts";
 
 const ROOT = path.resolve(import.meta.dir, "..");
@@ -24,10 +25,6 @@ const MUTATION_HELPER = "resourceMutation";
 const READER_HELPER = "resourceQueryOptions";
 const MUTATION_PRIMITIVES = new Set(["useMutation", "mutationOptions"]);
 const READER_PRIMITIVES = new Set(["queryOptions", "infiniteQueryOptions"]);
-const ROUTE_READER_HELPERS = new Set([
-  "ensureRouteQueryData",
-  "ensureRouteInfiniteQueryData",
-]);
 const READER_EXECUTORS = new Set([
   ...READER_PRIMITIVES,
   ...ROUTE_READER_HELPERS,

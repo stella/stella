@@ -22,6 +22,7 @@
   },
   "newDeviceLogin": {
     "action": "Skontrolovať prihlásené zariadenia",
+    "actionNote": "Tlačidlo otvorí Nastavenia › Zabezpečenie priamo pri tomto prihlásení.",
     "body": "Do vášho účtu sa práve niekto prihlásil z nového zariadenia alebo miesta.",
     "device": "Zariadenie",
     "deviceName": {

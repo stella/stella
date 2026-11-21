@@ -22,6 +22,7 @@
   },
   "newDeviceLogin": {
     "action": "Angemeldete Geräte prüfen",
+    "actionNote": "Die Schaltfläche öffnet Einstellungen › Sicherheit direkt bei dieser Anmeldung.",
     "body": "Es gab eine neue Anmeldung in Ihrem Konto von einem neuen Gerät oder Standort.",
     "device": "Gerät",
     "deviceName": {
