@@ -191,7 +191,7 @@ jobs:
         working-directory: apps/mobile
         env:
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
-        run: bunx expo prebuild --platform ios --clean
+        run: bunx --bun expo prebuild --platform ios --clean
 
       - name: Import the distribution certificate
         env:

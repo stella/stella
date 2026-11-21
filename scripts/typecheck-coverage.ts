@@ -1013,6 +1013,7 @@ const main = async (): Promise<void> => {
 
   run([
     "bunx",
+    "--bun",
     "--no-install",
     "turbo",
     "run",

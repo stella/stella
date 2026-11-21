@@ -43,7 +43,8 @@
       "apps/web/Dockerfile",
       "bun.lock",
       "packages/*/package.json",
-      "packages/*/src/**"
+      "packages/*/src/**",
+      "scripts/__fixtures__/bun-runtime/**"
     ],
     "scripts/check-ci-event-policy.test.ts": ["**"],
     "scripts/check-ci-job-classification.test.ts": ["**"],
