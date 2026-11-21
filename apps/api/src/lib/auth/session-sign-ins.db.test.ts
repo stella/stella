@@ -179,6 +179,23 @@ describe("recorded sign-ins", () => {
     ).toEqual([]);
   });
 
+  test("a known location names its country", async () => {
+    const owner = await insertUser();
+    const sessionId = await insertSession(owner);
+
+    const refused = await rejectionOf(
+      testDb.insert(sessionSignIns).values({
+        sessionId,
+        locationKind: "known",
+        city: "Bratislava",
+      }),
+    );
+
+    expect(refused).toMatchObject({
+      cause: { constraint: "session_sign_ins_location_check" },
+    });
+  });
+
   test("an unknown location cannot carry a place", async () => {
     const owner = await insertUser();
     const sessionId = await insertSession(owner);

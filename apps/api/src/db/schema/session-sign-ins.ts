@@ -70,7 +70,7 @@ export const sessionSignIns = pgTable(
     // A known location names its country; an unknown one carries nothing.
     check(
       "session_sign_ins_location_check",
-      sql`(${table.locationKind} = 'unknown' AND ${table.countryCode} IS NULL AND ${table.region} IS NULL AND ${table.city} IS NULL AND ${table.latitude} IS NULL AND ${table.longitude} IS NULL) OR (${table.locationKind} = 'known' AND ${table.countryCode} ~ '^[A-Z]{2}$' AND (${table.latitude} IS NULL) = (${table.longitude} IS NULL))`,
+      sql`(${table.locationKind} = 'unknown' AND ${table.countryCode} IS NULL AND ${table.region} IS NULL AND ${table.city} IS NULL AND ${table.latitude} IS NULL AND ${table.longitude} IS NULL) OR (${table.locationKind} = 'known' AND ${table.countryCode} IS NOT NULL AND ${table.countryCode} ~ '^[A-Z]{2}$' AND (${table.latitude} IS NULL) = (${table.longitude} IS NULL))`,
     ),
     ...denyStellaAccessPolicies(),
   ],
