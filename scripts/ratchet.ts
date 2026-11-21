@@ -458,6 +458,13 @@ const propertyNameText = (property: ObjectProperty): string | null =>
   property.computed ? null : keyText(property.key);
 
 const countRawNumericCoercions: FileCounter = (content, { file }) => {
+  if (
+    !content.includes("Number") &&
+    !content.includes("parseInt") &&
+    !content.includes("parseFloat")
+  ) {
+    return 0;
+  }
   const { program } = parseSyntax({ fileName: file, text: content });
   let total = 0;
   walk(program, (node) => {
@@ -1424,6 +1431,31 @@ const countWeakMcpProjectionTies: FileCounter = (content, { file }) => {
  * so a regex is hidden by the very characters that make it worth checking. A
  * guard a new regex can evade by containing a quote is not a guard.
  */
+const SUPER_LINEAR_REGEX_CACHE = new Map<string, boolean>();
+
+const isSuperLinearRegex = (pattern: string, flags: string): boolean => {
+  const key = `${pattern}\0${flags}`;
+  const cached = SUPER_LINEAR_REGEX_CACHE.get(key);
+  if (cached !== undefined) {
+    return cached;
+  }
+  let expression: RegExp;
+  try {
+    expression = new RegExp(pattern, flags);
+  } catch {
+    SUPER_LINEAR_REGEX_CACHE.set(key, false);
+    return false;
+  }
+  let result = false;
+  try {
+    result = analyse(expression).reports.length > 0;
+  } catch {
+    // Unanalysable pattern is not evidence of a finding.
+  }
+  SUPER_LINEAR_REGEX_CACHE.set(key, result);
+  return result;
+};
+
 const countSuperLinearRegexes: FileCounter = (content, { file }) => {
   // Pick the dialect from the extension. TSX for every file would
   // misread a generic arrow such as `<Ts>(…) =>` in a .ts file as JSX,
@@ -1437,20 +1469,8 @@ const countSuperLinearRegexes: FileCounter = (content, { file }) => {
     if (node.type !== "Literal" || !("regex" in node)) {
       return;
     }
-    let expression: RegExp;
-    try {
-      expression = new RegExp(node.regex.pattern, node.regex.flags);
-    } catch {
-      // A pattern this runtime cannot compile cannot run either.
-      return;
-    }
-    try {
-      if (analyse(expression).reports.length > 0) {
-        total += 1;
-      }
-    } catch {
-      // The analyser bails on constructs it does not model; an
-      // unanalysable pattern is not evidence of a finding.
+    if (isSuperLinearRegex(node.regex.pattern, node.regex.flags)) {
+      total += 1;
     }
   });
   return total;
@@ -2312,6 +2332,9 @@ const countDirectFailureSinks: FileCounter = (content, { file }) =>
 // `callbacks.captureError(…)`-shaped seams: adapters that also do generation
 // bookkeeping, inventoried apart from the terminal sinks above.
 const countAnalyticsCallbackSeams: FileCounter = (content, { file }) => {
+  if (!content.includes("captureError")) {
+    return 0;
+  }
   const { program } = parseSyntax({ fileName: file, text: content });
   let count = 0;
   walk(program, (node) => {
@@ -2333,6 +2356,9 @@ const failureSinkSpecs = ({
   content,
   file,
 }: SourceText): ObjectExpression[] => {
+  if (!content.includes(FAILURE_SINK_FACTORY)) {
+    return [];
+  }
   const { program } = parseSyntax({ fileName: file, text: content });
   const specs: ObjectExpression[] = [];
   walk(program, (node) => {
@@ -2562,6 +2588,32 @@ const countReviewOnlyInstructionRules: FileCounter = (content) => {
   return parsed.reviewOnlyRules;
 };
 
+const OUTBOUND_TRANSPORT_REFS_CACHE = new WeakMap<
+  ScanContext,
+  Map<string, readonly string[]>
+>();
+
+const cachedOutboundTransportReferences = (
+  context: ScanContext,
+  file: string,
+): readonly string[] => {
+  let byFile = OUTBOUND_TRANSPORT_REFS_CACHE.get(context);
+  if (byFile === undefined) {
+    byFile = new Map<string, readonly string[]>();
+    OUTBOUND_TRANSPORT_REFS_CACHE.set(context, byFile);
+  }
+  const cached = byFile.get(file);
+  if (cached !== undefined) {
+    return cached;
+  }
+  const refs = outboundTransportReferences({
+    file,
+    text: readSource(context, file),
+  });
+  byFile.set(file, refs);
+  return refs;
+};
+
 const countOutboundIndirectAccessExceptions = (
   context: ScanContext,
 ): RepoMetricResult => {
@@ -2572,10 +2624,9 @@ const countOutboundIndirectAccessExceptions = (
   ]).filter(
     (file) =>
       isOutboundProductionModule(file) &&
-      outboundTransportReferences({
-        file,
-        text: readSource(context, file),
-      }).includes("indirect:transport"),
+      cachedOutboundTransportReferences(context, file).includes(
+        "indirect:transport",
+      ),
   );
   const files: Record<string, number> = Object.fromEntries(
     flagged.map((file) => [file, 1]),
@@ -3160,10 +3211,10 @@ export const RATCHET_METRICS: readonly RatchetMetric[] = [
         if (!isApiProductionModule(file) || TRANSPORT_OWNER_MODULES.has(file)) {
           continue;
         }
-        for (const capability of outboundTransportReferences({
+        for (const capability of cachedOutboundTransportReferences(
+          context,
           file,
-          text: readSource(context, file),
-        })) {
+        )) {
           if (
             capability !== "permit:grant" &&
             !LOCAL_MODULE_CAPABILITIES.has(capability)
