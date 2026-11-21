@@ -660,6 +660,8 @@
     "accountTitle": "Účet",
     "deleteAccount": "Odstrániť účet",
     "deleteAccountHint": "Otvorí váš účet na webe, kde ho môžete odstrániť aj so všetkým, čo je vaše.",
+    "dictationBuiltInMicrophone": "Vždy používať mikrofón iPhonu",
+    "dictationBuiltInMicrophoneHint": "Nahráva mikrofónom iPhonu, aj keď sú pripojené slúchadlá AirPods alebo auto, takže hrajú ďalej v plnej kvalite a neprepnú sa do režimu hovoru.",
     "dictationCleanup": "Upraviť pomocou AI",
     "dictationCleanupHint": "Opraví chyby rozpoznávania a vyslovené formátovanie, napríklad „nový riadok“. Len text, nie zvuk, ide cez stella k poskytovateľovi AI vašej organizácie; stella ho neukladá.",
     "dictationModelDefault": "Predvolený",

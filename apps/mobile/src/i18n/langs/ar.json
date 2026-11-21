@@ -660,6 +660,8 @@
     "accountTitle": "الحساب",
     "deleteAccount": "حذف الحساب",
     "deleteAccountHint": "يفتح حسابك على الويب، حيث يمكنك حذفه مع كل ما يخصك.",
+    "dictationBuiltInMicrophone": "استخدام ميكروفون iPhone دائمًا",
+    "dictationBuiltInMicrophoneHint": "يسجّل بميكروفون iPhone حتى عند توصيل AirPods أو سيارة، فتستمر في التشغيل بجودة كاملة بدلًا من التحول إلى صوت المكالمة.",
     "dictationCleanup": "التنقيح بالذكاء الاصطناعي",
     "dictationCleanupHint": "يصحّح أخطاء التعرّف والتنسيق المنطوق مثل «سطر جديد». يمر النص فقط، لا الصوت، عبر stella إلى مزوّد الذكاء الاصطناعي لدى مؤسستك؛ ولا تخزّنه stella.",
     "dictationModelDefault": "الافتراضي",

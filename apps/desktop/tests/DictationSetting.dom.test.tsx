@@ -46,6 +46,9 @@ const ENABLED_SNAPSHOT = {
   model: { status: "ready" },
   modelBytes: 740_363_168,
   phase: "idle",
+  retypeKeys: { code: "KeyV", modifiers: ["control", "alt", "shift"] },
+  retypeShortcut: true,
+  retypeShortcutTaken: false,
   shortcutTaken: false,
 };
 
@@ -414,6 +417,39 @@ test("turning the sounds off asks the native side and shows its answer", async (
     expect(toggle.getAttribute("aria-checked")).toBe("false");
   });
   expect(calls).toEqual([{ enabled: false }]);
+});
+
+test("turning the retype shortcut off asks the native side and shows its answer", async () => {
+  const calls: unknown[] = [];
+  const { getByRole } = await renderSetting(
+    ENABLED_SNAPSHOT,
+    (called, payload) => {
+      if (called !== "dictation_set_retype_shortcut") {
+        return undefined;
+      }
+      calls.push(payload);
+      return { ...ENABLED_SNAPSHOT, retypeShortcut: false };
+    },
+  );
+  const toggle = getByRole("switch", {
+    name: defaultMessages.dictation.retype.title,
+  });
+  expect(toggle.getAttribute("aria-checked")).toBe("true");
+
+  fireEvent.click(toggle);
+
+  await waitFor(() => {
+    expect(toggle.getAttribute("aria-checked")).toBe("false");
+  });
+  expect(calls).toEqual([{ enabled: false }]);
+});
+
+test("a retype shortcut another app holds says so", async () => {
+  const { findByText } = await renderSetting({
+    ...ENABLED_SNAPSHOT,
+    retypeShortcutTaken: true,
+  });
+  expect(await findByText(/^Another app is using /u)).toBeTruthy();
 });
 
 test("an unread focus is not reported as switching apps", () => {

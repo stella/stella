@@ -660,6 +660,8 @@
     "accountTitle": "Konto",
     "deleteAccount": "Konto löschen",
     "deleteAccountHint": "Öffnet Ihr Konto im Web, wo Sie es mit allem, was Ihnen gehört, löschen können.",
+    "dictationBuiltInMicrophone": "Immer iPhone-Mikrofon verwenden",
+    "dictationBuiltInMicrophoneHint": "Nimmt mit dem Mikrofon des iPhone auf, auch wenn AirPods oder ein Auto verbunden sind. So spielen sie in voller Qualität weiter und wechseln nicht in den Anrufmodus.",
     "dictationCleanup": "Mit KI überarbeiten",
     "dictationCleanupHint": "Behebt Erkennungsfehler und gesprochene Formatierung wie „neue Zeile“. Nur der Text, nicht das Audio, geht über stella an den KI-Anbieter Ihrer Organisation; stella speichert ihn nicht.",
     "dictationModelDefault": "Standard",

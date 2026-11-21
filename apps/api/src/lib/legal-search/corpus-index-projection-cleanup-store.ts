@@ -169,7 +169,10 @@ type ClaimCorpusProjectionCleanupOptions<Family extends CorpusFamily> =
  * upsert state names the revision, so deleting it hides nothing. The other two
  * delete a copy an upsert state still names, and exist only for rows an
  * earlier release left behind (it queued served revisions for cleanup); no
- * writer in this release creates one, so both only shrink:
+ * writer in this release creates one, so both only shrink. The desired-state
+ * writer keeps that true: a retirement it makes un-names the copy in the same
+ * statement group, and it holds any repair that would cost a queued, still
+ * restorable copy its proof (`writeRepairedCorpusProjectionDesiredStatesTx`):
  *
  * - `served_after_delete`: a delete may already have been issued, so the copy
  *   may already be gone and holding the cleanup back would only keep the

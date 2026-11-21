@@ -32,6 +32,22 @@ const DialogTranslations = ({ children }: PropsWithChildren) => {
   );
 };
 
+/**
+ * The locale messages render in: the UI language with the reader's digits, so
+ * a plural's `#` matches every number formatted with format.number. Shared
+ * with nested providers (feature catalogs) so their plurals agree.
+ */
+export const useRenderedMessageLocale = (): string => {
+  const { prefs } = usePresentationPrefs();
+  const locale = useI18nStore((s) => s.loadedLang);
+  return buildMessageLocale({
+    lang: locale,
+    region: prefs.region,
+    regionalFormat: prefs.regionalFormat,
+    numberingSystem: prefs.numberingSystem,
+  });
+};
+
 export const I18nProvider = ({ children }: PropsWithChildren) => {
   const { prefs } = usePresentationPrefs();
   const locale = useI18nStore((s) => s.loadedLang);
@@ -65,14 +81,7 @@ export const I18nProvider = ({ children }: PropsWithChildren) => {
     weekStart: prefs.weekStart,
   });
 
-  // Messages render in the UI language with the reader's digits, so a
-  // plural's `#` matches every number formatted with format.number.
-  const messageLocale = buildMessageLocale({
-    lang: locale,
-    region: prefs.region,
-    regionalFormat: prefs.regionalFormat,
-    numberingSystem: prefs.numberingSystem,
-  });
+  const messageLocale = useRenderedMessageLocale();
 
   return (
     <IntlProvider
