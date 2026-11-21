@@ -67,6 +67,7 @@ export const DICTATION_READY = {
 export const SETTINGS_DICTATION = {
   available: true,
   cleanup: true,
+  cleanupStyle: "polished",
   cloudAvailable: true,
   cloudModel: "elevenlabs-direct/scribe-v3",
   customWords: ["Libeňská", "custom terms list", "22 Cdo 120/2026"],
@@ -92,6 +93,7 @@ export const SETTINGS_DICTATION = {
   shortcutTaken: false,
   sounds: true,
   textBeforeCursorAvailable: true,
+  translateTo: null,
 } as const satisfies DictationSettingSnapshot;
 
 /** The region's stella AI transcription models. */

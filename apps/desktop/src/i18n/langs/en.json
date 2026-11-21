@@ -548,6 +548,25 @@
       "descriptionCloud": "stella AI also fixes recognition mistakes and spoken formatting such as “new line” or “bold”, and fits the text to the app, such as email.",
       "title": "Clean up with AI"
     },
+    "cleanupStyle": {
+      "casual": {
+        "description": "Keeps a relaxed tone with light punctuation.",
+        "title": "Casual"
+      },
+      "notes": {
+        "description": "Short points, one per line, without filler words.",
+        "title": "Notes"
+      },
+      "polished": {
+        "description": "Fixes recognition mistakes and keeps your wording.",
+        "title": "Polished"
+      },
+      "title": "Style",
+      "verbatim": {
+        "description": "Every word as heard; only punctuation and capitals are added.",
+        "title": "Verbatim"
+      }
+    },
     "context": {
       "textBeforeCursor": {
         "description": "Up to {limit, number} characters of the document you are in, so the dictation fits what you are writing.",
@@ -681,6 +700,11 @@
       "failed": "The window could not be opened. Try again.",
       "open": "Open",
       "title": "Transcribe a recording"
+    },
+    "translateTo": {
+      "description": "Writes the cleaned text in this language, whatever language you speak.",
+      "off": "Language you speak",
+      "title": "Write in"
     }
   },
   "keepAwake": {

@@ -548,6 +548,25 @@
       "descriptionCloud": "stella AI dodatkowo poprawia błędy rozpoznawania i podyktowane formatowanie, na przykład „nowa linia” lub „pogrubienie”, oraz dopasowuje tekst do aplikacji, na przykład poczty e-mail.",
       "title": "Popraw za pomocą AI"
     },
+    "cleanupStyle": {
+      "casual": {
+        "description": "Zachowuje swobodny ton i oszczędną interpunkcję.",
+        "title": "Swobodny"
+      },
+      "notes": {
+        "description": "Krótkie punkty, każdy w osobnym wierszu, bez zbędnych słów.",
+        "title": "Notatki"
+      },
+      "polished": {
+        "description": "Poprawia błędy rozpoznawania i zachowuje Twoje sformułowania.",
+        "title": "Dopracowany"
+      },
+      "title": "Styl",
+      "verbatim": {
+        "description": "Każde słowo tak, jak padło; dodawane są tylko interpunkcja i wielkie litery.",
+        "title": "Dosłowny"
+      }
+    },
     "context": {
       "textBeforeCursor": {
         "description": "Do {limit, number} znaków dokumentu, w którym jesteś, aby dyktowany tekst pasował do tego, co piszesz.",
@@ -681,6 +700,11 @@
       "failed": "Nie udało się otworzyć okna. Spróbuj ponownie.",
       "open": "Otwórz",
       "title": "Transkrypcja nagrania"
+    },
+    "translateTo": {
+      "description": "Zapisuje poprawiony tekst w tym języku, niezależnie od tego, w jakim języku mówisz.",
+      "off": "Język, w którym mówisz",
+      "title": "Pisz w języku"
     }
   },
   "keepAwake": {

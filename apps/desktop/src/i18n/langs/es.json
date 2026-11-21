@@ -548,6 +548,25 @@
       "descriptionCloud": "stella IA también corrige errores de reconocimiento y el formato dictado, como «nueva línea» o «negrita», y adapta el texto a la aplicación, como el correo.",
       "title": "Corregir con IA"
     },
+    "cleanupStyle": {
+      "casual": {
+        "description": "Mantiene un tono relajado con puntuación ligera.",
+        "title": "Informal"
+      },
+      "notes": {
+        "description": "Puntos breves, uno por línea, sin muletillas.",
+        "title": "Notas"
+      },
+      "polished": {
+        "description": "Corrige los errores de reconocimiento y mantiene tu redacción.",
+        "title": "Pulido"
+      },
+      "title": "Estilo",
+      "verbatim": {
+        "description": "Cada palabra tal como se dijo; solo se añaden puntuación y mayúsculas.",
+        "title": "Literal"
+      }
+    },
     "context": {
       "textBeforeCursor": {
         "description": "Hasta {limit, number} caracteres del documento en el que estás, para que el dictado encaje con lo que escribes.",
@@ -681,6 +700,11 @@
       "failed": "No se pudo abrir la ventana. Inténtalo de nuevo.",
       "open": "Abrir",
       "title": "Transcribir una grabación"
+    },
+    "translateTo": {
+      "description": "Escribe el texto limpio en este idioma, hables el idioma que hables.",
+      "off": "Idioma en que hablas",
+      "title": "Escribir en"
     }
   },
   "keepAwake": {

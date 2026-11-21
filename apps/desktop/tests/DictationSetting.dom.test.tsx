@@ -37,6 +37,8 @@ const ENABLED_SNAPSHOT = {
   shareTextBeforeCursor: false,
   sounds: true,
   textBeforeCursorAvailable: true,
+  cleanupStyle: "polished",
+  translateTo: null,
   failure: null,
   failureKeptInHistory: false,
   holdKey: "combination",
@@ -219,6 +221,87 @@ test("turning cleanup off asks the native side and shows its answer", async () =
     expect(toggle.getAttribute("aria-checked")).toBe("false");
   });
   expect(calls).toEqual([{ enabled: false }]);
+});
+
+test("the speaker picks a cleanup style, and its description follows", async () => {
+  const picked: unknown[] = [];
+  const view = await renderSetting(ENABLED_SNAPSHOT, (command, payload) => {
+    if (command !== "dictation_set_cleanup_style") {
+      return undefined;
+    }
+    picked.push(payload);
+    return { ...ENABLED_SNAPSHOT, cleanupStyle: "notes" };
+  });
+  const { cleanupStyle } = defaultMessages.dictation;
+  expect(
+    view.container.querySelector("#dictation-cleanup-style-description")
+      ?.textContent,
+  ).toBe(cleanupStyle.polished.description);
+
+  const listbox = await openSelect(view, cleanupStyle.title);
+  expect(within(listbox).getAllByRole("option")).toHaveLength(4);
+  const notes = within(listbox).getByRole("option", {
+    name: cleanupStyle.notes.title,
+  });
+  await act(async () => {
+    fireEvent.pointerDown(notes, { pointerType: "mouse" });
+    fireEvent.click(notes);
+  });
+
+  await waitFor(() => {
+    expect(picked).toEqual([{ style: "notes" }]);
+  });
+  await waitFor(() => {
+    expect(
+      view.container.querySelector("#dictation-cleanup-style-description")
+        ?.textContent,
+    ).toBe(cleanupStyle.notes.description);
+  });
+});
+
+test("the speaker picks a language to write in, and turns it off again", async () => {
+  const asked: unknown[] = [];
+  const view = await renderSetting(ENABLED_SNAPSHOT, (command, payload) => {
+    if (command !== "dictation_set_translate_to") {
+      return undefined;
+    }
+    asked.push(payload);
+    return { ...ENABLED_SNAPSHOT, translateTo: "en" };
+  });
+  const { translateTo } = defaultMessages.dictation;
+
+  const listbox = await openSelect(view, translateTo.title);
+  // Off, then every language cleanup can write in.
+  expect(within(listbox).getAllByRole("option")).toHaveLength(14);
+  const english = within(listbox).getByRole("option", { name: "English" });
+  await act(async () => {
+    fireEvent.pointerDown(english, { pointerType: "mouse" });
+    fireEvent.click(english);
+  });
+  await waitFor(() => {
+    expect(asked).toEqual([{ language: "en" }]);
+  });
+
+  const again = await openSelect(view, translateTo.title);
+  const off = within(again).getByRole("option", { name: translateTo.off });
+  await act(async () => {
+    fireEvent.pointerDown(off, { pointerType: "mouse" });
+    fireEvent.click(off);
+  });
+  await waitFor(() => {
+    expect(asked).toEqual([{ language: "en" }, { language: null }]);
+  });
+});
+
+test("the cleanup style and language are offered only while cleanup runs", async () => {
+  const view = await renderSetting({ ...ENABLED_SNAPSHOT, cleanup: false });
+  const { cleanupStyle, translateTo } = defaultMessages.dictation;
+
+  for (const name of [cleanupStyle.title, translateTo.title]) {
+    expect(
+      Object.hasOwn(view.getByRole("combobox", { name }).dataset, "disabled"),
+    ).toBe(true);
+  }
 });
 
 test("hides the cleanup switch while dictation is off", async () => {

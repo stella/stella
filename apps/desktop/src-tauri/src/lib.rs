@@ -446,6 +446,11 @@ pub fn run() {
                   activity_window::show(&handle);
                 }
               }
+              tray::MenuAction::SetDictationLanguage(language) => {
+                if let Err(error) = dictation::set_language_from_tray(&handle, &language) {
+                  tracing::warn!(%error, "dictation language from the tray was not stored");
+                }
+              }
               tray::MenuAction::CheckForUpdates => {
                 let sessions = &*manager;
                 let active_edit_sessions = move || async move {

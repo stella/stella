@@ -548,6 +548,25 @@
       "descriptionCloud": "stella AI parandab ka tuvastusvead ja dikteeritud vormingu, näiteks „uus rida“ või „paks“, ning sobitab teksti rakendusega, näiteks e-postiga.",
       "title": "Paranda tehisintellektiga"
     },
+    "cleanupStyle": {
+      "casual": {
+        "description": "Hoiab vaba tooni ja kerget kirjavahemärgistust.",
+        "title": "Vaba"
+      },
+      "notes": {
+        "description": "Lühikesed punktid, igaüks eraldi real, ilma täitesõnadeta.",
+        "title": "Märkmed"
+      },
+      "polished": {
+        "description": "Parandab tuvastusvead ja säilitab teie sõnastuse.",
+        "title": "Viimistletud"
+      },
+      "title": "Stiil",
+      "verbatim": {
+        "description": "Iga sõna nii, nagu see kõlas; lisatakse ainult kirjavahemärgid ja suurtähed.",
+        "title": "Sõnasõnaline"
+      }
+    },
     "context": {
       "textBeforeCursor": {
         "description": "Kuni {limit, number} märki dokumendist, milles olete, et dikteeritu sobiks kirjutatavaga.",
@@ -681,6 +700,11 @@
       "failed": "Akent ei õnnestunud avada. Proovige uuesti.",
       "open": "Ava",
       "title": "Salvestise transkribeerimine"
+    },
+    "translateTo": {
+      "description": "Kirjutab puhastatud teksti selles keeles, olenemata sellest, mis keelt te räägite.",
+      "off": "Räägitav keel",
+      "title": "Kirjuta keeles"
     }
   },
   "keepAwake": {

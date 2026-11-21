@@ -548,6 +548,25 @@
       "descriptionCloud": "stella AI navyše opraví chyby rozpoznávania a vyslovené formátovanie, napríklad „nový riadok“ alebo „tučne“, a prispôsobí text aplikácii, napríklad e-mailu.",
       "title": "Upraviť pomocou AI"
     },
+    "cleanupStyle": {
+      "casual": {
+        "description": "Zachová uvoľnený tón s ľahkou interpunkciou.",
+        "title": "Neformálny"
+      },
+      "notes": {
+        "description": "Krátke body, každý na samostatnom riadku, bez výplňových slov.",
+        "title": "Poznámky"
+      },
+      "polished": {
+        "description": "Opraví chyby rozpoznávania a zachová vaše formulácie.",
+        "title": "Uhladený"
+      },
+      "title": "Štýl",
+      "verbatim": {
+        "description": "Každé slovo tak, ako zaznelo; doplní sa len interpunkcia a veľké písmená.",
+        "title": "Doslovný"
+      }
+    },
     "context": {
       "textBeforeCursor": {
         "description": "Najviac {limit, number} znakov dokumentu, v ktorom ste, aby diktát nadviazal na to, čo píšete.",
@@ -681,6 +700,11 @@
       "failed": "Okno sa nepodarilo otvoriť. Skúste to znova.",
       "open": "Otvoriť",
       "title": "Prepísať nahrávku"
+    },
+    "translateTo": {
+      "description": "Upravený text napíše v tomto jazyku, nech hovoríte akýmkoľvek jazykom.",
+      "off": "Jazyk, ktorým hovoríte",
+      "title": "Písať v jazyku"
     }
   },
   "keepAwake": {

@@ -481,7 +481,14 @@ fn finish(
   let ((cleaned, cleanup), cleanup_took) = dictation_trace::timed(|| {
     if cleanup_enabled {
       let words = crate::dictation_words::words(app);
-      dictation_cleanup::clean_up(app, text, &language.speaker, &words, context)
+      dictation_cleanup::clean_up(
+        app,
+        text,
+        &language.speaker,
+        &words,
+        context,
+        dictation::cleanup_form(app),
+      )
     } else {
       (None, Cleanup::Off)
     }
