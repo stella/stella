@@ -39,30 +39,40 @@ const SESSION: StoredSession = {
 
 const FIX = { from: "stela", to: "stella", seen: 2, status: "on" } as const;
 
+// A sign-in that signed out stays signed out for this module, also when the
+// suite runs again: each test signs in afresh.
+let signIns = 0;
+const signIn = (): StoredSession => {
+  signIns += 1;
+  return { ...SESSION, signInId: `sign-in-${String(signIns)}` };
+};
+
 describe("learned dictation fixes on the phone", () => {
   test("what is written is read back, per account", async () => {
     const { store } = memoryStore();
-    await updateLearnedFixes(store, SESSION, () => [FIX]);
-    expect(await readLearnedFixes(store, SESSION)).toEqual([FIX]);
+    const session = signIn();
+    await updateLearnedFixes(store, session, () => [FIX]);
+    expect(await readLearnedFixes(store, session)).toEqual([FIX]);
     expect(
-      await readLearnedFixes(store, { ...SESSION, userId: "user-2" }),
+      await readLearnedFixes(store, { ...session, userId: "user-2" }),
     ).toEqual([]);
   });
 
   test("changes made at once each read what the one before wrote", async () => {
     const { store } = memoryStore();
+    const session = signIn();
     const seen = (fixes: readonly { seen: number }[]) => fixes.at(0)?.seen ?? 0;
     const bump = async () =>
-      await updateLearnedFixes(store, SESSION, (fixes) => [
+      await updateLearnedFixes(store, session, (fixes) => [
         { ...FIX, seen: seen(fixes) + 1 },
       ]);
     await Promise.all([bump(), bump()]);
-    expect(seen(await readLearnedFixes(store, SESSION))).toBe(2);
+    expect(seen(await readLearnedFixes(store, session))).toBe(2);
   });
 
   test("a change still under way at sign-out writes nothing after it", async () => {
     const { items, store } = memoryStore();
-    const session = { ...SESSION, signInId: "sign-in-ending" };
+    const session = signIn();
     const boundary = createSessionEndBoundary();
     boundary.register(forgetLearnedFixes(store));
     const pending = updateLearnedFixes(store, session, () => [FIX]);
@@ -74,25 +84,30 @@ describe("learned dictation fixes on the phone", () => {
 
   test("nothing learned leaves nothing stored", async () => {
     const { items, store } = memoryStore();
-    await updateLearnedFixes(store, SESSION, () => [FIX]);
-    await deleteLearnedFixes(store, SESSION);
+    const session = signIn();
+    await updateLearnedFixes(store, session, () => [FIX]);
+    expect(items.size).toBe(1);
+    await deleteLearnedFixes(store, session);
     expect(items.size).toBe(0);
   });
 
   test("a value this build cannot read counts as nothing learned", async () => {
     const { items, store } = memoryStore();
-    await updateLearnedFixes(store, SESSION, () => [FIX]);
+    const session = signIn();
+    await updateLearnedFixes(store, session, () => [FIX]);
+    expect(items.size).toBe(1);
     const [key] = items.keys();
     items.set(key ?? "", '[{"from":"stela","to":"stella","seen":0}]');
-    expect(await readLearnedFixes(store, SESSION)).toEqual([]);
+    expect(await readLearnedFixes(store, session)).toEqual([]);
   });
 
   test("sign-out forgets them", async () => {
     const { items, store } = memoryStore();
-    await updateLearnedFixes(store, SESSION, () => [FIX]);
+    const session = signIn();
+    await updateLearnedFixes(store, session, () => [FIX]);
     const boundary = createSessionEndBoundary();
     boundary.register(forgetLearnedFixes(store));
-    await boundary.run("signed-out", SESSION);
+    await boundary.run("signed-out", session);
     expect(items.size).toBe(0);
   });
 });
