@@ -78,6 +78,7 @@ describe("as on the desktop", () => {
     expect(respell("podle ISO 27002", ["ISO 27001"])).toBe("podle ISO 27002");
     expect(respell("viz section 124", ["Section 123"])).toBe("viz section 124");
     expect(respell("podle iso 27001", ["ISO 27001"])).toBe("podle ISO 27001");
+    expect(respell("podle iso 27-001", ["ISO 27001"])).toBe("podle iso 27-001");
   });
 
   test("combining accents stay with their word", () => {
@@ -89,6 +90,20 @@ describe("as on the desktop", () => {
   test("a swap of two letters is one edit", () => {
     expect(respell("firma Kubrenetes", ["Kubernetes"])).toBe(
       "firma Kubernetes",
+    );
+  });
+});
+
+describe("overlapping custom words", () => {
+  test("the same name twice, composed and decomposed, is no tie", () => {
+    expect(
+      respell("pan dvorak", ["Dvořák", normalizeUnicode("Dvořák", "NFD")]),
+    ).toBe("pan Dvořák");
+  });
+
+  test("a phrase spelled right keeps its words from other matches", () => {
+    expect(respell("Baker McKenzie", ["Baker McKenzie", "McKénzie"])).toBe(
+      "Baker McKenzie",
     );
   });
 });

@@ -104,7 +104,11 @@ type WordMatch = {
 
 /** `text` with every close miss of a custom word spelled as in `words`. */
 export const respell = (text: string, words: readonly string[]): string => {
-  const targets = words.flatMap((word) => {
+  // One target per spelling: the same name twice is no tie.
+  const spellings = new Set(
+    words.map((word) => normalizeUnicode(word, "NFC").trim()),
+  );
+  const targets = [...spellings].flatMap((word) => {
     const made = target(word);
     return made === undefined ? [] : [made];
   });
@@ -120,9 +124,7 @@ export const respell = (text: string, words: readonly string[]): string => {
     piece = pieces.at(index)
   ) {
     const match =
-      piece.kind === "word"
-        ? bestMatch(pieces.slice(index), targets)
-        : undefined;
+      piece.kind === "word" ? bestMatch(pieces, index, targets) : undefined;
     if (match === undefined) {
       out += piece.text;
       index += 1;
@@ -202,20 +204,22 @@ const splitWords = (text: string): Piece[] => {
 const JOINERS = new Set(["'", "’", "-"]);
 
 /**
- * The custom word the words at the start of `pieces` are a close miss of,
- * spelled, and how many pieces it covers; the closest wins, then the one
- * without endings, then the longest phrase. None when none is close, when
- * two are equally close, or when the words already read as the custom word.
+ * The custom word the words from `start` on are a close miss of, spelled,
+ * and how many pieces it covers; the closest wins, then the one without
+ * endings, then the longest phrase. A match already spelled right is still
+ * returned, so its words are not matched again one by one. None when none
+ * is close or when two are equally close.
  */
 const bestMatch = (
   pieces: readonly Piece[],
+  start: number,
   targets: readonly Target[],
 ): { spelled: string; taken: number } | undefined => {
   let best:
     { spelled: string; taken: number; rank: readonly number[] } | undefined;
   let tied = false;
   for (const candidate of targets) {
-    const aligned = align(pieces, candidate);
+    const aligned = align(pieces, start, candidate);
     if (
       aligned === undefined ||
       aligned.distance > allowed(candidate.letters)
@@ -227,7 +231,7 @@ const bestMatch = (
     if (order === 0) {
       tied = true;
     } else if (order < 0) {
-      const original = joinPieces(pieces.slice(0, aligned.taken));
+      const original = joinPieces(pieces.slice(start, start + aligned.taken));
       best = {
         spelled: casedLike(aligned.spelled, original),
         taken: aligned.taken,
@@ -236,10 +240,7 @@ const bestMatch = (
       tied = false;
     }
   }
-  if (best === undefined || tied) {
-    return undefined;
-  }
-  return best.spelled === joinPieces(pieces.slice(0, best.taken))
+  return best === undefined || tied
     ? undefined
     : { spelled: best.spelled, taken: best.taken };
 };
@@ -270,6 +271,7 @@ const joinPieces = (pieces: readonly Piece[]): string =>
  */
 const align = (
   pieces: readonly Piece[],
+  start: number,
   { pieces: wanted }: Target,
 ):
   | { spelled: string; taken: number; distance: number; inflected: number }
@@ -278,7 +280,7 @@ const align = (
   let distance = 0;
   let inflected = 0;
   for (const [index, want] of wanted.entries()) {
-    const piece = pieces.at(index);
+    const piece = pieces.at(start + index);
     if (piece === undefined || piece.kind !== want.kind) {
       return undefined;
     }
@@ -319,18 +321,21 @@ const matchWord = (
   spelling: string,
   custom: string,
 ): WordMatch | undefined => {
+  // A number, as of a section or a standard, matches only as written:
+  // folding would drop the hyphen of "27-001".
+  if (/\p{N}/u.test(`${word}${spelling}`)) {
+    return word.toLowerCase() === spelling.toLowerCase()
+      ? { distance: 0, spelled: spelling, inflected: false }
+      : undefined;
+  }
   const folded = fold(word);
   const plain = distance(folded, custom);
-  const numbered = (text: string) => /\p{N}/u.test(text);
-  if (plain !== 0 && (numbered(folded) || numbered(custom))) {
-    return undefined;
-  }
   let best: WordMatch = {
     distance: plain,
     spelled: spelling,
     inflected: false,
   };
-  if (plain === 0 || numbered(custom)) {
+  if (plain === 0) {
     return best;
   }
   for (const { stem, written, endings } of stems(spelling, custom)) {
