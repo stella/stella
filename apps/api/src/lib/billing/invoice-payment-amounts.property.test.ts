@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
 
 import type { InvoiceDocumentType } from "@stll/invoicing";
+import { cents } from "@stll/money";
 import { assertProperty } from "@stll/property-testing";
 
 import { INVOICE_STATUS, type InvoiceStatus } from "@/api/db/schema";
@@ -18,11 +19,10 @@ import {
 
 const ALL_INVOICE_STATUSES: InvoiceStatus[] = [
   INVOICE_STATUS.DRAFT,
-  INVOICE_STATUS.ISSUED,
+  INVOICE_STATUS.FINALIZED,
   INVOICE_STATUS.SENT,
   INVOICE_STATUS.PAID,
-  INVOICE_STATUS.OVERDUE,
-  INVOICE_STATUS.CANCELLED,
+  INVOICE_STATUS.VOID,
 ];
 const statusArb = fc.constantFrom(...ALL_INVOICE_STATUSES);
 const documentTypeArb = fc.constantFrom<InvoiceDocumentType>(
@@ -49,16 +49,16 @@ describe("invoice payment amounts properties", () => {
           const amountDue = amountDueCents(invoiceAmountDue(balance));
 
           expect(result.outstandingAmount).toBe(amountDue);
-          expect(result.paidAmount).toBe(paidAmount);
+          expect(result.paidAmount).toBe(cents(paidAmount));
           expect(amountDue).toBeGreaterThanOrEqual(0);
-          expect(amountDue).toBe(Math.max(0, remaining - paidAmount));
+          expect(amountDue).toBe(cents(Math.max(0, remaining - paidAmount)));
 
           if (paidAmount > remaining) {
             expect(result.settlement).toEqual({
               kind: "overpaid",
-              refundAmount: paidAmount - remaining,
+              refundAmount: cents(paidAmount - remaining),
             });
-            expect(amountDue).toBe(0);
+            expect(amountDue).toBe(cents(0));
           } else {
             expect(result.settlement.kind).not.toBe("overpaid");
             expect(amountDue + paidAmount).toBe(remaining);
@@ -85,7 +85,7 @@ describe("invoice payment amounts properties", () => {
           };
           expect(invoiceSettlement(balance)).toEqual({ kind: "credited" });
           expect(isInvoiceSettled(balance)).toBe(false);
-          expect(amountDueCents(invoiceAmountDue(balance))).toBe(0);
+          expect(amountDueCents(invoiceAmountDue(balance))).toBe(cents(0));
           expect(
             invoicePaymentState({ ...balance, documentType: "invoice" }),
           ).toEqual({ status: "not_payable" });
@@ -141,10 +141,12 @@ describe("invoice payment amounts properties", () => {
             expect(state).toEqual({ status: "not_payable" });
             return;
           }
-          const due = amountDueCents(
-            invoiceAmountDue({ totalAmount, paidAmount, creditedAmount }),
-          );
-          if (due > 0) {
+          const due = invoiceAmountDue({
+            totalAmount,
+            paidAmount,
+            creditedAmount,
+          });
+          if (amountDueCents(due) > 0) {
             expect(state).toEqual({ status: "due", amountMinor: due });
           } else if (
             isInvoiceSettled({
