@@ -31,6 +31,10 @@ const extra = v.parse(
   v.object({
     liveActivities: v.optional(v.boolean(), false),
     pushNotifications: v.optional(v.boolean(), false),
+    keyboardDictation: v.optional(
+      v.nullable(v.object({ appGroup: v.string() })),
+      null,
+    ),
     shareInbox: v.optional(
       v.nullable(v.object({ appGroup: v.string(), folder: v.string() })),
       null,
@@ -59,3 +63,9 @@ export const PUSH_NOTIFICATIONS: boolean = extra.pushNotifications;
  * folder of the App Group's container; null in a build without the extension.
  */
 export const SHARE_INBOX = extra.shareInbox;
+
+/**
+ * The App Group the app shares with the stella keyboard (`app.config.ts`);
+ * null in a build without the keyboard.
+ */
+export const KEYBOARD_DICTATION = extra.keyboardDictation;

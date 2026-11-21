@@ -1,6 +1,8 @@
 {
   "duplicatesCommon": [],
   "duplicateValues": [
+    "chat.dictate",
+    "chat.dictationTranscribing",
     "chat.documentClose",
     "chat.documentOpen",
     "chat.edit.cancel",
@@ -14,6 +16,7 @@
     "chat.retry",
     "chat.scanDocument",
     "chat.sections.today",
+    "chat.stop",
     "chat.tool.delete_matter",
     "chat.tool.delete_task",
     "document.details",
@@ -21,6 +24,11 @@
     "document.retry",
     "document.title",
     "header.search",
+    "keyboard.cancel",
+    "keyboard.delete",
+    "keyboard.dictate",
+    "keyboard.stop",
+    "keyboard.transcribing",
     "law.retry",
     "law.share",
     "law.title",
@@ -61,6 +69,7 @@
     "matters.you",
     "more.timers",
     "role.retry",
+    "scan.deletePage",
     "scan.discard",
     "scan.matterTitle",
     "scan.moveDown",
@@ -115,6 +124,19 @@
     ],
     "entity.type": [
       "fr"
+    ],
+    "keyboard.languageAutoShort": [
+      "cs",
+      "de",
+      "es",
+      "et",
+      "fr",
+      "hu",
+      "lt",
+      "lv",
+      "pl",
+      "pt-BR",
+      "sk"
     ],
     "matter.details": [
       "de"

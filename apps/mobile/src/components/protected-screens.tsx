@@ -9,6 +9,7 @@ import {
   useHeaderSearch,
 } from "@/components/header-search";
 import { KeptDictationsProvider } from "@/components/kept-dictations";
+import { KeyboardDictationHost } from "@/components/keyboard-dictation-host";
 import { MattersViewProvider, useMattersView } from "@/components/matters-view";
 import { useNewChat } from "@/components/new-chat";
 import { PushRegistration } from "@/components/push-registration";
@@ -46,6 +47,7 @@ export const ProtectedScreens = () => {
                     <KeptDictationsProvider>
                       <TimerActivitySync />
                       <PushRegistration />
+                      <KeyboardDictationHost />
                       <Screens />
                       <RunBanners />
                     </KeptDictationsProvider>
@@ -263,6 +265,14 @@ const Screens = () => {
             />
             <Stack.Screen
               name="share/[shareId]"
+              options={{ ...pushedScreen, presentation: "modal" }}
+            />
+            <Stack.Screen
+              name="keyboard/dictate"
+              options={{ ...pushedScreen, presentation: "modal" }}
+            />
+            <Stack.Screen
+              name="keyboard/setup"
               options={{ ...pushedScreen, presentation: "modal" }}
             />
             <Stack.Screen name="timers/index" options={pushedScreen} />

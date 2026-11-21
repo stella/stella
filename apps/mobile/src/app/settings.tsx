@@ -10,6 +10,7 @@ import { Text } from "@stll/ui/text";
 
 import { DictationSetting } from "@/components/dictation-setting";
 import { screenStyles } from "@/components/empty-state-screen";
+import { KeyboardSettingRow } from "@/components/keyboard-setting-row";
 import { accountPageUrl } from "@/connection/account-page";
 import type { StoredSession } from "@/connection/session";
 import { useSession } from "@/connection/session-provider";
@@ -57,6 +58,7 @@ const SettingsScreen = () => {
           source={state.source}
         />
       )}
+      {session === null ? null : <KeyboardSettingRow />}
       {session === null ? null : (
         <View className="gap-2">
           <Button

@@ -103,6 +103,31 @@ the app target with the profile when `APPLE_TEAM_ID` and
 Connect API key of its own, with the App Manager role
 (`MOBILE_ASC_API_KEY_ID`, `MOBILE_ASC_API_ISSUER_ID`, `MOBILE_ASC_API_KEY_P8`).
 
+Each app extension is a target with its own bundle identifier and profile,
+and a release leaves an extension out until its profile secret exists: the
+Live Activity widgets (`<id>.widgets`, `MOBILE_WIDGETS_PROFILE_*`), the share
+extension (`<id>.share`, `MOBILE_SHARE_PROFILE_*`) and the stella keyboard
+(`<id>.keyboard`, `MOBILE_KEYBOARD_PROFILE_*`). The share extension and the
+keyboard share the App Group `group.<id>` with the app, so the app's profile
+and theirs must grant it.
+
+## stella keyboard
+
+`keyboard-extension/` is a custom keyboard for dictating into any app. A
+keyboard may not record, so the app does: `modules/keyboard-dictation` keeps
+an audio session open for as long as Settings › Dictation › stella keyboard
+says ("Keep microphone warm"), records what the keyboard asks for in pieces
+cut at pauses, and hands them to `src/components/keyboard-dictation-host.tsx`,
+which transcribes them through stella as the composer does. The two sides
+talk through the App Group's defaults and Darwin notifications
+(`modules/keyboard-dictation/ios/KeyboardDictationBridge.swift`, copied into
+the keyboard at prebuild); the keyboard needs Full Access to reach them.
+When the microphone is not warm, the keyboard opens the app on
+`keyboard/dictate`, which starts recording, and the person goes back to
+stop it. Text that arrives after the keyboard closed waits ten minutes
+behind its Paste dictation chip. The keyboard's messages are the catalogs'
+`keyboard` section, compiled into it at prebuild.
+
 ## Over-the-air updates
 
 `preview` and `production` builds check `api.stll.app/v1/mobile/updates/<variant>`

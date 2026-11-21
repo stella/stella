@@ -7,7 +7,14 @@ import {
   withXcodeProject,
 } from "expo/config-plugins";
 import type { ConfigPlugin, ExportedConfig } from "expo/config-plugins";
-import { cpSync, existsSync, rmSync } from "node:fs";
+import {
+  cpSync,
+  existsSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import path from "node:path";
 
 // The interface languages come from `@stll/locales` itself, so iOS is told
@@ -70,6 +77,12 @@ type ReleaseSigning = {
    * Group. Without it the release leaves the share extension out.
    */
   shareProfileUuid?: string | undefined;
+  /**
+   * The keyboard extension's own profile, granted the App Group; set, like
+   * the share profile, only beside the widgets profile. Without it the
+   * release leaves the keyboard out.
+   */
+  keyboardProfileUuid?: string | undefined;
 };
 
 /** The target expo-widgets adds for the widget extension. */
@@ -93,13 +106,43 @@ const SHARE_INBOX_FOLDER = "ShareInbox";
 export const SHARE_ROUTE = "share";
 
 /**
+ * The stella keyboard's target, built from `keyboard-extension/`: dictation
+ * into any app. A keyboard may not record, so the app records and
+ * transcribes (`modules/keyboard-dictation`), and the two talk through the
+ * App Group with the bridge both compile.
+ */
+const KEYBOARD_TARGET = "StellaKeyboard";
+
+/** The keyboard's sources, copied into the native project at prebuild. */
+export const KEYBOARD_EXTENSION_FOLDER = "keyboard-extension";
+
+/** What the keyboard and the app say to each other; the prebuild copies it into the keyboard. */
+export const KEYBOARD_BRIDGE =
+  "modules/keyboard-dictation/ios/KeyboardDictationBridge.swift";
+
+/** The catalogs whose `keyboard` messages the keyboard shows, compiled into it. */
+const KEYBOARD_CATALOGS = "src/i18n/langs";
+
+/** The app route the keyboard opens to start a dictation: `src/app/keyboard/dictate.tsx`. */
+export const KEYBOARD_DICTATE_ROUTE = "keyboard/dictate";
+
+/** The app route that sets the keyboard up: `src/app/keyboard/setup.tsx`. */
+export const KEYBOARD_SETUP_ROUTE = "keyboard/setup";
+
+/**
  * Signs the app target, and only it, with the release profile. Passed to
  * `xcodebuild`, the same settings would reach every CocoaPods target too, and
  * a resource bundle refuses a provisioning profile.
  */
 const withReleaseSigning: ConfigPlugin<ReleaseSigning> = (
   config,
-  { profileUuid, shareProfileUuid, teamId, widgetsProfileUuid },
+  {
+    keyboardProfileUuid,
+    profileUuid,
+    shareProfileUuid,
+    teamId,
+    widgetsProfileUuid,
+  },
 ) =>
   withXcodeProject(config, (mod) => {
     const project = mod.modResults;
@@ -139,6 +182,13 @@ const withReleaseSigning: ConfigPlugin<ReleaseSigning> = (
         SHARE_TARGET,
       );
       sign(share.buildConfigurationList, shareProfileUuid);
+    }
+    if (keyboardProfileUuid !== undefined) {
+      const [, keyboard] = IOSConfig.Target.findNativeTargetByName(
+        project,
+        KEYBOARD_TARGET,
+      );
+      sign(keyboard.buildConfigurationList, keyboardProfileUuid);
     }
     return mod;
   });
@@ -195,7 +245,6 @@ export const copyShareExtension = ({
 type XcodeProject = Parameters<typeof IOSConfig.Target.getNativeTargets>[0];
 
 const SHARE_SOURCES = ["ShareViewController.swift"];
-const SHARE_INFO_PLIST = `${SHARE_TARGET}-Info.plist`;
 
 /** Adds the share target once; a project that has it is left as it is. */
 export const addShareTarget = (
@@ -209,20 +258,64 @@ export const addShareTarget = (
     version,
   }: ShareExtension & { buildNumber: string; version: string },
 ) => {
+  addExtensionTarget(project, {
+    name: SHARE_TARGET,
+    bundleIdentifier,
+    buildNumber,
+    version,
+    sources: SHARE_SOURCES,
+    settings: {
+      STELLA_APP_GROUP: appGroup,
+      STELLA_APP_NAME: displayName,
+      STELLA_APP_SCHEME: scheme,
+      STELLA_SHARE_INBOX: SHARE_INBOX_FOLDER,
+      STELLA_SHARE_ROUTE: SHARE_ROUTE,
+    },
+  });
+};
+
+type ExtensionTarget = {
+  /** The target's name, its folder in the native project and its files' prefix. */
+  name: string;
+  bundleIdentifier: string;
+  buildNumber: string;
+  version: string;
+  /** The Swift files in the target's folder. */
+  sources: readonly string[];
+  /** What differs per build, read by the target's Info.plist and entitlements. */
+  settings: Readonly<Record<string, string>>;
+};
+
+/**
+ * Adds an app extension target, embedded in the app, built from the folder
+ * of its name: its sources, `<name>-Info.plist` and `<name>.entitlements`.
+ * A project that has the target is left as it is.
+ */
+const addExtensionTarget = (
+  project: XcodeProject,
+  {
+    buildNumber,
+    bundleIdentifier,
+    name,
+    settings,
+    sources,
+    version,
+  }: ExtensionTarget,
+) => {
   if (
     IOSConfig.Target.getNativeTargets(project).some(
-      ([, target]) =>
-        IOSConfig.XcodeUtils.unquote(target.name) === SHARE_TARGET,
+      ([, target]) => IOSConfig.XcodeUtils.unquote(target.name) === name,
     )
   ) {
     return;
   }
+  const infoPlist = `${name}-Info.plist`;
   // The xcode package reuses a reference with the same file name, and Xcode
   // refuses one file in two groups, so every name here is the target's own.
   const group = project.addPbxGroup(
-    [...SHARE_SOURCES, SHARE_INFO_PLIST, `${SHARE_TARGET}.entitlements`],
-    SHARE_TARGET,
-    SHARE_TARGET,
+    [...sources, infoPlist, `${name}.entitlements`],
+    name,
+    name,
   );
   project.addToPbxGroup(
     group.uuid,
@@ -234,13 +327,13 @@ export const addShareTarget = (
   objects["PBXTargetDependency"] ??= {};
   objects["PBXContainerItemProxy"] ??= {};
   const target = project.addTarget(
-    SHARE_TARGET,
+    name,
     "app_extension",
-    SHARE_TARGET,
+    name,
     bundleIdentifier,
   );
   project.addBuildPhase(
-    SHARE_SOURCES,
+    [...sources],
     "PBXSourcesBuildPhase",
     "Sources",
     target.uuid,
@@ -261,20 +354,202 @@ export const addShareTarget = (
   )) {
     Object.assign(configuration.buildSettings, {
       CLANG_ENABLE_MODULES: "YES",
-      CODE_SIGN_ENTITLEMENTS: `"${SHARE_TARGET}/${SHARE_TARGET}.entitlements"`,
+      CODE_SIGN_ENTITLEMENTS: `"${name}/${name}.entitlements"`,
       CURRENT_PROJECT_VERSION: `"${buildNumber}"`,
       GENERATE_INFOPLIST_FILE: "NO",
-      INFOPLIST_FILE: `"${SHARE_TARGET}/${SHARE_INFO_PLIST}"`,
+      INFOPLIST_FILE: `"${name}/${infoPlist}"`,
       MARKETING_VERSION: `"${version}"`,
-      STELLA_APP_GROUP: `"${appGroup}"`,
-      STELLA_APP_NAME: `"${displayName}"`,
-      STELLA_APP_SCHEME: `"${scheme}"`,
-      STELLA_SHARE_INBOX: `"${SHARE_INBOX_FOLDER}"`,
-      STELLA_SHARE_ROUTE: `"${SHARE_ROUTE}"`,
+      ...Object.fromEntries(
+        Object.entries(settings).map(([key, value]) => [key, `"${value}"`]),
+      ),
       SWIFT_VERSION: "5.0",
       TARGETED_DEVICE_FAMILY: `"1,2"`,
     });
   }
+};
+
+type KeyboardExtension = {
+  appGroup: string;
+  bundleIdentifier: string;
+  displayName: string;
+  scheme: string;
+};
+
+/** The keyboard's own sources, the bridge copied beside them and its generated messages. */
+const KEYBOARD_STRINGS_FILE = "KeyboardStrings.swift";
+const KEYBOARD_SOURCES = [
+  "KeyboardViewController.swift",
+  path.basename(KEYBOARD_BRIDGE),
+  KEYBOARD_STRINGS_FILE,
+];
+
+/** Adds the keyboard extension, as `withShareExtension` adds the share extension. */
+const withKeyboardExtension: ConfigPlugin<KeyboardExtension> = (
+  config,
+  { appGroup, bundleIdentifier, displayName, scheme },
+) =>
+  withXcodeProject(
+    withDangerousMod(config, [
+      "ios",
+      (mod) => {
+        copyKeyboardExtension(mod.modRequest);
+        return mod;
+      },
+    ]),
+    (mod) => {
+      addExtensionTarget(mod.modResults, {
+        name: KEYBOARD_TARGET,
+        bundleIdentifier,
+        buildNumber: mod.ios?.buildNumber ?? "1",
+        version: mod.version ?? APP_VERSION,
+        sources: KEYBOARD_SOURCES,
+        settings: {
+          STELLA_APP_GROUP: appGroup,
+          STELLA_APP_NAME: displayName,
+          STELLA_APP_SCHEME: scheme,
+          STELLA_KEYBOARD_DICTATE_ROUTE: KEYBOARD_DICTATE_ROUTE,
+          STELLA_KEYBOARD_SETUP_ROUTE: KEYBOARD_SETUP_ROUTE,
+        },
+      });
+      return mod;
+    },
+  );
+
+/**
+ * Copies the keyboard's sources and the bridge into the native project,
+ * replacing any earlier copy, and writes its messages beside them.
+ */
+export const copyKeyboardExtension = ({
+  platformProjectRoot,
+  projectRoot,
+}: {
+  platformProjectRoot: string;
+  projectRoot: string;
+}) => {
+  const destination = path.join(platformProjectRoot, KEYBOARD_TARGET);
+  rmSync(destination, { force: true, recursive: true });
+  cpSync(path.join(projectRoot, KEYBOARD_EXTENSION_FOLDER), destination, {
+    recursive: true,
+  });
+  cpSync(
+    path.join(projectRoot, KEYBOARD_BRIDGE),
+    path.join(destination, path.basename(KEYBOARD_BRIDGE)),
+  );
+  writeFileSync(
+    path.join(destination, KEYBOARD_STRINGS_FILE),
+    keyboardStringsSwift(readKeyboardStrings(projectRoot)),
+  );
+};
+
+/** Each catalog's `keyboard` messages, by locale. */
+export const readKeyboardStrings = (
+  projectRoot: string,
+): Record<string, Record<string, string>> => {
+  const folder = path.join(projectRoot, KEYBOARD_CATALOGS);
+  return Object.fromEntries(
+    readdirSync(folder)
+      .filter((name) => name.endsWith(".json"))
+      .toSorted()
+      .map((name) => {
+        const catalog: unknown = JSON.parse(
+          readFileSync(path.join(folder, name), "utf-8"),
+        );
+        const messages =
+          typeof catalog === "object" &&
+          catalog !== null &&
+          "keyboard" in catalog
+            ? catalog.keyboard
+            : undefined;
+        if (typeof messages !== "object" || messages === null) {
+          return panic(`${name} has no keyboard messages`);
+        }
+        return [
+          path.basename(name, ".json"),
+          Object.fromEntries(
+            Object.entries(messages).map(([key, value]) =>
+              typeof value === "string"
+                ? [key, value]
+                : panic(`${name}: keyboard.${key} is not a message`),
+            ),
+          ),
+        ];
+      }),
+  );
+};
+
+/** A Swift string literal of `value`: no interpolation, every control character escaped. */
+const swiftLiteral = (value: string) =>
+  `"${value.replaceAll(/[\\"\p{Cc}]/gu, (character) =>
+    character === "\\" || character === '"'
+      ? `\\${character}`
+      : `\\u{${(character.codePointAt(0) ?? 0).toString(16)}}`,
+  )}"`;
+
+/**
+ * The keyboard's messages as Swift: one property per message, so a message
+ * the keyboard names and the catalogs lack fails its build, and every
+ * locale the app ships, picked by the person's languages as iOS lists them.
+ */
+export const keyboardStringsSwift = (
+  catalogs: Readonly<Record<string, Readonly<Record<string, string>>>>,
+): string => {
+  const source =
+    catalogs["en"] ?? panic("The keyboard needs the English catalog");
+  const keys = Object.keys(source).toSorted();
+  const instance = (
+    locale: string,
+    messages: Readonly<Record<string, string>>,
+  ) =>
+    [
+      "KeyboardStrings(",
+      keys
+        .map(
+          (key) =>
+            `      ${key}: ${swiftLiteral(messages[key] ?? panic(`${locale} lacks keyboard.${key}`))}`,
+        )
+        .join(",\n"),
+      "    )",
+    ].join("\n");
+  for (const key of keys) {
+    if (!/^[a-z][A-Za-z0-9]*$/u.test(key)) {
+      return panic(`keyboard.${key} is no Swift name`);
+    }
+  }
+  return [
+    "// Generated at prebuild from the app's catalogs (their `keyboard`",
+    "// messages): edit those, not this file.",
+    "import Foundation",
+    "",
+    "struct KeyboardStrings {",
+    ...keys.map((key) => `  let ${key}: String`),
+    "",
+    `  static let source = ${instance("en", source)}`,
+    "",
+    "  static let catalogs: [String: KeyboardStrings] = [",
+    ...Object.entries(catalogs).map(
+      ([locale, messages]) =>
+        `    ${swiftLiteral(locale)}: ${instance(locale, messages)},`,
+    ),
+    "  ]",
+    "",
+    "  /// The first of the person's languages the app ships, else English.",
+    "  static let current: KeyboardStrings = {",
+    "    for preferred in Locale.preferredLanguages {",
+    "      if let exact = catalogs[preferred] {",
+    "        return exact",
+    "      }",
+    '      let language = String(preferred.prefix { $0 != "-" })',
+    "      if let match = catalogs.first(where: {",
+    '        $0.key == language || $0.key.hasPrefix("\\(language)-")',
+    "      }) {",
+    "        return match.value",
+    "      }",
+    "    }",
+    "    return source",
+    "  }()",
+    "}",
+    "",
+  ].join("\n");
 };
 
 /**
@@ -364,6 +639,11 @@ const updatesFor = (
 type AppConfigInputs = {
   buildNumber: number;
   /**
+   * Whether the build carries the stella keyboard, which needs the App
+   * Group in the app's profile and a profile of its own.
+   */
+  keyboardExtension: boolean;
+  /**
    * Whether the build carries the widget extension that draws Live
    * Activities. A release signs the app target alone, so it leaves the
    * extension out until the release signs that too.
@@ -391,6 +671,7 @@ const appGroupFor = (variant: Variant) =>
 
 const appConfigBase = ({
   buildNumber,
+  keyboardExtension,
   liveActivities,
   pushNotifications,
   runtimeVersion,
@@ -466,8 +747,9 @@ const appConfigBase = ({
       // ships for the device's language never load.
       CFBundleLocalizations: [...UI_LOCALES],
     },
-    // The share extension hands what was shared over in the App Group.
-    ...(shareExtension
+    // The share extension hands what was shared over in the App Group, and
+    // the keyboard talks to the app there.
+    ...(shareExtension || keyboardExtension
       ? {
           entitlements: {
             "com.apple.security.application-groups": [appGroupFor(variant)],
@@ -504,12 +786,14 @@ const appConfigBase = ({
     // The composer's microphone dictates a message
     // (src/components/use-dictation.ts). A dictation the person started goes
     // on while the screen is locked or another app is open, until they
-    // finish it or it reaches its limit (background audio mode).
+    // finish it or it reaches its limit (background audio mode). The same
+    // mode keeps the microphone warm for the stella keyboard
+    // (modules/keyboard-dictation).
     [
       "expo-audio",
       {
         microphonePermission:
-          "stella records your voice while you dictate a message, to type it for you.",
+          "stella records your voice while you dictate, in the app or with the stella keyboard, to type it for you.",
         recordAudioAndroid: true,
         enableBackgroundRecording: true,
       },
@@ -547,6 +831,11 @@ const appConfigBase = ({
   extra: {
     liveActivities,
     pushNotifications,
+    // The App Group the app and the stella keyboard share; null in a build
+    // without the keyboard.
+    keyboardDictation: keyboardExtension
+      ? { appGroup: appGroupFor(variant) }
+      : null,
     // Where the app reads what the share extension hands over; null in a
     // build without the extension.
     shareInbox: shareExtension
@@ -561,7 +850,10 @@ export const appConfigFor = ({
   ...inputs
 }: Omit<
   AppConfigInputs,
-  "liveActivities" | "pushNotifications" | "shareExtension"
+  | "keyboardExtension"
+  | "liveActivities"
+  | "pushNotifications"
+  | "shareExtension"
 > & {
   signing?: ReleaseSigning | undefined;
 }): ExportedConfig => {
@@ -572,9 +864,13 @@ export const appConfigFor = ({
   // `readSigning` takes a share profile only beside the widgets profile.
   const shareExtension =
     signing === undefined || signing.shareProfileUuid !== undefined;
+  // And a keyboard profile, likewise.
+  const keyboardExtension =
+    signing === undefined || signing.keyboardProfileUuid !== undefined;
   const config = withBarGlyphs(
     appConfigBase({
       ...inputs,
+      keyboardExtension,
       liveActivities: storeCapabilities,
       pushNotifications: storeCapabilities,
       shareExtension,
@@ -584,16 +880,25 @@ export const appConfigFor = ({
   const bundled = withWidgetsBundle(config);
   const signed =
     signing === undefined ? bundled : withReleaseSigning(bundled, signing);
-  // Registered after the release signing, so its target exists by the time
-  // the signing's mod runs.
-  return shareExtension
+  const { identifier, name, scheme } = VARIANT_CONFIG[inputs.variant];
+  // Registered after the release signing, so their targets exist by the
+  // time the signing's mod runs.
+  const shared = shareExtension
     ? withShareExtension(signed, {
         appGroup: appGroupFor(inputs.variant),
-        bundleIdentifier: `${VARIANT_CONFIG[inputs.variant].identifier}.share`,
-        displayName: VARIANT_CONFIG[inputs.variant].name,
-        scheme: VARIANT_CONFIG[inputs.variant].scheme,
+        bundleIdentifier: `${identifier}.share`,
+        displayName: name,
+        scheme,
       })
     : signed;
+  return keyboardExtension
+    ? withKeyboardExtension(shared, {
+        appGroup: appGroupFor(inputs.variant),
+        bundleIdentifier: `${identifier}.keyboard`,
+        displayName: name,
+        scheme,
+      })
+    : shared;
 };
 
 /** `APP_VARIANT`: `development` (default), `preview` or `production`. */
@@ -617,15 +922,18 @@ const readBuildNumber = (value: string | undefined): number => {
 /**
  * `APPLE_TEAM_ID` and `MOBILE_PROFILE_UUID`: both or neither; with them,
  * `MOBILE_WIDGETS_PROFILE_UUID` when the release also signs the Live
- * Activity extension, and beside it `MOBILE_SHARE_PROFILE_UUID` when the
- * release also signs the share extension.
+ * Activity extension, and beside it `MOBILE_SHARE_PROFILE_UUID` and
+ * `MOBILE_KEYBOARD_PROFILE_UUID` when the release also signs the share
+ * extension and the keyboard.
  */
 const readSigning = ({
+  keyboardProfileUuid,
   profileUuid,
   shareProfileUuid,
   teamId,
   widgetsProfileUuid,
 }: {
+  keyboardProfileUuid: string | undefined;
   profileUuid: string | undefined;
   shareProfileUuid: string | undefined;
   teamId: string | undefined;
@@ -636,13 +944,24 @@ const readSigning = ({
       "MOBILE_SHARE_PROFILE_UUID signs only beside MOBILE_WIDGETS_PROFILE_UUID",
     );
   }
+  if (keyboardProfileUuid !== undefined && widgetsProfileUuid === undefined) {
+    return panic(
+      "MOBILE_KEYBOARD_PROFILE_UUID signs only beside MOBILE_WIDGETS_PROFILE_UUID",
+    );
+  }
   if (teamId === undefined && profileUuid === undefined) {
     return widgetsProfileUuid === undefined
       ? undefined
       : panic("MOBILE_WIDGETS_PROFILE_UUID signs only alongside a release");
   }
   return teamId !== undefined && profileUuid !== undefined
-    ? { profileUuid, shareProfileUuid, teamId, widgetsProfileUuid }
+    ? {
+        keyboardProfileUuid,
+        profileUuid,
+        shareProfileUuid,
+        teamId,
+        widgetsProfileUuid,
+      }
     : panic("APPLE_TEAM_ID and MOBILE_PROFILE_UUID sign a release together");
 };
 
@@ -659,6 +978,7 @@ const appConfig = ({ projectRoot }: ConfigContext): ExpoConfig =>
     // names no published runtime, so no update ever reaches it.
     runtimeVersion: readEnv("MOBILE_RUNTIME_VERSION") ?? "unpublished",
     signing: readSigning({
+      keyboardProfileUuid: readEnv("MOBILE_KEYBOARD_PROFILE_UUID"),
       profileUuid: readEnv("MOBILE_PROFILE_UUID"),
       shareProfileUuid: readEnv("MOBILE_SHARE_PROFILE_UUID"),
       teamId: readEnv("APPLE_TEAM_ID"),
