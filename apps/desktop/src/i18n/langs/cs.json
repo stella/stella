@@ -662,6 +662,35 @@
       "openSoundPc": "Otevřít nastavení zvuku",
       "title": "stella neslyší váš mikrofon"
     },
+    "perApp": {
+      "add": "Přidat…",
+      "cleanup": {
+        "default": "Úprava podle nastavení",
+        "label": "Úprava pro {name}",
+        "off": "Bez úpravy",
+        "on": "S úpravou"
+      },
+      "description": "Zapněte nebo vypněte úpravu pomocí AI a zvolte jazyk pro jednu aplikaci nebo druh aplikací. Rozhoduje aplikace, která je v popředí, když začnete diktovat.",
+      "failed": "Nastavení se nepodařilo uložit. Zkuste to znovu.",
+      "group": "Podle aplikace",
+      "kinds": {
+        "browser": "Prohlížeče",
+        "chat": "Chatovací aplikace",
+        "code": "Editory kódu",
+        "document": "Dokumenty",
+        "email": "E-mailové aplikace",
+        "other": "Ostatní aplikace",
+        "terminal": "Terminály"
+      },
+      "kindsOfApp": "Druhy aplikací",
+      "language": {
+        "default": "Jazyk podle nastavení",
+        "label": "Jazyk pro {name}"
+      },
+      "recentApps": "Nedávné aplikace",
+      "remove": "Odebrat {name}",
+      "title": "Nastavení pro aplikaci"
+    },
     "preview": {
       "finishing": "Dokončuji…",
       "label": "Co jste zatím nadiktovali",
@@ -686,6 +715,19 @@
       "failed": "Okno se nepodařilo otevřít. Zkuste to znovu.",
       "open": "Otevřít",
       "title": "Přepsat nahrávku"
+    },
+    "whileDictating": {
+      "choices": {
+        "lower": "Ztlumit ostatní zvuk",
+        "nothing": "Nic nedělat",
+        "pause": "Pozastavit Hudbu a Spotify"
+      },
+      "description": "Co se stane s ostatním zvukem, když stella nahrává, aby se nedostal do textu. Po skončení nahrávání se vrátí.",
+      "speakersOnly": {
+        "description": "Sluchátka nechat být: mikrofon je neslyší.",
+        "title": "Jen přes reproduktory"
+      },
+      "title": "Během diktování"
     }
   },
   "keepAwake": {

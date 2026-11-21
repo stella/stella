@@ -41,11 +41,18 @@ import {
   DESKTOP_PLATFORM,
   useKeyboardLayout,
 } from "../shared/use-clipboard-shortcut";
+import { DictationAppSettings } from "./DictationAppSettings";
+import type {
+  DictationAppSetting,
+  DictationRecentApp,
+} from "./DictationAppSettings";
 import { DictationCustomWords } from "./DictationCustomWords";
 import { DictationDestination } from "./DictationDestination";
 import type { DictationDestinationValue } from "./DictationDestination";
 import { DictationInputFix } from "./DictationInputFix";
 import { DictationMicrophoneRow } from "./DictationMicrophone";
+import { DictationWhileDictatingRows } from "./DictationWhileDictating";
+import type { WhileDictating } from "./DictationWhileDictating";
 import { SettingsPageHeader } from "./settings-layout";
 
 type DictationModel =
@@ -63,6 +70,9 @@ type DictationLanguage = {
 };
 
 export type DictationSnapshot = {
+  /** Cleanup and the language for one app or kind of app, over the
+   *  settings below. */
+  appSettings: DictationAppSetting[];
   available: boolean;
   /** Whether the transcribed text goes through stella to the organization's
    *  AI provider before it is typed. */
@@ -87,6 +97,8 @@ export type DictationSnapshot = {
   shareWindowTitle: boolean;
   /** Whether a short sound marks the start and the end of listening. */
   sounds: boolean;
+  /** Whether other sound changes only while it plays through speakers. */
+  speakersOnly: boolean;
   /** Whether cleanup also gets the text before the cursor. */
   shareTextBeforeCursor: boolean;
   /** Whether this computer can read the text before the cursor; without it
@@ -117,12 +129,19 @@ export type DictationSnapshot = {
   model: DictationModel;
   modelBytes: number;
   phase: "idle" | "recording" | "transcribing";
+  /** Apps dictated into since stella started, offered for their own
+   *  settings. */
+  recentApps: DictationRecentApp[];
   /** Whether a shortcut types the last dictation again, its keys, and
    *  whether another app holds them. */
   retypeKeys: ShortcutKeys;
   retypeShortcut: boolean;
   retypeShortcutTaken: boolean;
   shortcutTaken: boolean;
+  /** What happens to other sound while recording, and what this computer
+   *  offers. */
+  whileDictating: WhileDictating;
+  whileDictatingOffered: WhileDictating[];
 };
 
 const BYTES_PER_MEGABYTE = 1_000_000;
@@ -359,6 +378,9 @@ const DictationPage = ({
   const setCustomWords = async (words: string[]) =>
     await change("dictation_set_custom_words", { words });
 
+  const setAppSettings = async (settings: DictationAppSetting[]) =>
+    await change("dictation_set_app_settings", { settings });
+
   const download = async () => {
     await change("dictation_download_model");
   };
@@ -514,6 +536,12 @@ const DictationPage = ({
               />
             )}
           </SettingsSection>
+          <DictationAppSettings
+            languages={snapshot.language.supported}
+            onChange={setAppSettings}
+            recentApps={snapshot.recentApps}
+            settings={snapshot.appSettings}
+          />
           {/* stella AI and cleanup take the words; without either, the
               text from the speech model here is spelled with them. */}
           <DictationCustomWords
@@ -588,6 +616,17 @@ const DictationShortcutSection = ({
         onChange={(sounds) => {
           change("dictation_set_sounds", { enabled: sounds });
         }}
+      />
+      <DictationWhileDictatingRows
+        choice={snapshot.whileDictating}
+        offered={snapshot.whileDictatingOffered}
+        onChoice={(choice) => {
+          change("dictation_set_while_dictating", { choice });
+        }}
+        onSpeakersOnly={(enabled) => {
+          change("dictation_set_speakers_only", { enabled });
+        }}
+        speakersOnly={snapshot.speakersOnly}
       />
       <DictationRetypeRow
         checked={snapshot.retypeShortcut}

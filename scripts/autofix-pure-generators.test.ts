@@ -276,8 +276,8 @@ test("translation content never becomes an autofix output", () => {
   // `i18n:sync` copies English into other locales; that is translation
   // content, so no generator may write a locale catalogue.
   const catalogues = [
-    "apps/web/src/i18n/langs/cs.json",
-    "apps/web/src/i18n/langs/en.json",
+    "apps/web/src/i18n/namespaces/cs/core.json",
+    "apps/web/src/i18n/namespaces/en/core.json",
     "apps/landing/src/i18n/messages/de.json",
     "packages/transactional/i18n/langs/sk.json",
   ];

@@ -5,7 +5,6 @@ import { useState } from "react";
 import { cn } from "../lib/utils";
 
 type SwapState = {
-  current: string;
   generation: number;
   previous: string | null;
 };
@@ -26,16 +25,16 @@ const SwapText = ({
   className?: string;
   text: string;
 }) => {
+  const [prevText, setPrevText] = useState(text);
   const [state, setState] = useState<SwapState>({
-    current: text,
     generation: 0,
     previous: null,
   });
-  if (state.current !== text) {
+  if (prevText !== text) {
+    setPrevText(text);
     setState({
-      current: text,
       generation: state.generation + 1,
-      previous: state.current,
+      previous: prevText,
     });
   }
   const hasSwapped = state.generation > 0;
@@ -70,7 +69,7 @@ const SwapText = ({
         )}
         key={`in-${state.generation}`}
       >
-        <span className={className}>{state.current}</span>
+        <span className={className}>{text}</span>
       </span>
     </span>
   );

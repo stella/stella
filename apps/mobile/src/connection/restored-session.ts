@@ -20,6 +20,7 @@ import {
 } from "@/connection/session-end";
 import { revokeRefreshToken } from "@/connection/tokens";
 import { deviceAccountStore } from "@/native/account-store";
+import { forgetKeptDictations } from "@/native/kept-dictation-files";
 import { clearTimerActions } from "@/native/timer-actions";
 import { forgetTimerActivityDevice } from "@/native/timer-activity-device";
 import { forgetDictationPreferences } from "@/state/dictation-preferences";
@@ -33,6 +34,7 @@ export const createDeviceSessionEnd = (): SessionEndBoundary => {
   const boundary = createSessionEndBoundary();
   boundary.register(forgetRecentSearches(deviceAccountStore));
   boundary.register(forgetDictationPreferences(deviceAccountStore));
+  boundary.register(forgetKeptDictations);
   boundary.register(forgetTimerActivityDevice);
   return boundary;
 };

@@ -1,6 +1,12 @@
-import { useEffect, useEffectEvent, useRef, useState } from "react";
+import {
+  useEffect,
+  useEffectEvent,
+  useRef,
+  useState,
+  useSyncExternalStore,
+} from "react";
 
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import {
   AudioQuality,
   IOSOutputFormat,
@@ -15,9 +21,17 @@ import type {
   RecordingOptions,
   RecordingStatus,
 } from "expo-audio";
-import { File } from "expo-file-system";
+import { randomUUID } from "expo-crypto";
 import { useLocale } from "use-intl";
 
+import { respell } from "@stll/transcript/spelling";
+
+import {
+  discardRecording,
+  finalText,
+  transcribePiece,
+} from "@/components/dictation-transcription";
+import { useKeptDictations } from "@/components/kept-dictations";
 import type { AccessTokenSource } from "@/connection/session";
 import { useSession } from "@/connection/session-provider";
 import { deviceAccountStore } from "@/native/account-store";
@@ -26,12 +40,8 @@ import {
   routeForDictation,
   watchDictationDevice,
 } from "@/native/dictation-device";
-import {
-  cleanUpDictation,
-  DICTATION_MAX_SECONDS,
-  readMatterVocabulary,
-  transcribeRecording,
-} from "@/state/dictation";
+import { DICTATION_MAX_SECONDS, readMatterVocabulary } from "@/state/dictation";
+import type { Dictated } from "@/state/dictation";
 import {
   DICTATION_TOTAL_MAX_MS,
   joinChunks,
@@ -39,12 +49,20 @@ import {
   watchChunk,
 } from "@/state/dictation-chunks";
 import type { ChunkWatch } from "@/state/dictation-chunks";
+import { retriesByItself } from "@/state/dictation-kept";
+import type { DictationField, PieceFailure } from "@/state/dictation-kept";
 import {
   chosenModelId,
   DEFAULT_DICTATION_PREFERENCES,
   readDictationPreferences,
 } from "@/state/dictation-preferences";
 import type { DictationPreferences } from "@/state/dictation-preferences";
+import type {
+  FinishedPiece,
+  KeptDictations,
+  KeptSetup,
+  KeptView,
+} from "@/state/kept-dictations";
 
 /**
  * Speech for transcription, not music: one channel at 16 kHz, which is what
@@ -98,19 +116,6 @@ const releaseMicrophone = async () => {
   await setAudioModeAsync({ allowsRecording: false });
 };
 
-/**
- * Removes a recording once nothing reads it any more: the audio of a
- * dictation stays on the phone only while it is being transcribed. Whether
- * it is gone.
- */
-const discardRecording = (uri: string): boolean =>
-  Result.try(() => {
-    const file = new File(uri);
-    if (file.exists) {
-      file.delete();
-    }
-  }).isOk();
-
 /** What the next stop of the recorder means. */
 type StopMeaning = "cut" | "finish" | "cancel";
 
@@ -133,12 +138,24 @@ type Run = {
   readonly locale: string;
   /** How long the finished pieces ran. */
   doneMs: number;
-  /** Each finished piece's text, null when it failed, in spoken order. */
-  readonly pieces: Promise<string | null>[];
+  /** What came of each finished piece, in spoken order. */
+  readonly pieces: Promise<PieceOutcome>[];
   /** How long the current piece has run, as last reported. */
   pieceMs: number;
   watch: ChunkWatch;
 };
+
+/** What came of one piece of a dictation. */
+type PieceOutcome =
+  | { readonly type: "text"; readonly text: string }
+  /** Not transcribed: the recording is still at `uri`. */
+  | {
+      readonly type: "failed";
+      readonly uri: string;
+      readonly error: PieceFailure;
+    }
+  /** The system's audio restarted and took the recording with it. */
+  | { readonly type: "lost" };
 
 /**
  * The composer's microphone. `start` asks for the microphone the first
@@ -147,22 +164,33 @@ type Run = {
  * dictation is recorded in pieces cut at pauses (`state/dictation-chunks`),
  * each transcribed while the next is recorded, and their texts are joined
  * in order; one that reaches the overall limit stops by itself and is
- * transcribed like a finished one. Every way a dictation ends gives the
- * microphone back and deletes every piece's recording, and a failure on the
- * way shows as the `failed` notice.
+ * transcribed like a finished one. A dictation some of whose pieces could
+ * not be transcribed is kept on the phone (`components/kept-dictations`)
+ * and `waiting` says so until it is: its text then goes to `onText` too, or,
+ * with the field closed, is offered in another `field` of its kind.
+ * Otherwise every way a dictation ends gives the microphone back and
+ * deletes every piece's recording, and a failure on the way shows as the
+ * `failed` notice.
  */
 export const useDictation = (
-  onText: (text: string) => void,
+  onText: (dictated: Dictated) => void,
   {
+    disabled = false,
+    field,
     matterId,
   }: {
+    /** While its field takes no text (its draft being sent), a recovered text is offered instead. */
+    readonly disabled?: boolean;
+    /** The kind of field the text is for, where a recovered text is offered. */
+    readonly field: DictationField;
     /** The matter the text is for: its names are what the model expects. */
     readonly matterId?: string | undefined;
-  } = {},
+  },
 ) => {
   const { state } = useSession();
   const locale = useLocale();
   const matterTerms = useMatterTerms();
+  const kept = useKeptDictations();
   const [phase, setPhase] = useState<DictationPhase>("idle");
   const [notice, setNotice] = useState<DictationNotice>();
   // How long the dictation's finished pieces ran, for the clock.
@@ -193,27 +221,37 @@ export const useDictation = (
     handleStatus.current(status);
   });
   const reading = useAudioRecorderState(recorder, 250);
-  // The latest `onText`, for a dictation that ends after a render changed it.
-  const deliver = useRef(onText);
-  useEffect(() => {
-    deliver.current = onText;
+  const { owner, deliver, ...keptControls } = useKeptControls({
+    kept,
+    field,
+    onText,
+    disabled,
   });
 
-  /** Ends the dictation: its pieces' texts, joined, go to `onText`. */
+  /**
+   * Ends the dictation: its pieces' texts, joined, go to `onText`, or to
+   * the kept dictations when a piece could not be transcribed.
+   */
   const conclude = async (current: Run, how: "finish" | "cancel") => {
     run.current = null;
     const released = await Result.tryPromise(releaseMicrophone);
     if (how === "cancel") {
+      discardWhenSettled(current.pieces);
       return;
     }
     setPhase("transcribing");
     const gathered = await gatherText(current);
-    if (released.isErr() || gathered.notice !== undefined) {
-      setNotice(gathered.notice ?? "failed");
+    if (released.isErr()) {
+      setNotice("failed");
     }
-    if (gathered.text !== null) {
-      deliver.current(gathered.text);
-    }
+    settleGathered({
+      gathered,
+      kept,
+      owner,
+      setup: keptSetupOf(field, current, await current.setup),
+      deliver,
+      setNotice,
+    });
   };
 
   const onStatus = (status: RecordingStatus) => {
@@ -235,20 +273,7 @@ export const useDictation = (
       how !== "cut" || status.hasError || finishedMs >= DICTATION_TOTAL_MAX_MS;
     const next = ended
       ? conclude(current, how === "cancel" ? "cancel" : "finish")
-      : continueRecording({
-          recorder,
-          builtInMicrophone: current.builtInMicrophone,
-          onRecording: () => {
-            live.current = true;
-          },
-          stillCut: () => meaning.current === "cut" && run.current === current,
-          conclude: async () => {
-            await conclude(
-              current,
-              meaning.current === "cancel" ? "cancel" : "finish",
-            );
-          },
-        });
+      : continueRecording({ recorder, current, meaning, run, live, conclude });
     next
       .catch(() => {
         setNotice("failed");
@@ -319,19 +344,15 @@ export const useDictation = (
     const { preferences } = opened;
     meaning.current = "cut";
     setDoneMs(0);
-    run.current = {
+    run.current = newRun({
       // Read while the person speaks, so the first piece waits for nothing.
       setup: readSetup(source, preferences, async () =>
         matterId === undefined ? [] : await matterTerms(source, matterId),
       ),
-      builtInMicrophone: preferences.microphone === "built-in",
+      preferences,
       matterId,
       locale,
-      doneMs: 0,
-      pieces: [],
-      pieceMs: 0,
-      watch: NO_PAUSE,
-    };
+    });
     recorder.record({ forDuration: DICTATION_MAX_SECONDS });
     live.current = true;
     setPhase("recording");
@@ -339,8 +360,12 @@ export const useDictation = (
 
   useDropOnClose(recorder, () => {
     attempt.current += 1;
+    const dropped = run.current;
     run.current = null;
     meaning.current = "cancel";
+    if (dropped !== null) {
+      discardWhenSettled(dropped.pieces);
+    }
   });
 
   return {
@@ -374,7 +399,220 @@ export const useDictation = (
       attempt.current += 1;
       setNotice(undefined);
     },
+    ...keptControls,
   };
+};
+
+const newRun = ({
+  setup,
+  preferences,
+  matterId,
+  locale,
+}: {
+  setup: Promise<DictationSetup>;
+  preferences: DictationPreferences;
+  matterId: string | undefined;
+  locale: string;
+}): Run => ({
+  setup,
+  builtInMicrophone: preferences.microphone === "built-in",
+  matterId,
+  locale,
+  doneMs: 0,
+  pieces: [],
+  pieceMs: 0,
+  watch: NO_PAUSE,
+});
+
+/** What a dictation is kept with, should it be: as it was recorded. */
+const keptSetupOf = (
+  field: DictationField,
+  current: Run,
+  { preferences }: DictationSetup,
+): KeptSetup => ({
+  field,
+  matterId: current.matterId ?? null,
+  modelId: chosenModelId(preferences, null) ?? null,
+  locale: current.locale,
+  cleanup: preferences.cleanup,
+});
+
+/**
+ * Where a finished dictation goes: its text to the field, or, with the
+ * field closed meanwhile, to the paste offer; a dictation with a piece not
+ * transcribed to the kept dictations, its recordings deleted only when the
+ * phone cannot keep them.
+ */
+const settleGathered = ({
+  gathered,
+  kept,
+  owner,
+  setup,
+  deliver,
+  setNotice,
+}: {
+  gathered: Gathered;
+  kept: KeptDictations | null;
+  owner: string;
+  setup: KeptSetup;
+  deliver: (dictated: Dictated) => void;
+  setNotice: (notice: DictationNotice) => void;
+}) => {
+  switch (gathered.type) {
+    case "text":
+      if (gathered.partly) {
+        setNotice("failed");
+      }
+      if (kept === null) {
+        deliver(gathered.dictated);
+      } else {
+        kept.deliver({ owner, setup, dictated: gathered.dictated });
+      }
+      return;
+    case "nothing":
+      setNotice(gathered.notice);
+      return;
+    case "keep": {
+      const isKept =
+        kept?.keep({
+          owner,
+          setup,
+          pieces: gathered.pieces,
+          refused: gathered.refused,
+        }) ?? false;
+      if (!isKept) {
+        for (const piece of gathered.pieces) {
+          if (piece.type === "audio") {
+            discardRecording(piece.uri);
+          }
+        }
+        setNotice("failed");
+      }
+      return;
+    }
+    default:
+      gathered satisfies never;
+      panic("A dictation ended with no known outcome");
+  }
+};
+
+/** A kept dictation as a field shows it. */
+export type DictationWaiting = {
+  readonly status: "waiting" | "retrying" | "needs-person";
+  /** Dictated into a field since closed, not this one. */
+  readonly earlier: boolean;
+};
+
+const NO_KEPT: readonly KeptView[] = [];
+const NO_SUBSCRIPTION = () => () => undefined;
+
+/**
+ * A field's part in the kept dictations while it is open, as `owner`: the
+ * texts of those it keeps go to `onText`, as `deliver` hands them; it shows
+ * its own waiting ones, else those of closed fields of its kind, with a
+ * retry and a discard; and it offers the oldest text recovered from a
+ * closed field of its kind.
+ */
+const useKeptControls = ({
+  kept,
+  field,
+  onText,
+  disabled,
+}: {
+  kept: KeptDictations | null;
+  field: DictationField;
+  onText: (dictated: Dictated) => void;
+  disabled: boolean;
+}) => {
+  const [owner] = useState(randomUUID);
+  // The latest `onText` and whether the field takes text, for a dictation
+  // that ends after a render changed them.
+  const deliver = useRef(onText);
+  const taking = useRef(!disabled);
+  useEffect(() => {
+    deliver.current = onText;
+    taking.current = !disabled;
+  });
+  useEffect(
+    () =>
+      kept?.own(owner, (dictated) => {
+        if (taking.current) {
+          deliver.current(dictated);
+        }
+        return taking.current;
+      }),
+    [kept, owner],
+  );
+  const views = useSyncExternalStore(
+    kept?.subscribe ?? NO_SUBSCRIPTION,
+    kept?.views ?? (() => NO_KEPT),
+  );
+  const own = views.filter(
+    (view) => view.owner === owner && view.status !== "recovered",
+  );
+  const orphaned = views.filter(
+    (view) => view.owner === null && view.field === field,
+  );
+  const waitingViews =
+    own.length > 0
+      ? own
+      : orphaned.filter(({ status }) => status !== "recovered");
+  const waitingIds = waitingViews.map(({ id }) => id);
+  const offeredId = orphaned.find(({ status }) => status === "recovered")?.id;
+  return {
+    owner,
+    deliver: (dictated: Dictated) => {
+      deliver.current(dictated);
+    },
+    /**
+     * A dictation of this field not transcribed yet, or one from a closed
+     * field of its kind (`earlier`); undefined when there is none.
+     */
+    waiting: waitingOf(waitingViews, own.length === 0),
+    retryWaiting: () => {
+      void kept?.retry(waitingIds);
+    },
+    discardWaiting: () => {
+      kept?.discard(waitingIds);
+    },
+    /** Whether a text recovered from a closed field of this kind is offered. */
+    offered: offeredId !== undefined,
+    /** Adds the offered text to this field, through `onText`. */
+    pasteOffered: () => {
+      const taken = offeredId === undefined ? undefined : kept?.take(offeredId);
+      if (taken !== undefined) {
+        deliver.current(taken);
+      }
+    },
+  };
+};
+
+/** How the waiting dictations a field shows stand, the most active first. */
+const waitingOf = (
+  views: readonly KeptView[],
+  earlier: boolean,
+): DictationWaiting | undefined => {
+  const statuses = new Set(views.map(({ status }) => status));
+  for (const status of ["retrying", "waiting", "needs-person"] as const) {
+    if (statuses.has(status)) {
+      return { status, earlier };
+    }
+  }
+  return undefined;
+};
+
+/**
+ * Deletes the recordings of a dropped dictation's pieces once their
+ * uploads settle; with the dictation dropped, no one is told how it went.
+ */
+const discardWhenSettled = (pieces: readonly Promise<PieceOutcome>[]) => {
+  void (async () => {
+    for (const outcome of await Promise.all(pieces)) {
+      if (outcome.type === "failed") {
+        discardRecording(outcome.uri);
+      }
+    }
+  })();
 };
 
 /**
@@ -396,10 +634,10 @@ const filePiece = ({
     if (current === null || hasError || how === "cancel") {
       discardRecording(url);
     } else {
-      current.pieces.push(pieceText(current.setup, url, current.matterId));
+      current.pieces.push(pieceOutcome(current.setup, url, current.matterId));
     }
   } else if (current !== null && mediaServicesDidReset === true) {
-    current.pieces.push(Promise.resolve(null));
+    current.pieces.push(Promise.resolve({ type: "lost" }));
   }
   if (current !== null) {
     current.doneMs += current.pieceMs;
@@ -463,32 +701,39 @@ const openMicrophone = async ({
 };
 
 /**
- * Records the next piece right after a cut, unless the person ended the
- * dictation meanwhile or the recorder cannot go on: then it concludes.
+ * Records the next piece of `current` right after a cut, unless the person
+ * ended the dictation meanwhile (`meaning`, `run`) or the recorder cannot
+ * go on: then it concludes, as the person meant.
  */
 const continueRecording = async ({
   recorder,
-  builtInMicrophone,
-  onRecording,
-  stillCut,
+  current,
+  meaning,
+  run,
+  live,
   conclude,
 }: {
   recorder: AudioRecorder;
-  builtInMicrophone: boolean;
-  onRecording: () => void;
-  stillCut: () => boolean;
-  conclude: () => Promise<void>;
+  current: Run;
+  meaning: { readonly current: StopMeaning };
+  run: { readonly current: Run | null };
+  live: { current: boolean };
+  conclude: (current: Run, how: "finish" | "cancel") => Promise<void>;
 }) => {
   const prepared = await Result.tryPromise(async () => {
     await recorder.prepareToRecordAsync();
-    routeForDictation(builtInMicrophone);
+    routeForDictation(current.builtInMicrophone);
   });
-  if (prepared.isErr() || !stillCut()) {
-    await conclude();
+  if (
+    prepared.isErr() ||
+    meaning.current !== "cut" ||
+    run.current !== current
+  ) {
+    await conclude(current, meaning.current === "cancel" ? "cancel" : "finish");
     return;
   }
   recorder.record({ forDuration: DICTATION_MAX_SECONDS });
-  onRecording();
+  live.current = true;
 };
 
 /** One reading of the recorder while it records. */
@@ -515,27 +760,79 @@ const nextStop = (current: Run, { durationMillis, metering }: Reading) => {
   return next.cut ? "cut" : null;
 };
 
+/** What a finished dictation comes to. */
+type Gathered =
+  /** Its text, `partly` when the system lost a piece on the way. */
+  | {
+      readonly type: "text";
+      readonly dictated: Dictated;
+      readonly partly: boolean;
+    }
+  | { readonly type: "nothing"; readonly notice: "failed" | "silent" }
+  /**
+   * A piece could not be transcribed: the dictation is kept, and retries
+   * by itself unless every such piece was `refused`.
+   */
+  | {
+      readonly type: "keep";
+      readonly pieces: readonly FinishedPiece[];
+      readonly refused: boolean;
+    };
+
 /**
- * The finished dictation's text: its pieces joined in order and cleaned up
- * when the person turned that on, or null when nothing was heard. A piece
- * that failed leaves a gap the person should know about.
+ * The finished dictation's text: its pieces joined in order, cleaned up
+ * when the person turned that on, and the matter's names spelled as written
+ * where the model came close; or nothing, when nothing was heard; or its
+ * pieces to keep, when one could not be transcribed.
  */
-const gatherText = async (
-  current: Run,
-): Promise<{ text: string | null; notice: DictationNotice | undefined }> => {
-  const texts = await Promise.all(current.pieces);
-  const heard = texts.filter((text) => text !== null);
-  const failed = heard.length < texts.length;
-  const joined = joinChunks(heard);
-  if (joined === "") {
-    return { text: null, notice: failed ? "failed" : "silent" };
+const gatherText = async (current: Run): Promise<Gathered> => {
+  const outcomes = await Promise.all(current.pieces);
+  const failures = outcomes.flatMap((outcome) =>
+    outcome.type === "failed" ? [outcome.error] : [],
+  );
+  if (failures.length > 0) {
+    return {
+      type: "keep",
+      pieces: outcomes.flatMap((outcome): FinishedPiece[] => {
+        switch (outcome.type) {
+          case "text":
+            return [{ type: "text", text: outcome.text }];
+          case "failed":
+            return [{ type: "audio", uri: outcome.uri }];
+          case "lost":
+            return [];
+          default:
+            outcome satisfies never;
+            return panic("A piece came to no known outcome");
+        }
+      }),
+      refused: !failures.some(retriesByItself),
+    };
   }
+  const partly = outcomes.some(({ type }) => type === "lost");
+  const joined = joinChunks(
+    outcomes.flatMap((outcome) =>
+      outcome.type === "text" ? [outcome.text] : [],
+    ),
+  );
+  if (joined === "") {
+    return { type: "nothing", notice: partly ? "failed" : "silent" };
+  }
+  const setup = await current.setup;
   const text = await finalText({
-    setup: await current.setup,
+    source: setup.source,
+    cleanup: setup.preferences.cleanup,
     joined,
     locale: current.locale,
   });
-  return { text, notice: failed ? "failed" : undefined };
+  return {
+    type: "text",
+    dictated: {
+      text: respell(text, setup.vocabulary),
+      names: setup.vocabulary,
+    },
+    partly,
+  };
 };
 
 /**
@@ -639,64 +936,23 @@ const readSetup = async (
 };
 
 /**
- * One piece's text, null when it could not be transcribed: with the model
- * the person picked, or the server's default when the server no longer
- * offers it. The recording is deleted once its upload has settled.
+ * What came of one piece: its text, with the recording deleted, or the
+ * failure, with the recording left for the dictation to be kept.
  */
-const pieceText = async (
+const pieceOutcome = async (
   setup: Promise<DictationSetup>,
-  url: string,
+  uri: string,
   matterId: string | undefined,
-): Promise<string | null> => {
-  const transcribed = await Result.tryPromise(async () => {
-    const { source, preferences, vocabulary } = await setup;
-    const audio = new File(url);
-    const choice = {
-      modelId: chosenModelId(preferences, null),
-      matterId,
-      vocabulary,
-    };
-    const first = await transcribeRecording({ fetch, source, audio, choice });
-    // A model the server no longer offers: the recording still counts, with
-    // the model the server offers by default.
-    const retry =
-      first.isErr() &&
-      choice.modelId !== undefined &&
-      first.error._tag === "ApiRequestError" &&
-      first.error.status === 503;
-    return retry
-      ? await transcribeRecording({
-          fetch,
-          source,
-          audio,
-          choice: { ...choice, modelId: undefined },
-        })
-      : first;
+): Promise<PieceOutcome> => {
+  const { source, preferences, vocabulary } = await setup;
+  const transcribed = await transcribePiece({
+    source,
+    uri,
+    choice: { modelId: chosenModelId(preferences, null), matterId, vocabulary },
   });
-  discardRecording(url);
-  return transcribed.isOk() && transcribed.value.isOk()
-    ? transcribed.value.value
-    : null;
-};
-
-/** The joined text, tidied by stella AI when the person turned that on; the words as heard when cleanup fails. */
-const finalText = async ({
-  setup,
-  joined,
-  locale,
-}: {
-  setup: DictationSetup;
-  joined: string;
-  locale: string;
-}): Promise<string> => {
-  if (!setup.preferences.cleanup) {
-    return joined;
+  if (transcribed.isErr()) {
+    return { type: "failed", uri, error: transcribed.error };
   }
-  const cleaned = await cleanUpDictation({
-    fetch,
-    source: setup.source,
-    transcript: joined,
-    locale,
-  });
-  return cleaned.isOk() && cleaned.value !== "" ? cleaned.value : joined;
+  discardRecording(uri);
+  return { type: "text", text: transcribed.value };
 };

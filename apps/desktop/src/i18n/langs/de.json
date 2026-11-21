@@ -662,6 +662,35 @@
       "openSoundPc": "Soundeinstellungen öffnen",
       "title": "stella kann Ihr Mikrofon nicht hören"
     },
+    "perApp": {
+      "add": "Hinzufügen…",
+      "cleanup": {
+        "default": "Überarbeitung wie eingestellt",
+        "label": "Überarbeitung für {name}",
+        "off": "Keine Überarbeitung",
+        "on": "Mit Überarbeitung"
+      },
+      "description": "Schalten Sie die KI-Überarbeitung für eine App oder eine Art von App ein oder aus und wählen Sie die Sprache. Es zählt die App, die beim Start des Diktats im Vordergrund ist.",
+      "failed": "Die Einstellungen konnten nicht gespeichert werden. Versuchen Sie es erneut.",
+      "group": "Pro App",
+      "kinds": {
+        "browser": "Browser",
+        "chat": "Chat-Apps",
+        "code": "Code-Editoren",
+        "document": "Dokumente",
+        "email": "E-Mail-Apps",
+        "other": "Andere Apps",
+        "terminal": "Terminalprogramme"
+      },
+      "kindsOfApp": "Arten von Apps",
+      "language": {
+        "default": "Sprache wie eingestellt",
+        "label": "Sprache für {name}"
+      },
+      "recentApps": "Zuletzt verwendete Apps",
+      "remove": "{name} entfernen",
+      "title": "Einstellungen für eine App"
+    },
     "preview": {
       "finishing": "Wird abgeschlossen…",
       "label": "Bisher Diktiertes",
@@ -686,6 +715,19 @@
       "failed": "Das Fenster konnte nicht geöffnet werden. Versuchen Sie es erneut.",
       "open": "Öffnen",
       "title": "Aufnahme transkribieren"
+    },
+    "whileDictating": {
+      "choices": {
+        "lower": "Andere Töne leiser stellen",
+        "nothing": "Nichts tun",
+        "pause": "Musik und Spotify pausieren"
+      },
+      "description": "Was mit anderen Tönen passiert, während stella aufnimmt, damit sie nicht im Text landen. Nach der Aufnahme ist alles wie vorher.",
+      "speakersOnly": {
+        "description": "Kopfhörer bleiben unverändert: Das Mikrofon hört sie nicht.",
+        "title": "Nur über Lautsprecher"
+      },
+      "title": "Beim Diktieren"
     }
   },
   "keepAwake": {

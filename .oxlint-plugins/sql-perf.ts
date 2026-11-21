@@ -16,7 +16,7 @@ import baselineCounts from "./sql-perf-baseline.json" with { type: "json" };
 import { filenameForContext } from "./utils.ts";
 
 const ROOT = path.resolve(import.meta.dirname, "..");
-const baseline = new Map(Object.entries(baselineCounts));
+const baseline = new Map<string, number>(Object.entries(baselineCounts));
 
 const message = (shape: string) =>
   `${shape} can scan rows before output is bounded. Use // sql-perf-allow: ` +

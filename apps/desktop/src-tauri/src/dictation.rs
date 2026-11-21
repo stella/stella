@@ -38,11 +38,13 @@ use crate::{
   clipboard_shortcut::ShortcutKeys,
   config::APP_DATA_DIR_NAME,
   device_preference::DevicePreference,
+  dictation_app_settings::{self, AppSetting, RecentApp},
   dictation_cloud::{self, CloudModels, Destination},
   dictation_context::{self, Sharing},
   dictation_focus::{self, FocusTarget},
   dictation_hold_key::{self, Action, Gesture, HoldChoice},
   dictation_language::{self, Choice, LanguageSnapshot},
+  dictation_media::{self, WhileDictating},
   dictation_retype::{self, LastDictation, Request},
   dictation_words,
   feature_gate::{DesktopFeature, FeatureGates},
@@ -181,6 +183,11 @@ pub struct DictationSnapshot {
   cleanup: bool,
   /// Whether a short sound marks the start and the end of listening.
   sounds: bool,
+  /// What happens to other sound while recording, what this computer
+  /// offers, and whether only while it plays through speakers.
+  while_dictating: WhileDictating,
+  while_dictating_offered: &'static [WhileDictating],
+  speakers_only: bool,
   /// Whether cleanup also gets the focused window's title.
   share_window_title: bool,
   /// Whether cleanup also gets the text before the cursor.
@@ -195,6 +202,10 @@ pub struct DictationSnapshot {
   /// The speaker's custom words, kept on this computer for the dictation
   /// account.
   custom_words: Vec<String>,
+  /// Settings for one app or kind of app over the global ones, and the
+  /// apps dictated into since stella started, offered for a new entry.
+  app_settings: Vec<AppSetting>,
+  recent_apps: Vec<RecentApp>,
   /// Whether the server enables stella AI transcription for this account;
   /// without it the window offers no choice of destination.
   cloud_available: bool,
@@ -247,7 +258,12 @@ enum Listening {
 struct Inner {
   enabled: bool,
   cleanup: bool,
+  app_settings: Vec<AppSetting>,
+  /// Only in memory.
+  recent_apps: Vec<RecentApp>,
   sounds: bool,
+  while_dictating: WhileDictating,
+  speakers_only: bool,
   share_window_title: bool,
   share_text_before_cursor: bool,
   language: Choice,
@@ -290,12 +306,28 @@ impl DictationState {
         .read()
         .as_deref()
         != Some(DISABLED_VALUE);
+    let while_dictating = WhileDictating::parse(
+      DevicePreference::in_app_data(dictation_media::PREFERENCE_FILE_NAME)
+        .read()
+        .as_deref(),
+    );
+    let speakers_only = DevicePreference::in_app_data(
+      dictation_media::SPEAKERS_ONLY_PREFERENCE_FILE_NAME,
+    )
+    .read()
+    .as_deref()
+      != Some(DISABLED_VALUE);
     let shared = |file_name: &str| {
       DevicePreference::in_app_data(file_name).read().as_deref() == Some(ENABLED_VALUE)
     };
     let share_window_title = shared(SHARE_WINDOW_TITLE_PREFERENCE_FILE_NAME);
     let share_text_before_cursor =
       shared(SHARE_TEXT_BEFORE_CURSOR_PREFERENCE_FILE_NAME);
+    let app_settings = dictation_app_settings::parse(
+      DevicePreference::in_app_data(dictation_app_settings::PREFERENCE_FILE_NAME)
+        .read()
+        .as_deref(),
+    );
     let language = Choice::parse(
       DevicePreference::in_app_data(LANGUAGE_PREFERENCE_FILE_NAME)
         .read()
@@ -317,7 +349,11 @@ impl DictationState {
     Self(Mutex::new(Inner {
       enabled,
       cleanup,
+      app_settings,
+      recent_apps: Vec::new(),
       sounds,
+      while_dictating,
+      speakers_only,
       share_window_title,
       share_text_before_cursor,
       language,
@@ -356,6 +392,9 @@ impl DictationState {
       enabled: inner.enabled,
       cleanup: inner.cleanup,
       sounds: inner.sounds,
+      while_dictating: inner.while_dictating,
+      while_dictating_offered: WhileDictating::OFFERED,
+      speakers_only: inner.speakers_only,
       share_window_title: inner.share_window_title,
       share_text_before_cursor: inner.share_text_before_cursor
         && dictation_context::TEXT_BEFORE_CURSOR_SUPPORTED,
@@ -363,6 +402,8 @@ impl DictationState {
       keeps_in_history,
       language: LanguageSnapshot::new(&inner.language, inferred),
       custom_words: Vec::new(),
+      app_settings: inner.app_settings.clone(),
+      recent_apps: inner.recent_apps.clone(),
       cloud_available,
       destination: inner.destination.effective(cloud_available),
       cloud_model: inner.cloud_model.clone(),
@@ -557,6 +598,10 @@ pub fn language(app: &AppHandle) -> SpeakerLanguage {
   let choice = app
     .state::<DictationState>()
     .update(|inner| inner.language.clone());
+  speaker_language(app, choice)
+}
+
+fn speaker_language(app: &AppHandle, choice: Choice) -> SpeakerLanguage {
   let inferred = match choice {
     Choice::Automatic => dictation_language::inferred(app),
     Choice::Language(_) => Vec::new(),
@@ -624,6 +669,46 @@ pub fn apply_cloud_gate(app: &AppHandle) {
 /// The key dictation listens for.
 pub fn hold_key(app: &AppHandle) -> HoldChoice {
   app.state::<DictationState>().update(|inner| inner.hold_key)
+}
+
+/// What a dictation into the app focused at the press runs with.
+pub struct ForApp {
+  pub cleanup: bool,
+  pub language: SpeakerLanguage,
+  /// What cleanup may read besides the kind of app: nothing without it.
+  pub sharing: Sharing,
+}
+
+/// The settings for the app focused at the press, over the global ones;
+/// the app joins the recent ones offered for an entry of its own.
+pub fn for_app(app: &AppHandle, focus: Option<&FocusTarget>) -> ForApp {
+  let identifier = focus.and_then(|target| target.identifier.as_deref());
+  let (applied, sharing, noted) = app.state::<DictationState>().update(|inner| {
+    let noted = identifier.zip(focus).is_some_and(|(identifier, target)| {
+      dictation_app_settings::note_recent(
+        &mut inner.recent_apps,
+        identifier,
+        &target.name,
+      )
+    });
+    let applied = dictation_app_settings::apply(
+      &inner.app_settings,
+      identifier,
+      inner.cleanup,
+      &inner.language,
+    );
+    let sharing = sharing_with(inner, applied.cleanup);
+    (applied, sharing, noted)
+  });
+  // Settings offers the app the moment it is dictated into.
+  if noted {
+    publish(app);
+  }
+  ForApp {
+    cleanup: applied.cleanup,
+    language: speaker_language(app, applied.language),
+    sharing,
+  }
 }
 
 /// Whether a finished dictation goes through AI cleanup before it is typed.
@@ -712,6 +797,14 @@ fn request_retype(app: &AppHandle, request: Request) {
   }
 }
 
+/// What happens to other sound while recording, and whether only while it
+/// plays through speakers.
+pub fn while_dictating(app: &AppHandle) -> (WhileDictating, bool) {
+  app
+    .state::<DictationState>()
+    .update(|inner| (inner.while_dictating, inner.speakers_only))
+}
+
 /// Starts a dictation: marks it recording and reads the speech model under
 /// the lock the model's removal takes, so a removal either sees the dictation
 /// and refuses, or has already marked the model missing and none is used.
@@ -735,13 +828,13 @@ pub fn set_phase(app: &AppHandle, phase: Phase) {
 
 /// What cleanup may read about where the text goes besides the kind of app:
 /// nothing while cleanup is off, otherwise what the speaker shares.
-pub fn context_sharing(app: &AppHandle) -> Sharing {
-  app.state::<DictationState>().update(|inner| Sharing {
-    window_title: inner.cleanup && inner.share_window_title,
-    text_before_cursor: inner.cleanup
+const fn sharing_with(inner: &Inner, cleanup: bool) -> Sharing {
+  Sharing {
+    window_title: cleanup && inner.share_window_title,
+    text_before_cursor: cleanup
       && inner.share_text_before_cursor
       && dictation_context::TEXT_BEFORE_CURSOR_SUPPORTED,
-  })
+  }
 }
 
 /// Records the failure for Settings → Dictation and, where the speaker would
@@ -1137,6 +1230,48 @@ pub fn dictation_set_retype_shortcut(
   Ok(read_snapshot(&app, &state))
 }
 
+/// What happens to other sound while recording, from the next one.
+#[tauri::command]
+pub fn dictation_set_while_dictating(
+  app: AppHandle,
+  state: State<'_, DictationState>,
+  choice: String,
+) -> Result<DictationSnapshot, String> {
+  if !available(&app) {
+    return Err("dictation is not available on this computer".to_string());
+  }
+  let parsed = WhileDictating::parse(Some(&choice));
+  if parsed.stored() != choice {
+    return Err("this is not offered on this computer".to_string());
+  }
+  change_preference(
+    &app,
+    dictation_media::PREFERENCE_FILE_NAME,
+    parsed.stored(),
+    |inner| inner.while_dictating = parsed,
+  )?;
+  Ok(read_snapshot(&app, &state))
+}
+
+/// Whether other sound is changed only while it plays through speakers.
+#[tauri::command]
+pub fn dictation_set_speakers_only(
+  app: AppHandle,
+  state: State<'_, DictationState>,
+  enabled: bool,
+) -> Result<DictationSnapshot, String> {
+  if !available(&app) {
+    return Err("dictation is not available on this computer".to_string());
+  }
+  change_preference(
+    &app,
+    dictation_media::SPEAKERS_ONLY_PREFERENCE_FILE_NAME,
+    stored_switch(enabled),
+    |inner| inner.speakers_only = enabled,
+  )?;
+  Ok(read_snapshot(&app, &state))
+}
+
 /// Whether cleanup also gets the focused window's title.
 #[tauri::command]
 pub fn dictation_set_share_window_title(
@@ -1199,6 +1334,30 @@ pub fn dictation_set_language(
     LANGUAGE_PREFERENCE_FILE_NAME,
     choice.stored(),
     |inner| inner.language = choice,
+  )?;
+  Ok(read_snapshot(&app, &state))
+}
+
+/// Settings for apps and kinds of app over the global ones, replacing the
+/// list stored before; refused whole when an entry could never apply.
+#[tauri::command]
+pub fn dictation_set_app_settings(
+  app: AppHandle,
+  state: State<'_, DictationState>,
+  settings: Vec<AppSetting>,
+) -> Result<DictationSnapshot, String> {
+  if !available(&app) {
+    return Err("dictation is not available on this computer".to_string());
+  }
+  let settings = dictation_app_settings::validated(settings)?;
+  let stored = serde_json::to_string(&settings).map_err(
+    crate::logging::with_cause_logged("dictation app settings could not be stored"),
+  )?;
+  change_preference(
+    &app,
+    dictation_app_settings::PREFERENCE_FILE_NAME,
+    &stored,
+    |inner| inner.app_settings = settings,
   )?;
   Ok(read_snapshot(&app, &state))
 }
@@ -1517,7 +1676,11 @@ mod tests {
     DictationState(Mutex::new(Inner {
       enabled: true,
       cleanup,
+      app_settings: Vec::new(),
+      recent_apps: Vec::new(),
       sounds: true,
+      while_dictating: WhileDictating::Nothing,
+      speakers_only: true,
       share_window_title: false,
       share_text_before_cursor: false,
       language: Choice::Automatic,
@@ -1658,6 +1821,8 @@ mod tests {
     assert_eq!(snapshot["shareWindowTitle"], false);
     assert_eq!(snapshot["shareTextBeforeCursor"], false);
     assert_eq!(snapshot["sounds"], true);
+    assert_eq!(snapshot["whileDictating"], "nothing");
+    assert_eq!(snapshot["speakersOnly"], true);
     assert_eq!(
       snapshot["textBeforeCursorAvailable"],
       dictation_context::TEXT_BEFORE_CURSOR_SUPPORTED
