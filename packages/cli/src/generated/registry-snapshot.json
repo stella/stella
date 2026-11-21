@@ -2351,7 +2351,6 @@
                 },
                 "retrievedAt": {
                   "type": ["string", "null"],
-                  "format": "date-time",
                   "maxLength": 32
                 },
                 "extent": {
@@ -2536,7 +2535,6 @@
                 },
                 "retrievedAt": {
                   "type": ["string", "null"],
-                  "format": "date-time",
                   "maxLength": 32
                 },
                 "extent": {
