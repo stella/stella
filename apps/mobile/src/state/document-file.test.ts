@@ -6,6 +6,7 @@ import {
   DATA_BOX_DOCUMENT_KIND,
   DATA_BOX_MESSAGE_MIME_TYPE,
 } from "@stll/api-contract/data-box";
+import type { SignaturePreview } from "@stll/api-contract/signature";
 
 import type { Fetch } from "@/connection/http";
 import {
@@ -316,7 +317,7 @@ describe("reading a document's file", () => {
     },
   );
 
-  const signature = {
+  const signature: Extract<SignaturePreview, { type: "signature" }> = {
     type: "signature",
     standard: "cades",
     packaging: "detached",
@@ -336,7 +337,7 @@ describe("reading a document's file", () => {
       },
     ],
     document: null,
-  } as const;
+  };
 
   test.each([
     ["smlouva.pdf.p7s", "application/pkcs7-signature"],

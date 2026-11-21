@@ -233,7 +233,7 @@ export const isOffline = (error: DocumentFileError): boolean =>
  * are unreadable, as the server answers for any other refused preview.
  */
 const namedSignaturePreview = (
-  preview: Result<SignaturePreview, ApiRequestError>,
+  preview: Result<SignaturePreview, ApiError>,
 ): SignatureDocumentFile["preview"] => {
   if (Result.isError(preview)) {
     return preview;

@@ -661,7 +661,9 @@ const LegalFilePreview = ({
           </>
         );
       }
-      return <Text selectable>{preview.value.text}</Text>;
+      return "text" in preview.value ? (
+        <Text selectable>{preview.value.text}</Text>
+      ) : null;
     }
     const { error } = preview;
     const unreadable =
