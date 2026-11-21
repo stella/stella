@@ -61,7 +61,8 @@ export const useActivitySetup = (): ActivitySetupControls => {
   const [unread, setUnread] = useState(false);
   // Event reads land in any order; only the most recent may set the state.
   const latest = useRef(0);
-  const reread = useRef<() => Promise<void>>(async () => undefined);
+  // The read the effect below owns; set before any change can be made.
+  const reread = useRef<(() => Promise<void>) | null>(null);
 
   useEffect(() => {
     let disposed = false;
@@ -106,14 +107,14 @@ export const useActivitySetup = (): ActivitySetupControls => {
       return false;
     }
     setFailed(false);
-    await reread.current();
+    await reread.current?.();
     return true;
   };
 
   return {
     failed,
     reload: () => {
-      void reread.current();
+      void reread.current?.();
     },
     setCaptureDetails: async (enabled) => {
       await run(async () =>
