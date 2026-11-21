@@ -153,6 +153,7 @@ const build = async (platform: NativePlatform, device: string) => {
   // the folder is generated afresh from the app config before every build.
   const prebuilt = await runInApp([
     "bunx",
+    "--bun",
     "expo",
     "prebuild",
     "--clean",
@@ -164,6 +165,7 @@ const build = async (platform: NativePlatform, device: string) => {
   }
   return await runInApp([
     "bunx",
+    "--bun",
     "expo",
     `run:${platform}`,
     "--device",

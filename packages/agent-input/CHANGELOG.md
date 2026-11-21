@@ -1,5 +1,11 @@
 # @stll/agent-input
 
+## 0.5.1
+
+### Patch Changes
+
+- [#8562](https://github.com/stella/stella/pull/8562) [`33ec58c`](https://github.com/stella/stella/commit/33ec58c4131a9fbca812b32dac502913684e6d63) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Update the shared time dependency to 0.4.3 with Temporal polyfill 1.0.8.
+
 ## 0.5.0
 
 ### Minor Changes

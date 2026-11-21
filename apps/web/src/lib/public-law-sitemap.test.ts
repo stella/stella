@@ -335,7 +335,7 @@ describe("public law sitemap", () => {
     ]);
   });
 
-  test("fetches bucketed sitemap decisions from stable shard paths", async () => {
+  test("fetches a split month's range from its stable shard path", async () => {
     const requestedUrls: string[] = [];
     const fetchImpl = async (input: Request | URL | string) => {
       requestedUrls.push(requestUrlForTest(input));
@@ -352,12 +352,12 @@ describe("public law sitemap", () => {
 
     await fetchPublicSitemapDecisions({
       fetchImpl,
-      shard: { bucket: "07", country: "cze", month: "05", year: "2026" },
+      shard: { bucket: "0007", country: "cze", month: "05", year: "2026" },
       signal: AbortSignal.timeout(1000),
     });
 
     expect(requestedUrls).toEqual([
-      "http://localhost:3001/v1/case/sitemap/decisions/shard?country=cze&year=2026&month=05&bucket=07",
+      "http://localhost:3001/v1/case/sitemap/decisions/shard?country=cze&year=2026&month=05&bucket=0007",
     ]);
   });
 
@@ -423,7 +423,7 @@ describe("public law sitemap", () => {
               year: "2026",
             },
             {
-              bucket: "07",
+              bucket: "0007",
               country: "cze",
               lastmod: "2025-12-31",
               month: "04",
@@ -492,7 +492,7 @@ describe("public law sitemap", () => {
           year: "2026",
         },
         {
-          bucket: "07",
+          bucket: "0007",
           country: "cze",
           lastmod: "2025-12-31",
           month: "04",
@@ -515,7 +515,7 @@ describe("public law sitemap", () => {
       "<loc>http://localhost:3000/sitemaps/law-cases/cze/2026/05.xml</loc>",
     );
     expect(xml).toContain(
-      "<loc>http://localhost:3000/sitemaps/law-cases/cze/2026/04/07.xml</loc>",
+      "<loc>http://localhost:3000/sitemaps/law-cases/cze/2026/04/0007.xml</loc>",
     );
     expect(xml).toContain("<lastmod>2026-01-01</lastmod>");
     expect(xml).toMatch(
@@ -782,7 +782,7 @@ describe("public law sitemap", () => {
     expect(SITEMAP_XML_RESPONSE_HEADERS).toEqual({
       ...ssrCacheClassHeaders("public-anonymous"),
       "Cache-Control":
-        "public, max-age=3600, s-maxage=21600, stale-while-revalidate=86400",
+        "public, max-age=3600, s-maxage=21600, stale-while-revalidate=86400, stale-if-error=86400",
       "Content-Type": "application/xml; charset=utf-8",
     });
   });
@@ -1169,7 +1169,15 @@ describe("public law sitemap", () => {
       "documentPresentationSnapshot(readRequestPresentationPrefs())",
     );
     expect(source).not.toContain("useI18nStore.getState()");
-    expect(source).toContain("hydrate: restoreHydratedDocumentPresentation");
+    // The snapshot is restored, then handed to the matches the hydration
+    // builds, so a member page's root (not loaded on the server) hydrates
+    // with the presentation the server painted.
+    expect(source).toContain(
+      "await restoreHydratedDocumentPresentation(snapshot);",
+    );
+    expect(source).toContain(
+      "router.options.context.presentationPrefs = snapshot.prefs;",
+    );
     expect(source).not.toContain("localeUserId");
     expect(source).not.toContain("loadAuthContext");
     const root = await readSource("apps/web/src/routes/__root.tsx");

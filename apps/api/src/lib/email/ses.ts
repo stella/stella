@@ -49,7 +49,7 @@ export const createSESTransport = (
 
   return {
     async send({ from, to, subject, html, text, replyTo, inlineImages }) {
-      await client.send(
+      const { MessageId } = await client.send(
         new SendEmailCommand({
           FromEmailAddress: from,
           Destination: { ToAddresses: [to] },
@@ -79,6 +79,9 @@ export const createSESTransport = (
           },
         }),
       );
+      return MessageId === undefined
+        ? { type: "accepted_untracked" }
+        : { type: "accepted", providerMessageId: MessageId };
     },
   };
 };

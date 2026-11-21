@@ -397,6 +397,9 @@ const fixtureRuleOverrides = [
   fixtureRuleOverride("retention-source-independence.fixture.ts", [
     "retention-source-independence/retention-source-independence",
   ]),
+  fixtureRuleOverride("settings-layout-primitives.fixture.ts", [
+    "settings-layout-primitives/settings-layout-primitives",
+  ]),
   fixtureRuleOverride("retention-oracle-owner.fixture.ts", [
     "retention-oracle-owner/retention-oracle-owner",
   ]),
@@ -2203,6 +2206,7 @@ const config = defineConfig({
     "./.oxlint-plugins/no-test-support-import.ts",
     "./.oxlint-plugins/retention-source-independence.ts",
     "./.oxlint-plugins/retention-oracle-owner.ts",
+    "./.oxlint-plugins/settings-layout-primitives.ts",
     "./.oxlint-plugins/no-banned-glyph.ts",
     "./.oxlint-plugins/no-hand-built-document-run-queue.ts",
     "./.oxlint-plugins/no-hand-built-step-marker.ts",
@@ -2632,6 +2636,18 @@ const config = defineConfig({
         "apps/api/src/tests/**",
       ],
       rules: { "no-test-support-import/no-test-support-import": "error" },
+    },
+    // Settings and admin pages compose from @stll/ui/settings; see the rule's
+    // row in .oxlint-plugins/restricted-import.ts.
+    {
+      files: [
+        "apps/web/src/routes/_protected.settings/**/*.{ts,tsx}",
+        "apps/web/src/routes/_protected.admin/**/*.{ts,tsx}",
+      ],
+      excludeFiles: ["**/*.test.{ts,tsx}"],
+      rules: {
+        "settings-layout-primitives/settings-layout-primitives": "error",
+      },
     },
     fixtureRuleOverride("require-static-timeout-label.fixture.ts", [
       "require-static-timeout-label/require-static-timeout-label",
@@ -4429,13 +4445,22 @@ const config = defineConfig({
     },
     {
       // A disabled Button must say why it cannot act (`disabledReason`).
-      // Enforced on its fixture only while the existing sites burn down: the
-      // `disabled-control-without-reason` ratchet in scripts/ratchet.ts holds
-      // their count and lets it only fall. The PR that reaches zero widens
-      // these files to the ratchet's scope (web `.tsx` under apps/* and
-      // packages/*, not apps/mobile or `*.native.tsx`) and drops the ratchet.
+      // Shared web Buttons show the reason on hover and focus.
       files: [
+        "apps/*/src/**/*.tsx",
+        "packages/*/src/**/*.tsx",
         ".oxlint-plugins/__fixtures__/disabled-control-needs-reason.fixture.tsx",
+      ],
+      // Mirrors isExcludedSource for handwritten web TSX. Mobile and
+      // platform-native files can use Buttons without this prop.
+      excludeFiles: [
+        "apps/mobile/**",
+        "**/*.native.tsx",
+        "**/e2e/**",
+        "**/tests/**",
+        "**/__tests__/**",
+        "**/*.{gen,test,type-test,spec}.*",
+        "**/*.{gen,test,type-test,spec}.*/**",
       ],
       rules: {
         "disabled-control-needs-reason/disabled-control-needs-reason": "error",

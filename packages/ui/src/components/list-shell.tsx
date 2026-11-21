@@ -2,6 +2,9 @@
 
 import type * as React from "react";
 
+import { cva } from "class-variance-authority";
+import type { VariantProps } from "class-variance-authority";
+
 import { cn } from "../lib/utils";
 import { InlineSkeleton, Skeleton } from "./skeleton";
 
@@ -46,14 +49,24 @@ const ListGroupHeading = ({
   />
 );
 
+/** `destructive` names an irreversible group (a danger zone). */
+type ListGroupTitleTone = "default" | "destructive";
+
+const LIST_GROUP_TITLE_TONE_CLASS = {
+  default: "text-foreground",
+  destructive: "text-destructive-foreground",
+} as const satisfies Record<ListGroupTitleTone, string>;
+
 const ListGroupTitle = ({
   className,
   children,
+  tone = "default",
   ...props
-}: React.ComponentProps<"h2">) => (
+}: React.ComponentProps<"h2"> & { tone?: ListGroupTitleTone | undefined }) => (
   <h2
     className={cn(
-      "text-foreground text-sm font-medium text-balance",
+      "text-sm font-medium text-balance",
+      LIST_GROUP_TITLE_TONE_CLASS[tone],
       className,
     )}
     data-slot="list-group-title"
@@ -75,6 +88,18 @@ const ListGroupDescription = ({
   />
 );
 
+/** Quiet trailing affordance on the header row (a link or ghost button). */
+const ListGroupAction = ({
+  className,
+  ...props
+}: React.ComponentProps<"div">) => (
+  <div
+    className={cn("flex shrink-0 items-center gap-1", className)}
+    data-slot="list-group-action"
+    {...props}
+  />
+);
+
 /**
  * The surface. Depth comes from a ring plus a soft shadow, not a frame.
  *
@@ -91,6 +116,36 @@ const List = ({ className, ...props }: React.ComponentProps<"ul">) => (
       className,
     )}
     data-slot="list"
+    {...props}
+  />
+);
+
+const listItemMediaVariants = cva(
+  "bg-muted grid size-8 shrink-0 place-items-center overflow-hidden rounded-lg outline-1 -outline-offset-1 outline-black/5 dark:outline-white/10",
+  {
+    defaultVariants: { variant: "icon" },
+    variants: {
+      variant: {
+        /** A glyph or logo, drawn quietly. */
+        icon: "text-muted-foreground [&_svg:not([class*='size-'])]:size-4",
+        /** A letter standing in for a name that has no logo. */
+        initial: "text-foreground text-xs font-medium",
+      },
+    },
+  },
+);
+
+/** Fixed 32px tile for an icon, logo or initial. */
+const ListItemMedia = ({
+  className,
+  variant,
+  ...props
+}: React.ComponentProps<"div"> &
+  VariantProps<typeof listItemMediaVariants>) => (
+  <div
+    aria-hidden="true"
+    className={cn(listItemMediaVariants({ variant }), className)}
+    data-slot="list-item-media"
     {...props}
   />
 );
@@ -173,10 +228,13 @@ const ListGroupTitlePending = () => (
 export {
   List,
   ListGroup,
+  ListGroupAction,
   ListGroupDescription,
   ListGroupHeader,
   ListGroupHeading,
   ListGroupTitle,
   ListGroupTitlePending,
+  ListItemMedia,
   ListItemSkeleton,
 };
+export type { ListGroupTitleTone };

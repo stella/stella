@@ -10,8 +10,9 @@ defaults:
 # stand-ins for Codex and Claude Code. Not part of ci-result. Pull requests run
 # it when they change what the suite exercises: the agent engine, the desktop
 # runner and its sidecar host, the local run contract, the API's and the chat's
-# local run code, the stand-in's scripts or the suite itself. This list is the
-# one place that names that surface.
+# local run code, the composer's send controls the suite drives, the
+# stand-in's scripts or the suite itself. This list is the one place that
+# names that surface.
 on:
   pull_request:
     paths:
@@ -41,6 +42,9 @@ on:
       - apps/api/src/lib/desktop-runner/**
       - apps/web/src/components/chat/chat-run-target-menu*
       - apps/web/src/components/chat/chat-model-selector.tsx
+      - apps/web/src/components/chat-input-surface.tsx
+      - apps/web/src/components/chat/chat-composer-action-button.tsx
+      - apps/web/src/components/chat/chat-prompt-improve-button.tsx
       - apps/web/src/components/chat/chat-local-run-*
       - apps/web/src/components/chat/local-run-*
       - apps/web/src/components/chat/local-files-undo*

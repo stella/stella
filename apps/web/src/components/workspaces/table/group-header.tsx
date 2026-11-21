@@ -39,6 +39,7 @@ export const TableGroupHeader = ({
         aria-expanded={empty ? undefined : !collapsed}
         className="flex min-w-0 flex-1"
         disabled={empty}
+        disabledReason={t("workspaces.emptyGroup")}
         onClick={empty ? undefined : onToggle}
         variant="plain"
       >

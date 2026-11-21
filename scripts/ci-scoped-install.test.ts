@@ -661,7 +661,7 @@ test("landing owns its browser task without invoking web generation", () => {
     ),
   );
   expect(landing.scripts["test:e2e"]).toBe(
-    "playwright test --config e2e/playwright.config.ts --project landing",
+    "bun --bun playwright test --config e2e/playwright.config.ts --project landing",
   );
   const steps = workflowJobSteps(workflow, "e2e-landing");
   const browser = v.parse(

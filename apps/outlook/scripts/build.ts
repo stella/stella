@@ -155,6 +155,7 @@ if (!build.success) {
 const tailwindArgs = [
   "bun",
   "x",
+  "--bun",
   "@tailwindcss/cli",
   "--input",
   "./src/styles.css",

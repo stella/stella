@@ -191,6 +191,9 @@ function LegalListsPage() {
           <Button
             aria-label={t("common.add")}
             disabled={creatingList || newListName.trim().length === 0}
+            disabledReason={
+              creatingList ? t("common.creating") : t("common.enterName")
+            }
             size="icon"
             type="submit"
           >
@@ -387,6 +390,7 @@ const LegalListDetail = ({ workspaceId, listId }: LegalListDetailProps) => {
           />
           <Button
             disabled={sectionName.trim().length === 0}
+            disabledReason={t("common.enterName")}
             size="sm"
             type="submit"
             variant="outline"
@@ -431,6 +435,7 @@ const LegalListDetail = ({ workspaceId, listId }: LegalListDetailProps) => {
               </Select>
               <Button
                 disabled={selectedPropertyId === NO_COLUMN_VALUE}
+                disabledReason={t("workspaces.lists.selectColumnToAdd")}
                 onClick={() => detached(addColumn(), "lists.add-column")}
                 size="sm"
                 type="button"
@@ -489,6 +494,7 @@ const LegalListDetail = ({ workspaceId, listId }: LegalListDetailProps) => {
           <div className="flex justify-center p-4">
             <Button
               disabled={items.isFetchingNextPage}
+              disabledReason={t("common.loading")}
               onClick={() =>
                 detached(items.fetchNextPage(), "lists.fetch-next-page")
               }
@@ -652,6 +658,7 @@ const ListItemsTable = ({
               <Button
                 aria-label={t("common.accept")}
                 disabled={item.reviewStatus === "verified"}
+                disabledReason={t("workspaces.lists.alreadyVerified")}
                 onClick={() =>
                   detached(verifyItem(item.id), "lists.verify-item")
                 }
@@ -809,7 +816,11 @@ const ListCreateItemForm = ({
           </SelectPopup>
         </Select>
       )}
-      <Button disabled={creating || name.trim().length === 0} type="submit">
+      <Button
+        disabled={creating || name.trim().length === 0}
+        disabledReason={creating ? t("common.creating") : t("common.enterName")}
+        type="submit"
+      >
         <PlusIcon />
         {t("common.add")}
       </Button>

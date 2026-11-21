@@ -274,7 +274,11 @@ export const InspectorGroupEditor = ({
             <Button onClick={onClose} type="button" variant="ghost">
               {t("common.cancel")}
             </Button>
-            <Button disabled={!name.trim()} type="submit">
+            <Button
+              disabled={!name.trim()}
+              disabledReason={t("inspector.enterGroupName")}
+              type="submit"
+            >
               {t("common.save")}
             </Button>
           </DialogFooter>

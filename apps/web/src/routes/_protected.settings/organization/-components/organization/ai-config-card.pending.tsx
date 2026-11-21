@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 
 import { ButtonFace } from "@stll/ui/control-face";
+import { SettingsSection } from "@stll/ui/settings";
 
 import { usePendingCache } from "@/components/pending-cache";
 import { PendingText } from "@/components/pending-text";
@@ -25,11 +26,12 @@ import { VerificationDecisionModelCardPending } from "./verification-decision-mo
  * The AI provider settings (`AIConfigForm`), beside its pending phase: the
  * heading with its save action, the providers, what follows from them (the
  * role models, the save's feedback, the verification model), the
- * organization's instructions, the on/off cards, then the DeepL and web
- * search keys, each set apart by a rule. The live form fills the slots; the
- * pending phase draws what every organization manager sees, and leaves out
- * what depends on the stored providers or on a feature (the role models,
- * the verification model, memory extraction), which joins once read.
+ * organization's instructions, the on/off settings as rows of one section,
+ * then the DeepL and web search keys, each set apart by a rule. The live
+ * form fills the slots; the pending phase draws what every organization
+ * manager sees, and leaves out what depends on the stored providers or on a
+ * feature (the role models, the verification model, memory extraction),
+ * which joins once read.
  */
 
 type AIConfigFormLayoutProps = {
@@ -72,9 +74,11 @@ export const AIConfigFormLayout = ({
     {providers}
     {details}
     {instructions}
-    {promptCaching}
-    {documentProcessing}
-    {memoryExtraction}
+    <SettingsSection>
+      {promptCaching}
+      {documentProcessing}
+      {memoryExtraction}
+    </SettingsSection>
     <div className="my-8 border-t" />
     {deepl}
     <div className="my-8 border-t" />

@@ -8,14 +8,19 @@ import {
   resolveSharedPoolTimeoutPolicy,
 } from "@/api/db/shared-pool-timeout-policy";
 import { envDbTimeouts } from "@/api/env-db-timeouts";
+import { SITEMAP_SHARD_READ_DEADLINE_MS } from "@/api/lib/case-law/sitemap-shard-budget";
 import { executedRows } from "@/api/lib/db/executed-rows";
 
-/** Request budgets only; background and authenticated reads retain their policy. */
+/**
+ * Request budgets only; background and authenticated reads retain their
+ * policy. A sitemap read ends well before the web server stops waiting for
+ * it, so it never outlives the request that asked for it.
+ */
 export const PUBLIC_READ_STATEMENT_TIMEOUT_MS = {
   browse: 30_000,
   search: 30_000,
   aggregate: 30_000,
-  sitemap: 30_000,
+  sitemap: SITEMAP_SHARD_READ_DEADLINE_MS,
 } as const;
 
 export const sharedPoolTimeoutPolicy = resolveSharedPoolTimeoutPolicy({

@@ -867,8 +867,8 @@ test("the model cannot be removed while a dictation runs", async () => {
   expect(
     getByRole("button", {
       name: defaultMessages.dictation.removeModel,
-    }).hasAttribute("disabled"),
-  ).toBe(true);
+    }).getAttribute("aria-disabled"),
+  ).toBe("true");
 });
 
 test("the retention warning shows only while the chosen model keeps the audio", async () => {
@@ -1136,8 +1136,10 @@ test("a full list of custom words takes no more", async () => {
   });
 
   expect(
-    getByRole("button", { name: customWords.add }).hasAttribute("disabled"),
-  ).toBe(true);
+    getByRole("button", { name: customWords.add }).getAttribute(
+      "aria-disabled",
+    ),
+  ).toBe("true");
 });
 
 test("custom words are offered with the speech model on this computer and cleanup off, which spell with them", async () => {

@@ -467,6 +467,7 @@ type PageMoveOptions = {
 };
 
 type OrganizerPageCardProps = {
+  busyReason: string | undefined;
   cleanScan: PageCleanScan | undefined;
   getDropDestination: (options: PageMoveOptions) => number | null;
   index: number;
@@ -481,6 +482,7 @@ type OrganizerPageCardProps = {
 };
 
 const OrganizerPageCard = ({
+  busyReason,
   cleanScan,
   getDropDestination,
   index,
@@ -689,6 +691,7 @@ const OrganizerPageCard = ({
             })}
             className="bg-background/90 text-foreground [:hover,[data-pressed]]:bg-background/90 size-11 cursor-grab"
             disabled={isBusy}
+            disabledReason={busyReason}
             onKeyDown={handleKeyDown}
             ref={setHandle}
             size="icon"
@@ -725,6 +728,81 @@ const OrganizerPageCard = ({
   );
 };
 
+type PdfOrganizerDisabledReasonsOptions = {
+  isAddingPDF: boolean;
+  operation: EditorOperation;
+  selectionEmpty: boolean;
+  canSaveVersion: boolean;
+  isDirty: boolean;
+  tPageEditor: (
+    key:
+      | "addingPdf"
+      | "transforming"
+      | "selectPagesFirst"
+      | "versionPermissionRequired"
+      | "keepOnePage",
+  ) => string;
+  tCommon: (key: "saving" | "noChangesToSave") => string;
+  tHistory: (key: "nothingToUndo" | "nothingToRedo") => string;
+};
+
+const pdfOrganizerBusyReason = ({
+  isAddingPDF,
+  operation,
+  tPageEditor,
+  tCommon,
+}: Pick<
+  PdfOrganizerDisabledReasonsOptions,
+  "isAddingPDF" | "operation" | "tPageEditor" | "tCommon"
+>) => {
+  if (isAddingPDF) {
+    return tPageEditor("addingPdf");
+  }
+  switch (operation.type) {
+    case "transforming":
+      return tPageEditor("transforming");
+    case "uploading":
+      return tCommon("saving");
+    case "idle":
+      return undefined;
+    default:
+      operation satisfies never;
+      return panic("Unhandled page organizer operation");
+  }
+};
+
+const pdfOrganizerDisabledReasons = ({
+  isAddingPDF,
+  operation,
+  selectionEmpty,
+  canSaveVersion,
+  isDirty,
+  tPageEditor,
+  tCommon,
+  tHistory,
+}: PdfOrganizerDisabledReasonsOptions) => {
+  const busy = pdfOrganizerBusyReason({
+    isAddingPDF,
+    operation,
+    tPageEditor,
+    tCommon,
+  });
+  const select =
+    busy ?? (selectionEmpty ? tPageEditor("selectPagesFirst") : undefined);
+  const versionPermission = !canSaveVersion
+    ? tPageEditor("versionPermissionRequired")
+    : undefined;
+  return {
+    busy,
+    select,
+    delete: select ?? tPageEditor("keepOnePage"),
+    undo: busy ?? tHistory("nothingToUndo"),
+    redo: busy ?? tHistory("nothingToRedo"),
+    sign: busy ?? (isDirty ? versionPermission : undefined),
+    save: busy ?? versionPermission ?? tCommon("noChangesToSave"),
+  };
+};
+
 const LoadedPDFPageOrganizer = ({
   canSaveVersion,
   entityId,
@@ -739,6 +817,7 @@ const LoadedPDFPageOrganizer = ({
 }: LoadedPDFPageOrganizerProps) => {
   const tCommon = useTranslations("common");
   const tErrors = useTranslations("errors");
+  const tHistory = useTranslations("legalReader.annotations.history");
   const tPageEditor = useTranslations("workspaces.pdf.pageEditor");
   const format = useFormatter();
   const hotkeyPlatform = useHydrationSafeHotkeyPlatform();
@@ -771,7 +850,17 @@ const LoadedPDFPageOrganizer = ({
   const plan = state.history.present;
   const selectedIds = new Set(state.ui.selectedPageIds);
   const isDirty = isPageOrganizerDirty(state);
-  const isBusy = operation.type !== "idle" || isAddingPDF;
+  const reasons = pdfOrganizerDisabledReasons({
+    isAddingPDF,
+    operation,
+    selectionEmpty: selectedIds.size === 0,
+    canSaveVersion,
+    isDirty,
+    tPageEditor,
+    tCommon,
+    tHistory,
+  });
+  const isBusy = reasons.busy !== undefined;
   const navigationBlocker = useUnsavedWork({
     surface: "pdf-page-organizer",
     guard: "confirm-navigation",
@@ -1332,6 +1421,7 @@ const LoadedPDFPageOrganizer = ({
           <Button
             className="-ms-2"
             disabled={isBusy}
+            disabledReason={reasons.busy}
             onClick={() => dispatch({ type: "toggleSelectAll" })}
             size="sm"
             variant="ghost"
@@ -1342,6 +1432,7 @@ const LoadedPDFPageOrganizer = ({
           <Button
             aria-label={tPageEditor("rotateLeft")}
             disabled={selectedIds.size === 0 || isBusy}
+            disabledReason={reasons.select}
             onClick={() => dispatch({ type: "rotateSelected", degrees: -90 })}
             size="icon-sm"
             tooltip={tPageEditor("rotateLeft")}
@@ -1352,6 +1443,7 @@ const LoadedPDFPageOrganizer = ({
           <Button
             aria-label={tPageEditor("rotateRight")}
             disabled={selectedIds.size === 0 || isBusy}
+            disabledReason={reasons.select}
             onClick={() => dispatch({ type: "rotateSelected", degrees: 90 })}
             size="icon-sm"
             tooltip={tPageEditor("rotateRight")}
@@ -1362,6 +1454,7 @@ const LoadedPDFPageOrganizer = ({
           <Button
             aria-label={tPageEditor("crop")}
             disabled={selectedIds.size === 0 || isBusy}
+            disabledReason={reasons.select}
             onClick={() => setIsCropOpen(true)}
             size="icon-sm"
             tooltip={tPageEditor("crop")}
@@ -1371,6 +1464,7 @@ const LoadedPDFPageOrganizer = ({
           </Button>
           <Button
             disabled={isBusy}
+            disabledReason={reasons.busy}
             onClick={openCleanScan}
             size="sm"
             tooltip={tPageEditor("cleanScan.scope", {
@@ -1384,6 +1478,7 @@ const LoadedPDFPageOrganizer = ({
           <Button
             aria-label={tPageEditor("duplicate")}
             disabled={selectedIds.size === 0 || isBusy}
+            disabledReason={reasons.select}
             onClick={() =>
               dispatch({
                 type: "duplicateSelected",
@@ -1403,6 +1498,7 @@ const LoadedPDFPageOrganizer = ({
               selectedIds.size >= plan.pages.length ||
               isBusy
             }
+            disabledReason={reasons.delete}
             onClick={() => dispatch({ type: "deleteSelected" })}
             size="icon-sm"
             tooltip={tPageEditor("delete")}
@@ -1413,6 +1509,7 @@ const LoadedPDFPageOrganizer = ({
           <div className="ms-auto flex items-center gap-1">
             <Button
               disabled={isBusy}
+              disabledReason={reasons.busy}
               loading={isAddingPDF}
               onClick={() => {
                 openFilePicker({
@@ -1436,6 +1533,7 @@ const LoadedPDFPageOrganizer = ({
             <Button
               aria-label={tPageEditor("undo")}
               disabled={state.history.past.length === 0 || isBusy}
+              disabledReason={reasons.undo}
               onClick={() => dispatch({ type: "undo" })}
               size="icon-sm"
               tooltip={tPageEditor("undo")}
@@ -1446,6 +1544,7 @@ const LoadedPDFPageOrganizer = ({
             <Button
               aria-label={tPageEditor("redo")}
               disabled={state.history.future.length === 0 || isBusy}
+              disabledReason={reasons.redo}
               onClick={() => dispatch({ type: "redo" })}
               size="icon-sm"
               tooltip={tPageEditor("redo")}
@@ -1477,6 +1576,7 @@ const LoadedPDFPageOrganizer = ({
                       selectedPageIds: state.ui.selectedPageIds,
                     })
                   }
+                  busyReason={reasons.busy}
                   index={index}
                   isBusy={isBusy}
                   isSelected={selectedIds.has(page.id)}
@@ -1530,6 +1630,7 @@ const LoadedPDFPageOrganizer = ({
         </p>
         <Button
           disabled={isBusy}
+          disabledReason={reasons.busy}
           onClick={() => {
             detached(
               runOperation(handleDownload),
@@ -1546,6 +1647,7 @@ const LoadedPDFPageOrganizer = ({
           <PageOrganizerSignAction
             closeEditor={onClose}
             disabled={isBusy || (isDirty && !canSaveVersion)}
+            disabledReason={reasons.sign}
             isDirty={isDirty}
             beginRequest={(operationToken) =>
               operationOwner.beginRequest(operationToken)
@@ -1559,6 +1661,7 @@ const LoadedPDFPageOrganizer = ({
         )}
         <Button
           disabled={!canSaveVersion || !isDirty || isBusy}
+          disabledReason={reasons.save}
           loading={operation.type !== "idle"}
           onClick={() => {
             detached(
@@ -1578,6 +1681,7 @@ const LoadedPDFPageOrganizer = ({
           {isCropOpen && (
             <PageOrganizerCrop
               disabled={isBusy}
+              disabledReason={reasons.busy}
               pages={plan.pages
                 .filter((page) => selectedIds.has(page.id))
                 .map((page) => {
@@ -1655,6 +1759,7 @@ const LoadedPDFPageOrganizer = ({
             </AlertDialogClose>
             <Button
               disabled={isBusy}
+              disabledReason={reasons.busy}
               onClick={() => {
                 if (navigationBlocker.status === "blocked") {
                   navigationBlocker.proceed();

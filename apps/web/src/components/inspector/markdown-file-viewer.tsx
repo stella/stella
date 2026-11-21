@@ -72,11 +72,22 @@ export const MarkdownDraftActions = ({
   }
   return (
     <>
-      <Button disabled={isSaving} onClick={discard} size="xs" variant="ghost">
+      <Button
+        disabled={isSaving}
+        disabledReason={t("common.saving")}
+        onClick={discard}
+        size="xs"
+        variant="ghost"
+      >
         <XIcon className="size-3.5" />
         {t("common.cancel")}
       </Button>
-      <Button disabled={isSaving} onClick={save} size="xs">
+      <Button
+        disabled={isSaving}
+        disabledReason={t("common.saving")}
+        onClick={save}
+        size="xs"
+      >
         <CheckIcon className="size-3.5" />
         {t("common.save")}
       </Button>

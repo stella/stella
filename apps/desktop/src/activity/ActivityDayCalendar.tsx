@@ -109,6 +109,24 @@ type Submission =
 export type ActivityReviewStatus = Submission["type"];
 type DraftedEntries = ActivityDaySnapshot["draftedEntries"];
 
+const getEditingDisabledReason = (
+  submission: Submission,
+  t: (key: "creatingDrafts" | "pendingRetry") => string,
+): string | undefined => {
+  switch (submission.type) {
+    case "submitting":
+      return t("creatingDrafts");
+    case "retry":
+      return t("pendingRetry");
+    case "editing":
+    case "saved":
+      return undefined;
+    default:
+      submission satisfies never;
+      return panic("Unhandled activity submission state");
+  }
+};
+
 /** Which suggestion's card is open: a matched group, or a range the user
  * selected in the Time entries column. A range keeps the id it opened with
  * while the user moves it, so the card keeps what was typed into it. */
@@ -296,6 +314,7 @@ const SubmissionFeedback = ({
           <Button
             size="sm"
             disabled={submission.type === "submitting"}
+            disabledReason={t("creatingDrafts")}
             onClick={onRetry}
           >
             {t("pendingRetry")}
@@ -365,7 +384,8 @@ export const ActivityDayCalendar = ({
     draftedEntries,
   });
   const suggestions = matchedSuggestions(day.groups, leftOut);
-  const editable = submission.type === "editing" || submission.type === "saved";
+  const editingDisabledReason = getEditingDisabledReason(submission, t);
+  const editable = editingDisabledReason === undefined;
   const drafting = useBillingDraftSettings(true);
   const narratives = useSuggestionDrafts({
     drafting,
@@ -521,7 +541,7 @@ export const ActivityDayCalendar = ({
         })}
         edit={narratives.editFor(openSuggestion)}
         candidates={matters}
-        editable={editable}
+        editingDisabledReason={editingDisabledReason}
         timeLabel={summaryLabel(suggestionSummary(openSuggestion))}
         sourceAppVisuals={snapshot.sourceAppVisuals}
         titlesNotice={titlesNotices.forSuggestion(openSuggestion)}

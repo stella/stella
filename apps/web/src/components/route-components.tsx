@@ -226,7 +226,11 @@ export const DefaultErrorComponent = ({
     return (
       <StatusMessage
         actionButton={
-          <Button disabled={isPending} onClick={retryErroredQueries}>
+          <Button
+            disabled={isPending}
+            disabledReason={t("common.retrying")}
+            onClick={retryErroredQueries}
+          >
             <RefreshCcwIcon /> {t("common.tryAgain")}
           </Button>
         }
@@ -372,6 +376,7 @@ const UnexpectedRouteError = ({
         <div className="flex flex-wrap gap-2">
           <Button
             disabled={errorReference === null}
+            disabledReason={t("routeError.errorReferencePending")}
             loading={isPending}
             onClick={handleRecovery}
           >
@@ -451,7 +456,11 @@ const UnauthorizedError = () => {
       status="error"
       title={t("errors.api.unauthorized")}
       actionButton={
-        <Button disabled={isPending} onClick={() => signOut()}>
+        <Button
+          disabled={isPending}
+          disabledReason={t("common.signingOut")}
+          onClick={() => signOut()}
+        >
           {t("auth.signIn")}
         </Button>
       }

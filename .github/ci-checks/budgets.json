@@ -723,6 +723,11 @@
       "p99Seconds": 0,
       "peakRssMiB": 61
     },
+    "Bun runtime guard": {
+      "minutes": 5,
+      "samples": 0,
+      "peakRssMiB": 128
+    },
     "Patched dependencies apply": {
       "minutes": 5,
       "samples": 0,

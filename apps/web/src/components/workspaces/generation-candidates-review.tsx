@@ -219,6 +219,30 @@ type GenerationCandidatesReviewProps = {
   onReviewFinished?: (summary: CandidateReviewSummary) => void;
 };
 
+type ReviewDecisionDisabledReasonOptions = {
+  canDecide: boolean;
+  busy: boolean;
+  t: (
+    key:
+      | "workspaces.reviewDecisionPermissionRequired"
+      | "docxReview.applyingReviewDecision",
+  ) => string;
+};
+
+const reviewDecisionDisabledReason = ({
+  canDecide,
+  busy,
+  t,
+}: ReviewDecisionDisabledReasonOptions) => {
+  if (!canDecide) {
+    return t("workspaces.reviewDecisionPermissionRequired");
+  }
+  if (busy) {
+    return t("docxReview.applyingReviewDecision");
+  }
+  return undefined;
+};
+
 export const GenerationCandidatesReview = ({
   workspaceId,
   listId,
@@ -290,7 +314,8 @@ export const GenerationCandidatesReview = ({
       <ReviewDecisionActions
         acceptLabel={t("common.accept")}
         className="shrink-0"
-        disabled={!canDecide || busy}
+        applyingReason={t("docxReview.applyingReviewDecision")}
+        disabledReason={reviewDecisionDisabledReason({ canDecide, busy, t })}
         emphasis="quiet"
         onAccept={() => {
           detached(
@@ -336,6 +361,7 @@ export const GenerationCandidatesReview = ({
   const acceptAllButton = showAcceptAll && (
     <Button
       disabled={busy}
+      disabledReason={t("docxReview.acceptingChanges")}
       loading={progress.type === "all"}
       onClick={() => {
         detached(

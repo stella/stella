@@ -199,11 +199,17 @@ const DocumentReferenceUploadDialogBody = ({
         </DialogPanel>
 
         <DialogFooter>
-          <Button disabled={isSending} onClick={cancel} variant="ghost">
+          <Button
+            disabled={isSending}
+            disabledReason={t("workspaces.files.uploading")}
+            onClick={cancel}
+            variant="ghost"
+          >
             {t("common.cancel")}
           </Button>
           <Button
             disabled={isSending}
+            disabledReason={t("workspaces.files.uploading")}
             loading={isSending}
             onClick={() =>
               detached(confirm(), "document-reference-upload.confirm")

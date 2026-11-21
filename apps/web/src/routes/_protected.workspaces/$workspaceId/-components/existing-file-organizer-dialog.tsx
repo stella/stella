@@ -717,6 +717,11 @@ export const ExistingFileOrganizerDialog = ({
             <Button
               className="me-auto"
               disabled={isGeneratingSuggestions || rows.length === 0}
+              disabledReason={
+                isGeneratingSuggestions
+                  ? t("common.loading")
+                  : t("workspaces.importOrganizer.noFilesToOrganize")
+              }
               onClick={() => {
                 detached(
                   requestAiSuggestions(),
@@ -736,6 +741,11 @@ export const ExistingFileOrganizerDialog = ({
           )}
           <Button
             disabled={isGeneratingSuggestions || !canApply}
+            disabledReason={
+              isGeneratingSuggestions
+                ? t("common.loading")
+                : t("workspaces.importOrganizer.noChangesToApply")
+            }
             onClick={handleApply}
             type="button"
           >
@@ -870,6 +880,7 @@ const UserInstructionsSection = ({
         {expanded && (
           <Button
             disabled={disabled}
+            disabledReason={t("common.loading")}
             onClick={onRegenerate}
             size="xs"
             type="button"
@@ -915,6 +926,7 @@ const FailureBanner = ({ disabled, onRetry }: FailureBannerProps) => {
       </div>
       <Button
         disabled={disabled}
+        disabledReason={t("common.loading")}
         onClick={onRetry}
         size="xs"
         type="button"

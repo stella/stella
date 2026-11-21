@@ -294,6 +294,26 @@ export const LinkClauseDialog = ({
     onLinked();
   };
 
+  const resolveLinkClauseDisabledReason = () => {
+    if (linking) {
+      return t("clauses.linking");
+    }
+    if (!selectedClauseId) {
+      return t("clauses.selectClauseToLink");
+    }
+    if (slotUnavailable) {
+      return t("clauses.chooseUnusedSlot");
+    }
+    if (
+      previewDataView.type === "error" ||
+      linksDataView.type === "error" ||
+      variantsResultView.type === "error"
+    ) {
+      return t("common.loadFailed");
+    }
+    return t("common.loading");
+  };
+
   return (
     <Dialog onOpenChange={onOpenChange} open={open}>
       <DialogPopup className="sm:max-w-lg">
@@ -526,6 +546,7 @@ export const LinkClauseDialog = ({
               !selectedClauseId ||
               slotUnavailable
             }
+            disabledReason={resolveLinkClauseDisabledReason()}
             onClick={() => {
               detached(handleLink(), "link-clause-dialog.link");
             }}

@@ -98,6 +98,70 @@ type TranslateDocumentDialogProps = TranslateDocumentDialogCommonProps &
       }
   );
 
+type TranslationStartDisabledReasonOptions = {
+  isStarting: boolean;
+  isRunning: boolean;
+  isLoadingRun: boolean;
+  isDeepL: boolean;
+  availabilityKnown: boolean;
+  canUseDeepL: boolean;
+  isDocx: boolean;
+  canUseAI: boolean;
+  hasPreparedVersion: boolean;
+  preparationFailed: boolean;
+  t: (
+    key:
+      | "bilingualTranslate.review.starting"
+      | "translate.dialog.translating"
+      | "common.loading"
+      | "translate.dialog.notConfigured"
+      | "translate.dialog.docxOnly"
+      | "translate.dialog.providerUnavailable"
+      | "translate.error.title"
+      | "translate.dialog.waitForDocument"
+      | "translate.dialog.commentsDescription",
+  ) => string;
+};
+
+const translationStartDisabledReason = ({
+  isStarting,
+  isRunning,
+  isLoadingRun,
+  isDeepL,
+  availabilityKnown,
+  canUseDeepL,
+  isDocx,
+  canUseAI,
+  hasPreparedVersion,
+  preparationFailed,
+  t,
+}: TranslationStartDisabledReasonOptions) => {
+  if (isStarting) {
+    return t("bilingualTranslate.review.starting");
+  }
+  if (isRunning) {
+    return t("translate.dialog.translating");
+  }
+  if (isLoadingRun || (isDeepL && !availabilityKnown)) {
+    return t("common.loading");
+  }
+  if (isDeepL && !canUseDeepL) {
+    return t("translate.dialog.notConfigured");
+  }
+  if (!isDeepL && !isDocx) {
+    return t("translate.dialog.docxOnly");
+  }
+  if (!isDeepL && !canUseAI) {
+    return t("translate.dialog.providerUnavailable");
+  }
+  if (!isDeepL && !hasPreparedVersion) {
+    return preparationFailed
+      ? t("translate.error.title")
+      : t("translate.dialog.waitForDocument");
+  }
+  return t("translate.dialog.commentsDescription");
+};
+
 export const TranslateDocumentDialog = (
   props: TranslateDocumentDialogProps,
 ) => {
@@ -469,6 +533,19 @@ export const TranslateDocumentDialog = (
   const isStarting = translateMutation.isPending;
   const isLoadingRun = runId !== null && runQuery.isPending;
   const isRunning = run ? isDocumentTranslationRunActive(run.status) : false;
+  const startDisabledReason = translationStartDisabledReason({
+    isStarting,
+    isRunning,
+    isLoadingRun,
+    isDeepL,
+    availabilityKnown: availability !== undefined,
+    canUseDeepL,
+    isDocx,
+    canUseAI,
+    hasPreparedVersion: preparationQuery.data !== undefined,
+    preparationFailed: preparationQuery.isError,
+    t,
+  });
   const canStart =
     (isDeepL ? canUseDeepL : canUseAI) &&
     canTranslateDocument({ canUseDeepL, isDocx }) &&
@@ -509,6 +586,7 @@ export const TranslateDocumentDialog = (
                 <Button
                   aria-label={t("common.translate")}
                   disabled={disabled}
+                  disabledReason={t("translate.dialog.waitForDocument")}
                   size="icon-xs"
                   tooltip={t("common.translate")}
                   variant="ghost"
@@ -678,13 +756,20 @@ export const TranslateDocumentDialog = (
 
         <DialogFooter>
           <DialogClose
-            render={<Button disabled={isStarting} variant="ghost" />}
+            render={
+              <Button
+                disabled={isStarting}
+                disabledReason={t("bilingualTranslate.review.starting")}
+                variant="ghost"
+              />
+            }
           >
             {t("common.close")}
           </DialogClose>
           {!run || (!isRunning && run.status !== "completed") ? (
             <Button
               disabled={!canStart}
+              disabledReason={startDisabledReason}
               onClick={() => translateMutation.mutate()}
             >
               {isStarting

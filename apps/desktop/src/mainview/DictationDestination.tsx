@@ -13,9 +13,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@stll/ui/select";
+import { SettingsRow, settingsRowIds } from "@stll/ui/settings";
 import { ToggleGroup, ToggleGroupItem } from "@stll/ui/toggle-group";
-
-import { SettingsRow, settingsRowIds } from "./settings-layout";
 
 export type DictationDestinationValue = "local" | "cloud";
 

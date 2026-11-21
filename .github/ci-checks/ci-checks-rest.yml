@@ -168,6 +168,20 @@ checks:
     # each install.
     run: bun run lint:ws
 
+  - name: Bun runtime guard
+    env:
+      CI_CHECK_KIND: CONTEXTUAL
+      CI_CHECK_CONTEXT: "Enforces the changed lines of package scripts against the merge base with origin/main."
+    id: bun_runtime_guard
+    if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
+    # Package scripts, shell scripts, workflow steps, spawned commands and
+    # Playwright web servers start JavaScript on Bun. Changed lines are
+    # compared with the merge base, so this stays out of the install
+    # lifecycle that runs `lint:ws`.
+    run: |
+      bun test scripts/check-bun-runtime.test.ts
+      bun run check:bun-runtime
+
   - name: Lockfile workspace-version guard
     id: static_check_017
     env:

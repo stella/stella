@@ -175,6 +175,9 @@ const GapActions = ({
       <AddFactSheet
         claimText={claim.text}
         disabled={busy}
+        disabledReason={
+          disabled ? t("avt.review.permissionRequired") : t("common.saving")
+        }
         onSubmit={actions.addFact.mutateAsync}
         pending={actions.addFact.isPending}
         resume={actions.addFactResume}
@@ -195,6 +198,7 @@ const GapActions = ({
           <Button
             aria-pressed={needsEvidence.marked}
             disabled={disabled}
+            disabledReason={t("avt.review.permissionRequired")}
             onClick={() => needsEvidence.onChange(!needsEvidence.marked)}
             size="sm"
             variant={needsEvidence.marked ? "secondary" : "ghost"}
@@ -293,6 +297,7 @@ const LinkFactPicker = ({
                 <Button
                   className="w-full"
                   disabled={facts.isFetchingNextPage}
+                  disabledReason={t("common.loading")}
                   onClick={() =>
                     detached(facts.fetchNextPage(), "avt.link-fact-next-page")
                   }
@@ -341,6 +346,7 @@ type AddFactSheetProps = {
   workspaceId: string;
   claimText: string;
   disabled: boolean;
+  disabledReason: string;
   pending: boolean;
   /** A started addition's values, held until it finishes. */
   resume: AddFactInput | null;
@@ -356,6 +362,7 @@ const AddFactSheet = ({
   workspaceId,
   claimText,
   disabled,
+  disabledReason,
   pending,
   resume,
   onSubmit,
@@ -370,6 +377,7 @@ const AddFactSheet = ({
     <Sheet onOpenChange={setOpen} open={open}>
       <Button
         disabled={disabled}
+        disabledReason={disabledReason}
         loading={pending}
         onClick={() => setOpen(true)}
         size="sm"
@@ -560,6 +568,7 @@ const AddFactForm = ({
       <SheetFooter>
         <Button
           disabled={pending}
+          disabledReason={t("common.saving")}
           onClick={onCancel}
           type="button"
           variant="ghost"
@@ -593,6 +602,9 @@ export const LinkedMark = ({
 }: LinkedMarkProps) => {
   const t = useTranslations();
   const actions = useClaimGapActions({ workspaceId, runId, listId, claimId });
+  const reviewDisabledReason = disabled
+    ? t("avt.review.permissionRequired")
+    : t("common.saving");
   return (
     <span className="flex items-center gap-0.5">
       <ReviewStatusBadge
@@ -605,6 +617,7 @@ export const LinkedMark = ({
       <Button
         aria-label={t("avt.gap.unlink", { fact: factName })}
         disabled={disabled || actions.link.isPending}
+        disabledReason={reviewDisabledReason}
         onClick={() => actions.link.mutate({ factEntityId, change: "unlink" })}
         size="icon-xs"
         variant="ghost"
@@ -622,6 +635,28 @@ type LinkedFactsProps = GapScope & {
   disabled: boolean;
   /** The claim is in a re-check of several claims still running. */
   recheckLocked: boolean;
+};
+
+type ClaimReviewDisabledReasonOptions = {
+  disabled: boolean;
+  recheckPending: boolean;
+  t: (
+    key: "avt.review.permissionRequired" | "common.verifying" | "common.saving",
+  ) => string;
+};
+
+const claimReviewDisabledReason = ({
+  disabled,
+  recheckPending,
+  t,
+}: ClaimReviewDisabledReasonOptions) => {
+  if (disabled) {
+    return t("avt.review.permissionRequired");
+  }
+  if (recheckPending) {
+    return t("common.verifying");
+  }
+  return t("common.saving");
 };
 
 /**
@@ -660,6 +695,11 @@ export const LinkedFacts = ({
     facts.map((fact) => [fact.id, fact.name]),
   );
   const busy = disabled || actions.link.isPending || actions.recheckPending;
+  const reviewDisabledReason = claimReviewDisabledReason({
+    disabled,
+    recheckPending: actions.recheckPending,
+    t,
+  });
   return (
     <section className="space-y-2">
       <div className="flex items-center justify-between gap-2">
@@ -668,12 +708,14 @@ export const LinkedFacts = ({
         </h3>
         <Button
           disabled={busy || recheckLocked}
+          disabledReason={
+            recheckLocked
+              ? t("avt.staleness.recheckLocked")
+              : reviewDisabledReason
+          }
           loading={actions.recheckPending}
           onClick={() => actions.recheck.mutate()}
           size="sm"
-          // While the claim is in a re-check of several, it says why it
-          // waits.
-          tooltip={recheckLocked ? t("avt.staleness.recheckLocked") : undefined}
           variant="ghost"
         >
           <RefreshCwIcon />
@@ -715,6 +757,7 @@ export const LinkedFacts = ({
                 <Button
                   aria-label={t("avt.gap.unlink", { fact: name })}
                   disabled={busy}
+                  disabledReason={reviewDisabledReason}
                   onClick={() =>
                     actions.link.mutate({
                       factEntityId: factId,
@@ -737,6 +780,7 @@ export const LinkedFacts = ({
           <Button
             className="w-full"
             disabled={read.isFetchingNextPage}
+            disabledReason={t("common.loading")}
             onClick={() =>
               detached(read.fetchNextPage(), "avt.linked-facts-next-page")
             }

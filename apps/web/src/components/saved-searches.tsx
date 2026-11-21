@@ -96,6 +96,31 @@ type SavedSearchNameDialogProps = {
   onReload: () => void;
 };
 
+type SavedSearchDisabledReasonOptions = {
+  isSaving: boolean;
+  name: string;
+  t: (
+    key:
+      | "common.saving"
+      | "search.savedSearchEnterName"
+      | "search.savedSearchNameConflict",
+  ) => string;
+};
+
+const savedSearchDisabledReason = ({
+  isSaving,
+  name,
+  t,
+}: SavedSearchDisabledReasonOptions) => {
+  if (isSaving) {
+    return t("common.saving");
+  }
+  if (!name.trim()) {
+    return t("search.savedSearchEnterName");
+  }
+  return t("search.savedSearchNameConflict");
+};
+
 const SavedSearchNameDialog = ({
   dialog,
   isSaving,
@@ -168,6 +193,7 @@ const SavedSearchNameDialog = ({
             {dialog?.type === "rename" && isConflict && (
               <Button
                 disabled={isSaving}
+                disabledReason={t("common.saving")}
                 onClick={onReload}
                 type="button"
                 variant="outline"
@@ -178,6 +204,7 @@ const SavedSearchNameDialog = ({
             <Button
               className="min-h-11"
               disabled={isSaving}
+              disabledReason={t("common.saving")}
               onClick={onClose}
               type="button"
               variant="ghost"
@@ -191,6 +218,7 @@ const SavedSearchNameDialog = ({
                 isSaving ||
                 (dialog?.type === "rename" && isConflict)
               }
+              disabledReason={savedSearchDisabledReason({ isSaving, name, t })}
               type="submit"
             >
               {isSaving && (
@@ -414,6 +442,11 @@ const SavedSearches = ({
           aria-label={t("search.saveSearch")}
           className="size-11 shrink-0"
           disabled={!hasActiveCriteria || isMutatingSavedSearch}
+          disabledReason={
+            isMutatingSavedSearch
+              ? t("search.savedSearchUpdating")
+              : t("search.savedSearchAddCriteria")
+          }
           onClick={() => setDialog({ type: "create", name: "" })}
           size="icon"
           title={t("search.saveSearch")}
@@ -466,6 +499,7 @@ const SavedSearches = ({
                 aria-label={t("common.rename")}
                 className="size-11 shrink-0"
                 disabled={isMutatingSavedSearch}
+                disabledReason={t("search.savedSearchUpdating")}
                 onClick={() => {
                   renameMutation.reset();
                   setDialog({
@@ -484,6 +518,7 @@ const SavedSearches = ({
                 aria-label={t("common.delete")}
                 className="size-11 shrink-0"
                 disabled={isMutatingSavedSearch}
+                disabledReason={t("search.savedSearchUpdating")}
                 onClick={() =>
                   setDialog({ type: "delete", search: savedSearch })
                 }
@@ -499,6 +534,7 @@ const SavedSearches = ({
             <Button
               className="h-11 w-full"
               disabled={savedSearchesQuery.isFetchingNextPage}
+              disabledReason={t("caseLaw.loadingMore")}
               onClick={() => {
                 detached(
                   savedSearchesQuery.fetchNextPage(),
@@ -557,6 +593,7 @@ const SavedSearches = ({
                 <Button
                   className="min-h-11"
                   disabled={deleteMutation.isPending}
+                  disabledReason={t("common.deleting")}
                   variant="ghost"
                 />
               }
@@ -566,6 +603,7 @@ const SavedSearches = ({
             <Button
               className="min-h-11"
               disabled={deleteMutation.isPending}
+              disabledReason={t("common.deleting")}
               onClick={() => {
                 if (dialog.type === "delete") {
                   deleteMutation.mutate(dialog.search.id);

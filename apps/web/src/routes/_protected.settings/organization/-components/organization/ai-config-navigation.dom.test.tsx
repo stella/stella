@@ -446,7 +446,7 @@ const mount = async (
   });
   await deeplQueries().findByLabelText(messages.translate.settings.apiKeyLabel);
   await screen.findByRole("checkbox", {
-    name: messages.settings.organization.promptCaching.toggleLabel,
+    name: messages.settings.organization.promptCaching.title,
   });
   await waitFor(() => {
     expect(document.querySelector("#web-search-key-search") === null).toBe(
@@ -479,12 +479,19 @@ const unreadableRecoveryQueries = () => {
   return within(recovery);
 };
 const settingsSectionQueries = (title: string) => {
-  const heading = screen.getByRole("heading", { name: title });
+  // An on/off setting is a row named by its title, not a heading.
+  const heading =
+    screen.queryByRole("heading", { name: title }) ??
+    screen.getByRole("checkbox", { name: title });
+  // A settings section's heading sits in its header, above the surface its
+  // controls are on, so the section is the group around both.
   const section =
     heading.tagName === "H3"
       ? heading.parentElement?.parentElement
-      : heading.parentElement;
-  if (!section) {
+      : (heading.closest('[data-slot="settings-row"]') ??
+        heading.closest('[data-slot="list-group"]') ??
+        heading.parentElement);
+  if (!(section instanceof HTMLElement)) {
     panic("Settings section must contain its heading");
   }
   return within(section);
@@ -644,10 +651,10 @@ test("instruction refetches preserve drafts and compare edits with the latest sa
   expect(context.text).toBe(draft);
   replace(original);
   await waitFor(() => expect(hasUnsavedWork()).toBe(true));
-  expect(save).toHaveProperty("disabled", false);
+  expect(save.getAttribute("aria-disabled")).toBeNull();
   replace(updated);
   expect(hasUnsavedWork()).toBe(false);
-  expect(save).toHaveProperty("disabled", true);
+  expect(save.getAttribute("aria-disabled")).toBe("true");
   expect(writes()).toEqual([]);
 });
 
@@ -1447,7 +1454,7 @@ test("one page header save writes credential, model and decision changes togethe
     overrideModels: { chat: { provider: "google", modelId } },
     decision: { provider, modelId: decisionModelId, apiKeyMasked: "****key" },
   };
-  expect(save).toHaveProperty("disabled", false);
+  expect(save.getAttribute("aria-disabled")).toBeNull();
   fireEvent.click(save);
   await waitFor(() => expect(hasUnsavedWork()).toBe(false));
   const postWrites = requests.filter(({ method }) => method === "POST");
@@ -1623,24 +1630,26 @@ test("one page Save commits both provider drafts and all auxiliary sections", as
   fireEvent.change(fetch, { target: { value: "fixture-reader-key" } });
   fireEvent.click(
     screen.getByRole("checkbox", {
-      name: messages.settings.organization.promptCaching.toggleLabel,
+      name: messages.settings.organization.promptCaching.title,
     }),
   );
   fireEvent.click(
     screen.getByRole("checkbox", {
-      name: messages.settings.organization.documentProcessing.toggleLabel,
+      name: messages.settings.organization.documentProcessing.title,
     }),
   );
   const memory = screen.queryByRole("checkbox", {
-    name: messages.settings.organization.memoryExtraction.toggleLabel,
+    name: messages.settings.organization.memoryExtraction.title,
   });
   if (memory !== null) {
     fireEvent.click(memory);
   }
   expect(writes()).toEqual([]);
   expect(
-    screen.getByRole("button", { name: messages.common.save }),
-  ).toHaveProperty("disabled", true);
+    screen
+      .getByRole("button", { name: messages.common.save })
+      .getAttribute("aria-disabled"),
+  ).toBe("true");
   expect(
     screen.getAllByRole("button", { name: messages.common.saveChanges }),
   ).toHaveLength(1);
@@ -1728,7 +1737,7 @@ test("a failed auxiliary section retains its draft while successful sections cle
   fireEvent.change(search, { target: { value: "fixture-search-key" } });
   fireEvent.click(
     screen.getByRole("checkbox", {
-      name: messages.settings.organization.promptCaching.toggleLabel,
+      name: messages.settings.organization.promptCaching.title,
     }),
   );
   auxiliaryFailure = {
@@ -1745,9 +1754,7 @@ test("a failed auxiliary section retains its draft while successful sections cle
     const save = screen.getByRole("button", {
       name: messages.common.saveChanges,
     });
-    expect(save instanceof HTMLButtonElement ? save.disabled : null).toBe(
-      false,
-    );
+    expect(save.getAttribute("aria-disabled")).toBeNull();
   });
   expect(deepl).toHaveProperty("value", "fixture-deepl-key");
   const failedSection = settingsSectionQueries(
@@ -1812,7 +1819,7 @@ test.each(Object.values(DIRTY_ONLY_SECTIONS))(
     } else {
       fireEvent.click(
         screen.getByRole("checkbox", {
-          name: messages.settings.organization.promptCaching.toggleLabel,
+          name: messages.settings.organization.promptCaching.title,
         }),
       );
     }
@@ -1922,9 +1929,7 @@ test("page Save refuses writes after the session organization changes and retain
     const save = screen.getByRole("button", {
       name: messages.common.saveChanges,
     });
-    expect(save instanceof HTMLButtonElement ? save.disabled : null).toBe(
-      false,
-    );
+    expect(save.getAttribute("aria-disabled")).toBeNull();
   });
   expect(writes()).toEqual([]);
   expect(deepl).toHaveProperty("value", "fixture-deepl-key");
@@ -1966,8 +1971,8 @@ test.each([false, true])(
       const save = screen.getByRole("button", {
         name: messages.common.saveChanges,
       });
-      expect(save instanceof HTMLButtonElement ? save.disabled : null).toBe(
-        !deleteFails,
+      expect(save.getAttribute("aria-disabled")).toBe(
+        deleteFails ? null : "true",
       );
     });
     expect(writes()).toHaveLength(2);

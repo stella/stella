@@ -3,6 +3,7 @@ import { panic } from "better-result";
 import type { LoadedCatalogueEntry } from "@stll/catalogue";
 
 import type { ClientAuthStatus } from "@/hooks/use-client-auth-status";
+import type { QueryView } from "@/lib/query-view.logic";
 
 type OrganizationCatalogueEntry = {
   kind: LoadedCatalogueEntry["kind"];
@@ -16,22 +17,29 @@ export type AddToStellaState =
   | { type: "sign-in" }
   | { type: "forbidden" }
   | { type: "role-error" }
+  | { type: "catalogue-error" }
   | { type: "installed" }
+  | { type: "missing-entry" }
   | { type: "unavailable" }
   | { type: "install" };
+
+type CatalogueRead = QueryView<
+  { entries: readonly OrganizationCatalogueEntry[] },
+  unknown
+>;
 
 type ResolveAddToStellaStateOptions = {
   authStatus: ClientAuthStatus["status"];
   canInstall: boolean | "error" | undefined;
   entry: Pick<LoadedCatalogueEntry, "kind" | "slug">;
-  organizationEntries: readonly OrganizationCatalogueEntry[] | undefined;
+  catalogue: CatalogueRead;
 };
 
 export const resolveAddToStellaState = ({
   authStatus,
   canInstall,
   entry,
-  organizationEntries,
+  catalogue,
 }: ResolveAddToStellaStateOptions): AddToStellaState => {
   switch (authStatus) {
     case "checking":
@@ -49,18 +57,30 @@ export const resolveAddToStellaState = ({
   if (canInstall === "error") {
     return { type: "role-error" };
   }
-  if (canInstall === undefined || organizationEntries === undefined) {
+  if (canInstall === undefined || catalogue.type === "pending") {
     return { type: "checking" };
   }
   if (!canInstall) {
     return { type: "forbidden" };
   }
+  if (
+    catalogue.type === "error" ||
+    (catalogue.type === "items" && catalogue.refetchError !== undefined)
+  ) {
+    return { type: "catalogue-error" };
+  }
+  if (catalogue.type === "empty") {
+    return { type: "missing-entry" };
+  }
 
-  const organizationEntry = organizationEntries.find(
+  const organizationEntry = catalogue.items.entries.find(
     (candidate) =>
       candidate.kind === entry.kind && candidate.slug === entry.slug,
   );
-  if (!organizationEntry || organizationEntry.installState === "unavailable") {
+  if (organizationEntry === undefined) {
+    return { type: "missing-entry" };
+  }
+  if (organizationEntry.installState === "unavailable") {
     return { type: "unavailable" };
   }
   if (

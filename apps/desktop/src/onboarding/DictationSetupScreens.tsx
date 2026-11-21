@@ -36,7 +36,7 @@ import type {
   DictationDestinationChoice,
   DictationSetupScreen,
 } from "./dictation-setup-steps";
-import { namedDictationFailure, needsDownload } from "./use-dictation";
+import { namedDictationFailure } from "./use-dictation";
 import type { DictationControls, DictationSnapshot } from "./use-dictation";
 
 const BYTES_PER_MEGABYTE = 1_000_000;
@@ -382,7 +382,6 @@ const LocalModel = ({
       {offersDownload ? (
         <Button
           className="shrink-0"
-          disabled={!needsDownload(model)}
           onClick={() => {
             void controls.download();
           }}

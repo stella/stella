@@ -183,6 +183,11 @@ export const DocumentTypesCard = () => {
         />
         <Button
           disabled={newLabel.trim().length === 0 || createMutation.isPending}
+          disabledReason={
+            createMutation.isPending
+              ? t("common.creating")
+              : t("common.enterName")
+          }
           type="submit"
         >
           <PlusIcon />
@@ -348,6 +353,7 @@ const DocumentTypeRow = ({ type, onReorder }: DocumentTypeRowProps) => {
         aria-label={t("common.delete")}
         className="shrink-0"
         disabled={deleteMutation.isPending}
+        disabledReason={t("common.deleting")}
         onClick={() => deleteMutation.mutate()}
         size="icon-xs"
         type="button"

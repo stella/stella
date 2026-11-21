@@ -373,10 +373,11 @@ describe("approving time by person", () => {
     if (!(row instanceof HTMLElement)) {
       throw new TypeError("no row for adam-1");
     }
-    const send = within(row).getByRole("button", {
-      name: messages.billing.revertToDraft,
-    });
-    expect(send).toHaveProperty("disabled", true);
+    const send = () =>
+      within(row).getByRole("button", {
+        name: messages.billing.revertToDraft,
+      });
+    expect(send().getAttribute("aria-disabled")).toBe("true");
     await act(async () => {
       fireEvent.change(
         within(row).getByRole("textbox", {
@@ -386,7 +387,7 @@ describe("approving time by person", () => {
       );
     });
     await act(async () => {
-      fireEvent.click(send);
+      fireEvent.click(send());
     });
 
     await waitFor(() => {
@@ -428,11 +429,12 @@ describe("approving time by person", () => {
     await act(async () => {
       fireEvent.click(third);
     });
-    const returnSelected = within(adam).getByRole("button", {
-      name: "Return 2 selected entries",
-    });
+    const returnSelected = () =>
+      within(adam).getByRole("button", {
+        name: "Return 2 selected entries",
+      });
     // A return always carries its reason.
-    expect(returnSelected).toHaveProperty("disabled", true);
+    expect(returnSelected().getAttribute("aria-disabled")).toBe("true");
     const reasons = within(adam).getAllByRole("textbox", {
       name: messages.billing.approval.returnComment,
     });
@@ -447,7 +449,7 @@ describe("approving time by person", () => {
       });
     });
     await act(async () => {
-      fireEvent.click(returnSelected);
+      fireEvent.click(returnSelected());
     });
 
     await waitFor(() => {

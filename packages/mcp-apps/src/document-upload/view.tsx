@@ -17,6 +17,16 @@ type DocumentUploadProps = {
 const Content = ({ runtime }: DocumentUploadProps) => {
   const snapshot = useSyncExternalStore(runtime.subscribe, runtime.getSnapshot);
   const t = useTranslations();
+  const activeUploadReason = snapshot.message || t("preparingUpload");
+  const uploadDisabledReason = (() => {
+    if (snapshot.uploadPhase === "active") {
+      return activeUploadReason;
+    }
+    if (!snapshot.file) {
+      return t("chooseUploadFile");
+    }
+    return t("waitingForUploadTarget");
+  })();
   return (
     <main
       aria-labelledby="title"
@@ -33,6 +43,7 @@ const Content = ({ runtime }: DocumentUploadProps) => {
         <FileInput
           aria-labelledby="file-label"
           disabled={snapshot.uploadPhase === "active"}
+          disabledReason={activeUploadReason}
           file={snapshot.file}
           onFileChange={runtime.selectFile}
           chooseLabel={t("chooseFile")}
@@ -47,6 +58,7 @@ const Content = ({ runtime }: DocumentUploadProps) => {
           !snapshot.file ||
           !snapshot.uploadTarget
         }
+        disabledReason={uploadDisabledReason}
         onClick={() => {
           runtime.detached(runtime.upload(), "documentUpload.upload");
         }}

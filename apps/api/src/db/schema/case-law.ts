@@ -3375,7 +3375,9 @@ export const caseLawStatuteCitationCountState = p.pgTable(
  * whole by a background refresh, so a public read lists the shards without
  * counting the corpus. `year`/`month` are the shard's path segments
  * (`undated`/`00` for decisions without a date) and `bucket` is `all` for an
- * unsplit month or the two-digit bucket of a split one.
+ * unsplit month or the four-digit position of one range of a split one. A
+ * range is one contiguous key range of the decisions' date index, so serving
+ * it reads its own decisions and nothing else of the month.
  *
  * Row security is forced (migration `20260927230000_case_law_sitemap_shards`)
  * so the owner-run refresh needs a policy; table privileges decide access.
@@ -3417,9 +3419,19 @@ export const caseLawSitemapShards = p.pgTable(
     country: p.varchar({ length: 3 }).notNull(),
     year: p.varchar({ length: 7 }).notNull(),
     month: p.varchar({ length: 2 }).notNull(),
-    bucket: p.varchar({ length: 3 }).notNull(),
+    bucket: p.varchar({ length: 4 }).notNull(),
     total: p.integer().notNull(),
     lastModifiedAt: timestamptz("last_modified_at").notNull(),
+    /**
+     * Where a split month's range starts, inclusive, on the key of
+     * `case_law_decisions_country_date_published_idx` (the decision date,
+     * `-infinity` when undated, then the id); null from the month's start.
+     */
+    rangeStartDate: p.date("range_start_date"),
+    rangeStartId: p.uuid("range_start_id"),
+    /** Where the range ends, exclusive, on the same key; null to the month's end. */
+    rangeEndDate: p.date("range_end_date"),
+    rangeEndId: p.uuid("range_end_id"),
   },
   (t) => [
     p.primaryKey({

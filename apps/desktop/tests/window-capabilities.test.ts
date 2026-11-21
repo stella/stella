@@ -49,6 +49,7 @@ const SHELL_WINDOW_MODULES: Record<string, readonly string[]> = {
     "src/mainview/PermissionsSection.tsx",
     "src/mainview/ShortcutSetting.tsx",
     "src/mainview/SigningDriverSection.tsx",
+    "src/mainview/UpdateCheck.tsx",
     "src/shared/ShortcutRecorder.tsx",
     "src/shared/use-clipboard-shortcut.ts",
   ],

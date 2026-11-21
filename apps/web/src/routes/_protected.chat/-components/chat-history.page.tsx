@@ -349,6 +349,7 @@ export const ChatHistoryPage = ({
           <Button
             className="self-center"
             disabled={pinnedThreadsQuery.isFetchingNextPage}
+            disabledReason={t("common.loading")}
             onClick={() => {
               detached(
                 pinnedThreadsQuery.fetchNextPage(),
@@ -366,6 +367,7 @@ export const ChatHistoryPage = ({
           <Button
             className="self-center"
             disabled={threadsQuery.isFetchingNextPage}
+            disabledReason={t("common.loading")}
             onClick={() => {
               detached(
                 threadsQuery.fetchNextPage(),
@@ -787,7 +789,11 @@ function DeleteChatDialog({ dialog, onOpenChange }: DeleteChatDialogProps) {
           <AlertDialogClose
             disabled={deleteThread.isPending}
             render={
-              <Button disabled={deleteThread.isPending} variant="ghost" />
+              <Button
+                disabled={deleteThread.isPending}
+                disabledReason={t("common.deleting")}
+                variant="ghost"
+              />
             }
           >
             {t("common.cancel")}

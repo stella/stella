@@ -3,8 +3,8 @@ import { useId, useState } from "react";
 import { useTranslations } from "use-intl";
 
 import { DestructiveConfirmDialog } from "@stll/ui/destructive-confirm-dialog";
-import { Frame, FramePanel } from "@stll/ui/frame";
 import { Label } from "@stll/ui/label";
+import { SettingsPanel, SettingsRow, SettingsSection } from "@stll/ui/settings";
 import { Switch } from "@stll/ui/switch";
 
 import { QueryViewFeedback } from "@/components/query-view-feedback";
@@ -35,14 +35,11 @@ export const SharepointCard = () => {
     // The admin expects the switch here: say the read failed and offer a
     // retry instead of letting the section vanish.
     return (
-      <section className="flex flex-col gap-3">
-        <h2 className="text-base font-semibold">{t("sharepoint.title")}</h2>
-        <Frame>
-          <FramePanel>
-            <QueryViewFeedback view={access} />
-          </FramePanel>
-        </Frame>
-      </section>
+      <SettingsSection title={t("sharepoint.title")}>
+        <SettingsPanel>
+          <QueryViewFeedback view={access} />
+        </SettingsPanel>
+      </SettingsSection>
     );
   }
   if (
@@ -89,35 +86,31 @@ const SharepointEnablement = ({
   const confirmDisable = async () => await mutation.mutateAsync(false);
 
   return (
-    <section className="flex flex-col gap-3">
-      <h2 className="text-base font-semibold">{t("sharepoint.title")}</h2>
-      <Frame>
-        <FramePanel>
-          <div className="flex items-start justify-between gap-4 p-1">
-            <div className="flex min-w-0 flex-col gap-1">
-              <Label className="text-sm font-medium" htmlFor={switchId}>
-                {t("sharepoint.admin.toggleLabel")}
-              </Label>
-              <p className="text-muted-foreground text-xs text-pretty">
-                {t("sharepoint.admin.description")}
-              </p>
-            </div>
-            <Switch
-              checked={enabled}
-              disabled={!canEdit || mutation.isPending}
-              id={switchId}
-              onCheckedChange={(next) => {
-                if (next) {
-                  mutation.mutate(true);
-                } else {
-                  setConfirmingDisable(true);
-                }
-              }}
-            />
-          </div>
-          <QueryViewFeedback view={access} />
-        </FramePanel>
-      </Frame>
+    <>
+      <SettingsSection title={t("sharepoint.title")}>
+        <SettingsRow
+          description={t("sharepoint.admin.description")}
+          title={
+            <Label className="text-sm font-medium" htmlFor={switchId}>
+              {t("sharepoint.admin.toggleLabel")}
+            </Label>
+          }
+        >
+          <Switch
+            checked={enabled}
+            disabled={!canEdit || mutation.isPending}
+            id={switchId}
+            onCheckedChange={(next) => {
+              if (next) {
+                mutation.mutate(true);
+              } else {
+                setConfirmingDisable(true);
+              }
+            }}
+          />
+        </SettingsRow>
+      </SettingsSection>
+      <QueryViewFeedback view={access} />
       <DestructiveConfirmDialog
         cancelLabel={t("common.cancel")}
         confirmLabel={t("sharepoint.admin.disableConfirm")}
@@ -132,6 +125,6 @@ const SharepointEnablement = ({
         open={confirmingDisable}
         title={t("sharepoint.admin.disableTitle")}
       />
-    </section>
+    </>
   );
 };

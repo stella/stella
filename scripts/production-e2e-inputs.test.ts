@@ -295,7 +295,7 @@ for (const [config, message] of [
       path.join(import.meta.dirname, "production-e2e-inputs.mjs"),
     ).href;
     const result = Bun.spawnSync([
-      "node",
+      process.execPath,
       "--input-type=module",
       "--eval",
       `import { productionE2eInputs } from ${JSON.stringify(moduleUrl)}; productionE2eInputs(${JSON.stringify(configPath)});`,

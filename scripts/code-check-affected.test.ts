@@ -1943,9 +1943,9 @@ console.log(m.configuredCodeCheckConcurrency(), m.codeCheckConcurrency(12 * 1024
 
 describe("check failure reporting", () => {
   const commands = [
-    ["bun", "turbo", "lint"],
-    ["bun", "turbo", "typecheck"],
-    ["bun", "turbo", "typecheck:repo"],
+    ["bun", "--bun", "turbo", "lint"],
+    ["bun", "--bun", "turbo", "typecheck"],
+    ["bun", "--bun", "turbo", "typecheck:repo"],
   ];
   test("planner deadlines retain measured headroom beyond the old fixed cap and respect the remaining leg budget", () => {
     const longest =
@@ -2119,12 +2119,14 @@ describe("check failure reporting", () => {
     expect(executed).toEqual(commands.slice(0, 1));
     const report = output.join("");
     expect(report).toContain("code-check: 1 failed command(s)\n");
-    expect(report).toContain("code-check: failed (exit 2): bun turbo lint");
-    expect(report).not.toContain(
-      "code-check: failed (exit 2): bun turbo typecheck:repo",
+    expect(report).toContain(
+      "code-check: failed (exit 2): bun --bun turbo lint",
     );
     expect(report).not.toContain(
-      "code-check: failed (exit 2): bun turbo typecheck\n",
+      "code-check: failed (exit 2): bun --bun turbo typecheck:repo",
+    );
+    expect(report).not.toContain(
+      "code-check: failed (exit 2): bun --bun turbo typecheck\n",
     );
   });
   test.each([{ args: [] }, { args: ["--leg", "api"] }])(

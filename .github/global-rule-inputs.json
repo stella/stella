@@ -52,6 +52,8 @@
     "scripts/check-base-image-pulls.test.ts",
     "scripts/check-bridge-version.sh",
     "scripts/check-bridge-version.test.sh",
+    "scripts/check-bun-runtime.test.ts",
+    "scripts/check-bun-runtime.ts",
     "scripts/check-bundle-startup-ledger.ts",
     "scripts/check-ci-event-policy.test.ts",
     "scripts/check-ci-event-policy.ts",

@@ -80,11 +80,17 @@ const GatedButtons = ({
   const t = useTranslations();
   return (
     <>
-      <Button disabled={disabled} onClick={() => onRequest("use")} size="sm">
+      <Button
+        disabled={disabled}
+        disabledReason={t("common.loading")}
+        onClick={() => onRequest("use")}
+        size="sm"
+      >
         {t("templates.useTemplate")}
       </Button>
       <Button
         disabled={disabled}
+        disabledReason={t("common.loading")}
         onClick={() => onRequest("add")}
         size="sm"
         variant="outline"
@@ -93,6 +99,7 @@ const GatedButtons = ({
       </Button>
       <Button
         disabled={disabled}
+        disabledReason={t("common.loading")}
         onClick={() => onRequest("download")}
         size="sm"
         variant="outline"

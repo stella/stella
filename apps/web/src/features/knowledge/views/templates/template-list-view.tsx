@@ -212,6 +212,7 @@ const TemplateListView = ({
               <Button
                 className="w-full"
                 disabled={source.isFetchingNextPage}
+                disabledReason={t("common.loading")}
                 onClick={actions.loadMore}
                 size="sm"
                 variant="muted"

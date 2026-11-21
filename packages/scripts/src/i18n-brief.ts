@@ -7,11 +7,14 @@
  *
  * Usage: i18n-brief <langs-dir> --locale=<code> [--key=<key> ...]
  *                   [--glossary=<path>] [--usage-in=<dir> ...]
+ *                   [--memory=<langs-dir>]
  *
- * --key=<key>        Brief these keys instead (repeatable).
- * --glossary=<path>  Glossary to cite; defaults to glossary.json beside the
- *                    langs dir.
- * --usage-in=<dir>   Show the source lines that use each key (repeatable).
+ * --key=<key>          Brief these keys instead (repeatable).
+ * --glossary=<path>    Glossary to cite; defaults to glossary.json beside the
+ *                      langs dir.
+ * --usage-in=<dir>     Show the source lines that use each key (repeatable).
+ * --memory=<langs-dir> Reference catalog (e.g. apps/web/src/i18n/langs) to
+ *                      surface existing translations for identical English strings.
  */
 import { panic } from "better-result";
 import path from "node:path";
@@ -61,6 +64,36 @@ export const selectBriefKeys = ({
   return [...flattenMessages(source).keys()].filter((key) => selected.has(key));
 };
 
+export type TranslationMemory = ReadonlyMap<string, readonly string[]>;
+
+/** Map English strings in a reference catalog to their translated values in the target locale. */
+export const buildTranslationMemory = ({
+  source,
+  target,
+}: {
+  source: NestedMessages;
+  target: NestedMessages;
+}): TranslationMemory => {
+  const sourceMessages = flattenMessages(source);
+  const targetMessages = flattenMessages(target);
+  const byEnglish = new Map<string, Set<string>>();
+  for (const [key, english] of sourceMessages) {
+    const translated = targetMessages.get(key);
+    if (translated === undefined || translated === english) {
+      continue;
+    }
+    const existing = byEnglish.get(english) ?? new Set<string>();
+    existing.add(translated);
+    byEnglish.set(english, existing);
+  }
+  return new Map(
+    [...byEnglish].map(([english, values]) => [
+      english,
+      [...values].toSorted(),
+    ]),
+  );
+};
+
 type BriefItem = {
   key: string;
   source: string;
@@ -68,6 +101,8 @@ type BriefItem = {
   lockedSource: string | null;
   /** The current translation; null while it still holds the English. */
   translation: string | null;
+  /** Existing translations for this exact English string from a reference catalog. */
+  memoryTranslations: readonly string[];
   placeholders: string[];
   missingPluralCategories: string[];
   terms: Term[];
@@ -82,6 +117,7 @@ type BuildBriefItemsOptions = {
   lock: SourceLock;
   glossary: Glossary;
   files: readonly SourceFile[];
+  memory?: TranslationMemory | undefined;
 };
 
 export const buildBriefItems = ({
@@ -92,6 +128,7 @@ export const buildBriefItems = ({
   lock,
   glossary,
   files,
+  memory,
 }: BuildBriefItemsOptions): BriefItem[] => {
   const sourceMessages = flattenMessages(source);
   const targetMessages = flattenMessages(target);
@@ -106,6 +143,7 @@ export const buildBriefItems = ({
       lockedSource: locked !== undefined && locked !== value ? locked : null,
       translation:
         translation === undefined || translation === value ? null : translation,
+      memoryTranslations: memory?.get(value) ?? [],
       placeholders: findArgumentNames(value),
       missingPluralCategories: findMissingPluralCategories(value, locale),
       terms: findMentionedTerms({ glossary, source: value, key }),
@@ -155,6 +193,11 @@ const renderItem = (item: BriefItem, locale: string): string[] => {
   }
   if (item.translation !== null) {
     lines.push(`- Current ${locale}: ${JSON.stringify(item.translation)}`);
+  }
+  if (item.memoryTranslations.length > 0) {
+    lines.push(
+      `- Reference catalog (${locale}): ${item.memoryTranslations.map((value) => JSON.stringify(value)).join(" / ")}`,
+    );
   }
   if (item.placeholders.length > 0) {
     lines.push(
@@ -211,7 +254,7 @@ export const renderBrief = ({
     "",
     "- Keep every placeholder and tag listed for a message exactly as written; translate the text around them.",
     "- Use the glossary rendering for each listed term, never a form it rules out.",
-    "- Write the product name in lowercase in every form and position, sentence starts included: stella, stellu, stelle.",
+    "- Write the product name in lowercase base form in every locale and position, sentence starts included; never decline or inflect stella (use an appositive noun such as cs 'v aplikaci stella', pl 'w aplikacji stella', hu 'a stella alkalmazásban').",
     "- Where the English changed, rework the current translation to say what the English now says; keep its wording where the change does not reach.",
     "- Write complete, natural sentences for a legal professional, never a word-for-word rendering of the English.",
     "",
@@ -251,14 +294,22 @@ if (import.meta.main) {
     valuesOf("--glossary=").at(0) ?? path.join(langsDir, "..", "glossary.json"),
   );
 
-  const readMessages = async (file: string): Promise<NestedMessages> =>
-    parseNestedMessages(
-      await Bun.file(path.resolve(langsDir, file)).text(),
-      file,
-    );
+  const readMessagesFrom = async (
+    dir: string,
+    file: string,
+  ): Promise<NestedMessages> =>
+    parseNestedMessages(await Bun.file(path.resolve(dir, file)).text(), file);
   const localeFile = path.join(langsDir, `${locale}.json`);
-  const source = await readMessages("en.json");
-  const target = await readMessages(`${locale}.json`);
+  const source = await readMessagesFrom(langsDir, "en.json");
+  const target = await readMessagesFrom(langsDir, `${locale}.json`);
+  const memoryDir = valuesOf("--memory=").at(0);
+  const memory =
+    memoryDir === undefined
+      ? undefined
+      : buildTranslationMemory({
+          source: await readMessagesFrom(memoryDir, "en.json"),
+          target: await readMessagesFrom(memoryDir, `${locale}.json`),
+        });
   const lock =
     (await readSourceLock(langsDir)) ??
     panic(`${langsDir} has no source lock; run i18n:sync first`);
@@ -282,6 +333,7 @@ if (import.meta.main) {
     lock,
     glossary: parseGlossary(await Bun.file(glossaryPath).text()),
     files: await readUsageSources({ dirs: valuesOf("--usage-in="), langsDir }),
+    memory,
   });
   // The terminology tables are generated beside the glossary they render.
   const conventions = await Promise.all(

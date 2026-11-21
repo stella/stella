@@ -86,6 +86,7 @@ export const SkillExportMenu = ({ skillId }: SkillExportMenuProps) => {
             aria-busy={pending}
             aria-label={label}
             disabled={pending}
+            disabledReason={t("common.preparing")}
             size="icon-sm"
             title={label}
             variant="ghost"
