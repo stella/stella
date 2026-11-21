@@ -158,6 +158,7 @@ export const ChatComposer = ({
     // A refusal of this send is what the composer shows next, not an older
     // dictation's failure.
     dictation.settleForSend();
+    const learned = field.learnOnceSent(message);
     const taken = files.attachments;
     const accepted = onSend(
       { text: message, files: readyFiles(taken) },
@@ -170,6 +171,7 @@ export const ChatComposer = ({
       mode,
     );
     if (accepted) {
+      learned();
       setDraft("");
       files.clear();
     }
@@ -179,6 +181,7 @@ export const ChatComposer = ({
     if (onQueue === undefined || !canSend) {
       return;
     }
+    const learned = field.learnOnceSent(message);
     const taken = files.attachments;
     const accepted = onQueue(
       { text: message, files: readyFiles(taken) },
@@ -192,6 +195,7 @@ export const ChatComposer = ({
       },
     );
     if (accepted) {
+      learned();
       setDraft("");
       files.clear();
     }
@@ -204,6 +208,7 @@ export const ChatComposer = ({
     if (onSteer === undefined || !canSteer) {
       return;
     }
+    const learned = field.learnOnceSent(message);
     if (
       onSteer({ text: message, files: [] }, () => {
         // A steer is settled later than a send, often after the member typed
@@ -213,6 +218,7 @@ export const ChatComposer = ({
         );
       })
     ) {
+      learned();
       setDraft("");
     }
   };

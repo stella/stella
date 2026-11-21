@@ -263,6 +263,7 @@
       "entry": [
         "src/transcript.ts",
         "src/spelling.ts",
+        "src/corrections.ts",
         "src/timeline.ts",
         "src/exporters.ts",
         "src/vocabulary.ts",
