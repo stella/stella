@@ -11,9 +11,9 @@ import { Skeleton } from "@stll/ui/skeleton";
 import { TruncatedText } from "@stll/ui/truncated-text";
 
 import { CopyControl } from "@/components/copy-control";
+import { DATA_BOX_DIRECTION_LABEL_KEYS } from "@/features/correspondence/data-box-direction";
 import { usePermissions } from "@/hooks/use-permissions";
 import { useFormatter } from "@/i18n/formatting-context";
-import type { TranslationKey } from "@/i18n/types";
 import { detached } from "@/lib/detached";
 import {
   CORRESPONDENCE_PAGE_SIZE,
@@ -34,16 +34,9 @@ import {
   useRotateCorrespondenceAddress,
 } from "@/routes/_protected.workspaces/$workspaceId/-mutations/correspondence";
 
-// An incoming message is the default and needs no label.
-const DIRECTION_LABEL_KEYS = {
-  organization_sender: "correspondence.dataBox.sent",
-  organization_recipient: null,
-  unknown: "correspondence.dataBox.directionUnknown",
-} as const satisfies Record<DataBoxDirectionBasis, TranslationKey | null>;
-
 const DataBoxDirectionLabel = ({ basis }: { basis: DataBoxDirectionBasis }) => {
   const t = useTranslations();
-  const label = DIRECTION_LABEL_KEYS[basis];
+  const label = DATA_BOX_DIRECTION_LABEL_KEYS[basis];
   return label === null ? null : (
     <span className="text-muted-foreground text-xs">{t(label)}</span>
   );

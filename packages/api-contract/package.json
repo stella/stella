@@ -169,6 +169,7 @@
     "./asic": "./src/asic.ts",
     "./asic-file-formats": "./src/asic-file-formats.ts",
     "./cades": "./src/cades.ts",
+    "./preview-text": "./src/preview-text.ts",
     "./data-box": "./src/data-box.ts",
     "./email-mime-types": "./src/email-mime-types.ts",
     "./document-format": "./src/document-format.ts",
