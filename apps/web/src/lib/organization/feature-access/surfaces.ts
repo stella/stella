@@ -38,6 +38,13 @@ export const CALLER_FEATURE = {
     routeImports: ["@/features/avt/"],
   },
   legalLists: LEGAL_LISTS_FEATURE,
+  // Gates the document editor's citation check, not a route.
+  citationCheck: {
+    id: "citation-check",
+    requires: [],
+    undeclared: { type: "hidden" },
+    routeImports: [],
+  },
   // Gates column options in the property composer, not a route.
   tableAnalysis: {
     id: "table-analysis",

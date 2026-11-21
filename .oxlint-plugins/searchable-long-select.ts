@@ -480,6 +480,10 @@ export default eslintCompatPlugin({
         let longListVariables = new Set<Variable>();
         let longListHelpers = new Set<Variable>();
         return {
+          before() {
+            const text = context.sourceCode.text;
+            return /<\s*select\b|Select/u.test(text);
+          },
           Program(program) {
             selectLocals = new Set();
             itemLocals = new Set();

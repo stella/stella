@@ -1692,20 +1692,28 @@ const readS3ErrorBodyPrefix = async (response: Response): Promise<string> => {
   }
 };
 
+type S3ResponseErrorCodeRead =
+  | { readonly kind: "code"; readonly value: string }
+  | { readonly kind: "absent" }
+  | { readonly kind: "unreadable" };
+
 const readS3ResponseErrorCode = async (
   response: Response,
-): Promise<string | null> => {
+): Promise<S3ResponseErrorCodeRead> => {
   const headerCode = response.headers.get("x-amz-error-code");
   if (headerCode !== null) {
-    return headerCode.trim();
+    return { kind: "code", value: headerCode.trim() };
   }
   const body = await Result.tryPromise(
     async () => await readS3ErrorBodyPrefix(response),
   );
   if (body.isErr()) {
-    return null;
+    return { kind: "unreadable" };
   }
-  return extractS3ErrorCode(body.value);
+  const extracted = extractS3ErrorCode(body.value);
+  return extracted === null
+    ? { kind: "absent" }
+    : { kind: "code", value: extracted };
 };
 
 const throwCorpusObjectResponseError = async ({
@@ -1722,7 +1730,8 @@ const throwCorpusObjectResponseError = async ({
   // `<Code>ExpiredToken</Code>` is the only thing identifying it as an expiry,
   // and the credential guard replays the read on that code alone. Dropping it
   // for non-404 statuses left every fetch-based read outside the retry.
-  const code = await readS3ResponseErrorCode(response);
+  const codeRead = await readS3ResponseErrorCode(response);
+  const code = codeRead.kind === "code" ? codeRead.value : null;
   // Absence stays a 404-only conclusion: `NotFound` on any other status says
   // something about the request, not about the key.
   if (

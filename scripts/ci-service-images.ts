@@ -389,9 +389,12 @@ if (import.meta.main) {
       `${JSON.stringify(await composeImageOverrides(await Bun.file(file).text(), resolve, path.dirname(path.resolve(file))))}\n`,
     );
   } else if (mode === "--resolve") {
-    for (const { source, name } of mirrorImages) {
-      process.stdout.write(`${name}=${await resolve(source)}\n`);
-    }
+    const lines = await Promise.all(
+      mirrorImages.map(
+        async ({ source, name }) => `${name}=${await resolve(source)}\n`,
+      ),
+    );
+    process.stdout.write(lines.join(""));
   } else if (
     mode === "--build-contexts" ||
     mode === "--build" ||

@@ -32,15 +32,15 @@ import {
 /** A part of up to 12,000 characters takes the stronger model well over a
  *  short dictation's few seconds. The deadline bounds the model only: the
  *  edge in front of the API ends a request that sends nothing for 60 s, so
- *  the desktop sizes its parts for an answer inside that. */
+ *  a client sizes its parts for an answer inside that. */
 const RECORDING_CLEANUP_DEADLINE_MS = 120_000;
 
 /**
  * Cleans one part of a recording's transcript with the organization's
  * chat model, keeping the answer only when it is a plausible cleanup of
- * that part.
+ * that part, whichever credential proved its caller.
  */
-const cleanUpRecordingPart = async ({
+export const cleanUpRecordingPart = async ({
   request,
   ...options
 }: DictationGeneration & {

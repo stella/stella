@@ -13,7 +13,10 @@ import {
   TIME_ENTRY_ACTIVITY_GROUPS,
   TIME_ENTRY_SUGGESTION_STATUSES,
 } from "@stll/api-contract";
-import { BILLING_CODE_MAX_LENGTH } from "@stll/api-contract/billing";
+import {
+  BILLING_CODE_MAX_LENGTH,
+  BILLING_CODE_TYPES,
+} from "@stll/api-contract/billing";
 import {
   DESKTOP_TIME_ENTRY_BATCH_STATUSES,
   type DesktopTimeEntryBatchResponse,
@@ -625,8 +628,6 @@ export const timeEntrySuggestions = p.pgTable(
     ...wsOrganizationUserPolicies("time_entry_suggestions"),
   ],
 );
-
-export const BILLING_CODE_TYPES = ["task", "activity"] as const;
 
 export const billingCodes = p.pgTable(
   "billing_codes",

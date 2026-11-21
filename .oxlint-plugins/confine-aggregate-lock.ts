@@ -22,17 +22,19 @@ export default eslintCompatPlugin({
         },
       },
       createOnce(context) {
+        const resolvedFile = () => {
+          const sourceFile = repoRelativeFilename(context);
+          return sourceFile ===
+            ".oxlint-plugins/__fixtures__/confine-aggregate-lock.fixture.ts"
+            ? "apps/api/src/handlers/planted.ts"
+            : sourceFile;
+        };
         return {
+          before() {
+            return aggregateLockSourceIncluded(resolvedFile());
+          },
           Program(node) {
-            const sourceFile = repoRelativeFilename(context);
-            const file =
-              sourceFile ===
-              ".oxlint-plugins/__fixtures__/confine-aggregate-lock.fixture.ts"
-                ? "apps/api/src/handlers/planted.ts"
-                : sourceFile;
-            if (!aggregateLockSourceIncluded(file)) {
-              return;
-            }
+            const file = resolvedFile();
             const sites = aggregateLockSites(file, context.sourceCode.text);
             const actual = aggregateLockBaseline(sites);
             for (const problem of aggregateLockBaselineProblems({
