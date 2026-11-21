@@ -18,6 +18,7 @@ import type { CzNsSbirkaDocumentIdentity } from "@/api/handlers/case-law/ingesti
 import { readStoredRawFromS3 } from "@/api/handlers/case-law/ingestion/pipeline/stored-raw";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { CaseLawPublicReadTransaction } from "@/api/lib/case-law-public-read-db";
+import { readCappedByGroup } from "@/api/lib/db/read-bounded";
 import { decodeCollectionDocumentBody } from "@/api/lib/legal-search/collection-document-part";
 import { collectionDocumentPartReadSchema } from "@/api/lib/legal-search/collection-document-part-read";
 import { allowsDerivedAi } from "@/api/lib/legal-search/corpus-source";
@@ -64,7 +65,7 @@ export const readCollectionPublications = async ({
   tx,
   decisionId,
 }: CollectionPublicationReadOptions) => {
-  const rows = await tx
+  const query = tx
     .select({
       postId: caseLawCollectionBodies.collectionDocumentId,
       sourceUrl: caseLawCollectionBodies.sourceUrl,
@@ -94,8 +95,14 @@ export const readCollectionPublications = async ({
       sql`CASE WHEN ${caseLawCollectionBodies.documentPart}->>'extent' = 'complete' THEN 0 ELSE 1 END`,
       asc(caseLawCollectionBodies.collectionSourceId),
       asc(caseLawCollectionBodies.collectionDocumentId),
-    )
-    .limit(COLLECTION_PUBLICATION_PROJECTION_MAX);
+    );
+  // The leading publications; their exact total is counted apart, so a
+  // truncated projection still says how many it omits.
+  const { rows } = await readCappedByGroup(query, {
+    cap: COLLECTION_PUBLICATION_PROJECTION_MAX,
+    readRows: async (limited) => await limited,
+    groupKeyOf: () => "publications",
+  });
   return { rows, totalCount: rows.at(0)?.totalCount ?? 0 };
 };
 
