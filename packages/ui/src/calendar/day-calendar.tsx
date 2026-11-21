@@ -172,12 +172,15 @@ const isSameDraftView = (left: DraftView, right: DraftView): boolean =>
  * change, committing it would select a stale range, so it is discarded.
  */
 const useDraftSelection = (view: DraftView) => {
+  const viewKey = `${view.date}:${view.startHour}:${view.endHour}:${view.granularity}:${view.timeZone}`;
+  const [prevViewKey, setPrevViewKey] = useState(viewKey);
   const [stored, setDraft] = useState<DraftSelection | null>(null);
-  const draft =
-    stored !== null && isSameDraftView(stored.view, view) ? stored : null;
-  if (stored !== null && draft === null) {
+  if (prevViewKey !== viewKey) {
+    setPrevViewKey(viewKey);
     setDraft(null);
   }
+  const draft =
+    stored !== null && isSameDraftView(stored.view, view) ? stored : null;
   return [draft, setDraft] as const;
 };
 
