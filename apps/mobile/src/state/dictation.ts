@@ -217,6 +217,7 @@ export const cleanUpDictation = async ({
   const first = await request(writing);
   const cleaned =
     first.isErr() &&
+    first.error._tag === "ApiRequestError" &&
     first.error.status === UNPROCESSABLE_STATUS &&
     Object.keys(writing).length > 0
       ? await request({})
