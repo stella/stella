@@ -72,6 +72,16 @@ export const PDF_PAGE_FIELD_ROW_CLASS =
   "ms-1.5 me-2 flex items-center gap-x-1.5 text-sm tabular-nums";
 const PDF_PAGE_FIELD_CLASS = "me-1 w-14 *:text-end";
 
+export const PdfPageCount = ({
+  formattedCount,
+}: {
+  formattedCount?: string | undefined;
+}) => (
+  <span className="min-w-[5ch] whitespace-nowrap">
+    {formattedCount ?? <FaceLabelPending className="w-3" />}
+  </span>
+);
+
 const IconButtonFace = ({ children }: { children: ReactNode }) => (
   <ButtonFace size="icon-xs" variant="ghost">
     {children}
@@ -134,7 +144,7 @@ export const PdfToolbarFace = ({
           {page}
         </InputFace>
         <span>/</span>
-        <FaceLabelPending className="w-3" />
+        <PdfPageCount />
       </div>
     </div>
     <div className="flex justify-self-end">
