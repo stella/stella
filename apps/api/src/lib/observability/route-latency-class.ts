@@ -9,6 +9,7 @@ import type { RequestClass } from "@/api/lib/observability/request-metrics";
 export const ROUTE_LATENCY_CLASSES = {
   "POST /v1/dictation/transcribe": "ai",
   "POST /v1/dictation/cleanup": "ai",
+  "POST /v1/dictation/recording-cleanup": "ai",
   "DELETE /mcp": "search",
   "DELETE /v1/contacts": "batch",
   "DELETE /mcp-anonymized": "search",
