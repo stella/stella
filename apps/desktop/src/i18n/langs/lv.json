@@ -662,6 +662,35 @@
       "openSoundPc": "Atvērt skaņas iestatījumus",
       "title": "stella nedzird jūsu mikrofonu"
     },
+    "perApp": {
+      "add": "Pievienot…",
+      "cleanup": {
+        "default": "Labošana pēc iestatījuma",
+        "label": "Labošana: {name}",
+        "off": "Bez labošanas",
+        "on": "Ar labošanu"
+      },
+      "description": "Ieslēdziet vai izslēdziet AI labošanu un izvēlieties valodu vienai lietotnei vai lietotņu veidam. Izšķir lietotne, kas ir priekšplānā, kad sākat diktēt.",
+      "failed": "Iestatījumus neizdevās saglabāt. Mēģiniet vēlreiz.",
+      "group": "Pa lietotnēm",
+      "kinds": {
+        "browser": "Pārlūki",
+        "chat": "Tērzēšanas lietotnes",
+        "code": "Koda redaktori",
+        "document": "Dokumenti",
+        "email": "E-pasta lietotnes",
+        "other": "Citas lietotnes",
+        "terminal": "Termināļi"
+      },
+      "kindsOfApp": "Lietotņu veidi",
+      "language": {
+        "default": "Valoda pēc iestatījuma",
+        "label": "Valoda: {name}"
+      },
+      "recentApps": "Nesen lietotās lietotnes",
+      "remove": "Noņemt {name}",
+      "title": "Lietotnes iestatījumi"
+    },
     "preview": {
       "finishing": "Tiek pabeigts…",
       "label": "Līdz šim diktētais teksts",
@@ -686,6 +715,19 @@
       "failed": "Neizdevās atvērt logu. Mēģiniet vēlreiz.",
       "open": "Atvērt",
       "title": "Ieraksta transkribēšana"
+    },
+    "whileDictating": {
+      "choices": {
+        "lower": "Klusināt citas skaņas",
+        "nothing": "Neko nedarīt",
+        "pause": "Pauzēt Mūziku un Spotify"
+      },
+      "description": "Kas notiek ar citām skaņām, kamēr stella ieraksta, lai tās nenonāktu tekstā. Pēc ieraksta viss atgriežas.",
+      "speakersOnly": {
+        "description": "Austiņas paliek kā ir: mikrofons tās nedzird.",
+        "title": "Tikai caur skaļruņiem"
+      },
+      "title": "Diktējot"
     }
   },
   "keepAwake": {

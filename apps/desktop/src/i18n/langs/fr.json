@@ -662,6 +662,35 @@
       "openSoundPc": "Ouvrir les paramètres de son",
       "title": "stella n'entend pas votre micro"
     },
+    "perApp": {
+      "add": "Ajouter…",
+      "cleanup": {
+        "default": "Correction selon le réglage",
+        "label": "Correction pour {name}",
+        "off": "Sans correction",
+        "on": "Avec correction"
+      },
+      "description": "Activez ou désactivez la correction par l’IA et choisissez la langue pour une app ou un type d’app. C’est l’app au premier plan au début de la dictée qui compte.",
+      "failed": "Les réglages n’ont pas pu être enregistrés. Réessayez.",
+      "group": "Par app",
+      "kinds": {
+        "browser": "Navigateurs",
+        "chat": "Apps de discussion",
+        "code": "Éditeurs de code",
+        "document": "Traitements de texte",
+        "email": "Apps de messagerie",
+        "other": "Autres apps",
+        "terminal": "Terminaux"
+      },
+      "kindsOfApp": "Types d’app",
+      "language": {
+        "default": "Langue selon le réglage",
+        "label": "Langue pour {name}"
+      },
+      "recentApps": "Apps récentes",
+      "remove": "Retirer {name}",
+      "title": "Réglages pour une app"
+    },
     "preview": {
       "finishing": "Finalisation…",
       "label": "Ce que vous avez dicté jusqu’ici",
@@ -686,6 +715,19 @@
       "failed": "Impossible d’ouvrir la fenêtre. Réessayez.",
       "open": "Ouvrir",
       "title": "Transcrire un enregistrement"
+    },
+    "whileDictating": {
+      "choices": {
+        "lower": "Baisser les autres sons",
+        "nothing": "Ne rien faire",
+        "pause": "Mettre Musique et Spotify en pause"
+      },
+      "description": "Ce qui arrive aux autres sons pendant que stella enregistre, pour qu’ils ne finissent pas dans le texte. Tout revient à la fin de l’enregistrement.",
+      "speakersOnly": {
+        "description": "Les écouteurs restent tels quels : le micro ne les entend pas.",
+        "title": "Seulement sur les haut-parleurs"
+      },
+      "title": "Pendant la dictée"
     }
   },
   "keepAwake": {

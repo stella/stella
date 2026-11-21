@@ -18,6 +18,8 @@ import type {
 import { File } from "expo-file-system";
 import { useLocale } from "use-intl";
 
+import { respell } from "@stll/transcript/spelling";
+
 import type { AccessTokenSource } from "@/connection/session";
 import { useSession } from "@/connection/session-provider";
 import { deviceAccountStore } from "@/native/account-store";
@@ -32,6 +34,7 @@ import {
   readMatterVocabulary,
   transcribeRecording,
 } from "@/state/dictation";
+import type { Dictated } from "@/state/dictation";
 import {
   DICTATION_TOTAL_MAX_MS,
   joinChunks,
@@ -152,7 +155,7 @@ type Run = {
  * way shows as the `failed` notice.
  */
 export const useDictation = (
-  onText: (text: string) => void,
+  onText: (dictated: Dictated) => void,
   {
     matterId,
   }: {
@@ -211,8 +214,8 @@ export const useDictation = (
     if (released.isErr() || gathered.notice !== undefined) {
       setNotice(gathered.notice ?? "failed");
     }
-    if (gathered.text !== null) {
-      deliver.current(gathered.text);
+    if (gathered.dictated !== null) {
+      deliver.current(gathered.dictated);
     }
   };
 
@@ -516,26 +519,33 @@ const nextStop = (current: Run, { durationMillis, metering }: Reading) => {
 };
 
 /**
- * The finished dictation's text: its pieces joined in order and cleaned up
- * when the person turned that on, or null when nothing was heard. A piece
+ * The finished dictation's text: its pieces joined in order, cleaned up
+ * when the person turned that on, and the matter's names spelled as written
+ * where the model came close; null when nothing was heard. A piece
  * that failed leaves a gap the person should know about.
  */
 const gatherText = async (
   current: Run,
-): Promise<{ text: string | null; notice: DictationNotice | undefined }> => {
+): Promise<{
+  dictated: Dictated | null;
+  notice: DictationNotice | undefined;
+}> => {
   const texts = await Promise.all(current.pieces);
   const heard = texts.filter((text) => text !== null);
   const failed = heard.length < texts.length;
   const joined = joinChunks(heard);
   if (joined === "") {
-    return { text: null, notice: failed ? "failed" : "silent" };
+    return { dictated: null, notice: failed ? "failed" : "silent" };
   }
-  const text = await finalText({
-    setup: await current.setup,
-    joined,
-    locale: current.locale,
-  });
-  return { text, notice: failed ? "failed" : undefined };
+  const setup = await current.setup;
+  const text = await finalText({ setup, joined, locale: current.locale });
+  return {
+    dictated: {
+      text: respell(text, setup.vocabulary),
+      names: setup.vocabulary,
+    },
+    notice: failed ? "failed" : undefined,
+  };
 };
 
 /**

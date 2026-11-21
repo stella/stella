@@ -40,6 +40,7 @@ mod device_preference;
 mod device_proof;
 mod diagnostics;
 mod dictation;
+mod dictation_app_settings;
 mod dictation_audio;
 mod dictation_cleanup;
 mod dictation_cloud;
@@ -53,6 +54,7 @@ mod dictation_hold_key;
 mod dictation_input;
 mod dictation_language;
 mod dictation_live;
+mod dictation_media;
 mod dictation_microphone;
 mod dictation_models;
 mod dictation_notice;
@@ -266,6 +268,8 @@ pub fn run() {
     .manage(desktop_telemetry.clone())
     .setup(move |app| {
       let handle = app.handle().clone();
+      // Sound a dictation lowered or paused before a crash comes back.
+      dictation_media::restore();
       #[cfg(target_os = "macos")]
       if let Ok(mut clipboard) = clipboard_manager.lock()
         && let Err(error) = clipboard.reconcile_image_exports()
@@ -642,6 +646,8 @@ pub fn run() {
       }
       tauri::RunEvent::Exit => {
         keep_awake::global().release_for_exit();
+        // Sound a dictation lowered or paused comes back.
+        dictation_media::restore();
         activity::flush_on_exit(app);
         desktop_crash::clean_exit(app);
         #[cfg(target_os = "macos")]

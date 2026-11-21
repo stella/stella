@@ -9,6 +9,7 @@ import { Text } from "@stll/ui/text";
 import { useDictation } from "@/components/use-dictation";
 import type { DictationNotice } from "@/components/use-dictation";
 import { CheckIcon, DictateIcon, XIcon } from "@/icons.gen";
+import type { Dictated } from "@/state/dictation";
 import { DICTATION_TOTAL_MAX_MS } from "@/state/dictation-chunks";
 import { useUiColors } from "@/theme";
 
@@ -31,7 +32,7 @@ export const DictateButton = ({
   disabled?: boolean;
   matterId?: string | undefined;
   onBusyChange?: ((busy: boolean) => void) | undefined;
-  onText: (text: string) => void;
+  onText: (dictated: Dictated) => void;
 }) => {
   const t = useTranslations("chat");
   const ui = useUiColors();

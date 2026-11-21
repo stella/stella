@@ -662,6 +662,35 @@
       "openSoundPc": "Abrir configuración de sonido",
       "title": "stella no oye tu micrófono"
     },
+    "perApp": {
+      "add": "Añadir…",
+      "cleanup": {
+        "default": "Corrección según el ajuste",
+        "label": "Corrección para {name}",
+        "off": "Sin corrección",
+        "on": "Con corrección"
+      },
+      "description": "Activa o desactiva la corrección con IA y elige el idioma para una app o un tipo de app. Decide la app que está en primer plano al empezar a dictar.",
+      "failed": "No se pudieron guardar los ajustes. Inténtalo de nuevo.",
+      "group": "Por app",
+      "kinds": {
+        "browser": "Navegadores",
+        "chat": "Apps de chat",
+        "code": "Editores de código",
+        "document": "Documentos",
+        "email": "Apps de correo",
+        "other": "Otras apps",
+        "terminal": "Terminales"
+      },
+      "kindsOfApp": "Tipos de app",
+      "language": {
+        "default": "Idioma según el ajuste",
+        "label": "Idioma para {name}"
+      },
+      "recentApps": "Apps recientes",
+      "remove": "Quitar {name}",
+      "title": "Ajustes para una app"
+    },
     "preview": {
       "finishing": "Terminando…",
       "label": "Lo que ha dictado hasta ahora",
@@ -686,6 +715,19 @@
       "failed": "No se pudo abrir la ventana. Inténtalo de nuevo.",
       "open": "Abrir",
       "title": "Transcribir una grabación"
+    },
+    "whileDictating": {
+      "choices": {
+        "lower": "Bajar el resto del sonido",
+        "nothing": "No hacer nada",
+        "pause": "Pausar Música y Spotify"
+      },
+      "description": "Qué pasa con el resto del sonido mientras stella graba, para que no acabe en el texto. Vuelve cuando termina la grabación.",
+      "speakersOnly": {
+        "description": "Deja los auriculares como están: el micrófono no los oye.",
+        "title": "Solo por altavoces"
+      },
+      "title": "Al dictar"
     }
   },
   "keepAwake": {
