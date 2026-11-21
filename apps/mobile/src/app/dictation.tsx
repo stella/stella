@@ -210,9 +210,10 @@ const DictationText = ({ initial }: { initial: string }) => {
     () => () => {
       const file = prepared.current;
       if (file?.exists === true) {
+        // Best effort: the cache folder is the system's to clear too.
         Result.try(() => {
           file.delete();
-        });
+        }).unwrapOr(undefined);
       }
     },
     [],
