@@ -59,7 +59,7 @@ const generate = async () => {
     return;
   }
   const codes = await Promise.all(
-    parallelStages.map((command) => runAsync(command)),
+    parallelStages.map(async (command) => await runAsync(command)),
   );
   const failed = codes.find((code) => code !== 0);
   if (failed !== undefined) {
@@ -71,7 +71,9 @@ const generate = async () => {
 // a local `prepare` leaves them to the checks that need them.
 const generateDirectories = async () => {
   const codes = await Promise.all(
-    CI_GENERATED_DIRECTORIES.map(({ command }) => runAsync(command)),
+    CI_GENERATED_DIRECTORIES.map(
+      async ({ command }) => await runAsync(command),
+    ),
   );
   const failed = codes.find((code) => code !== 0);
   if (failed !== undefined) {
