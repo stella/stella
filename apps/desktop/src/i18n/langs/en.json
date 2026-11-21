@@ -1141,9 +1141,9 @@
       "title": "Matter"
     },
     "matterFolder": {
-      "audioFailed": "The recording could not be saved to the matter. The Word documents were saved.",
-      "audioMissing": "The recording is no longer open in this window, so only the Word documents were saved.",
-      "audioTooLarge": "The recording is larger than {size}, so it was not saved to the matter. The Word documents were saved.",
+      "audioFailed": "The recording could not be saved to the matter.",
+      "audioMissing": "The recording is no longer open in this window, so it was not saved to the matter.",
+      "audioTooLarge": "The recording is larger than {size}, so it was not saved to the matter.",
       "cleanedDocxFileName": "{title} cleaned up.docx",
       "cleanedTitle": "{title} cleaned up",
       "documents": "Saving the Word documents…",

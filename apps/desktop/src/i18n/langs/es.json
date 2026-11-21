@@ -1141,9 +1141,9 @@
       "title": "Asunto"
     },
     "matterFolder": {
-      "audioFailed": "No se pudo guardar la grabación en el asunto. Los documentos de Word se guardaron.",
-      "audioMissing": "La grabación ya no está abierta en esta ventana, así que solo se guardaron los documentos de Word.",
-      "audioTooLarge": "La grabación supera {size}, así que no se guardó en el asunto. Los documentos de Word se guardaron.",
+      "audioFailed": "No se pudo guardar la grabación en el asunto.",
+      "audioMissing": "La grabación ya no está abierta en esta ventana, así que no se guardó en el asunto.",
+      "audioTooLarge": "La grabación supera {size}, así que no se guardó en el asunto.",
       "cleanedDocxFileName": "{title} - texto revisado.docx",
       "cleanedTitle": "{title} - texto revisado",
       "documents": "Guardando los documentos de Word…",

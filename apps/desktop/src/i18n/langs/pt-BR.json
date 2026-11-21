@@ -1141,9 +1141,9 @@
       "title": "Caso"
     },
     "matterFolder": {
-      "audioFailed": "Não foi possível salvar a gravação no caso. Os documentos do Word foram salvos.",
-      "audioMissing": "A gravação não está mais aberta nesta janela, por isso só os documentos do Word foram salvos.",
-      "audioTooLarge": "A gravação é maior que {size}, por isso não foi salva no caso. Os documentos do Word foram salvos.",
+      "audioFailed": "Não foi possível salvar a gravação no caso.",
+      "audioMissing": "A gravação não está mais aberta nesta janela, por isso não foi salva no caso.",
+      "audioTooLarge": "A gravação é maior que {size}, por isso não foi salva no caso.",
       "cleanedDocxFileName": "{title} - texto revisado.docx",
       "cleanedTitle": "{title} - texto revisado",
       "documents": "Salvando os documentos do Word…",

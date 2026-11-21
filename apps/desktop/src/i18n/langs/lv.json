@@ -1141,9 +1141,9 @@
       "title": "Lieta"
     },
     "matterFolder": {
-      "audioFailed": "Ierakstu neizdevās saglabāt lietā. Word dokumenti ir saglabāti.",
-      "audioMissing": "Ieraksts šajā logā vairs nav atvērts, tāpēc saglabāti tikai Word dokumenti.",
-      "audioTooLarge": "Ieraksts ir lielāks par {size}, tāpēc tas netika saglabāts lietā. Word dokumenti ir saglabāti.",
+      "audioFailed": "Ierakstu neizdevās saglabāt lietā.",
+      "audioMissing": "Ieraksts šajā logā vairs nav atvērts, tāpēc tas netika saglabāts lietā.",
+      "audioTooLarge": "Ieraksts ir lielāks par {size}, tāpēc tas netika saglabāts lietā.",
       "cleanedDocxFileName": "{title} – rediģēts teksts.docx",
       "cleanedTitle": "{title} – rediģēts teksts",
       "documents": "Saglabā Word dokumentus…",

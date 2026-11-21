@@ -1141,9 +1141,9 @@
       "title": "Ügy"
     },
     "matterFolder": {
-      "audioFailed": "A felvételt nem sikerült az ügybe menteni. A Word-dokumentumok elmentve.",
-      "audioMissing": "A felvétel már nincs megnyitva ebben az ablakban, ezért csak a Word-dokumentumok lettek elmentve.",
-      "audioTooLarge": "A felvétel nagyobb, mint {size}, ezért nem került az ügybe. A Word-dokumentumok elmentve.",
+      "audioFailed": "A felvételt nem sikerült az ügybe menteni.",
+      "audioMissing": "A felvétel már nincs megnyitva ebben az ablakban, ezért nem került az ügybe.",
+      "audioTooLarge": "A felvétel nagyobb, mint {size}, ezért nem került az ügybe.",
       "cleanedDocxFileName": "{title} – szerkesztett szöveg.docx",
       "cleanedTitle": "{title} – szerkesztett szöveg",
       "documents": "A Word-dokumentumok mentése…",

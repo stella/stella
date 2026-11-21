@@ -1141,9 +1141,9 @@
       "title": "Toimik"
     },
     "matterFolder": {
-      "audioFailed": "Salvestist ei õnnestunud toimikusse salvestada. Wordi dokumendid salvestati.",
-      "audioMissing": "Salvestis pole selles aknas enam avatud, seega salvestati ainult Wordi dokumendid.",
-      "audioTooLarge": "Salvestis on suurem kui {size}, seega seda toimikusse ei salvestatud. Wordi dokumendid salvestati.",
+      "audioFailed": "Salvestist ei õnnestunud toimikusse salvestada.",
+      "audioMissing": "Salvestis pole selles aknas enam avatud, seega seda toimikusse ei salvestatud.",
+      "audioTooLarge": "Salvestis on suurem kui {size}, seega seda toimikusse ei salvestatud.",
       "cleanedDocxFileName": "{title} – toimetatud tekst.docx",
       "cleanedTitle": "{title} – toimetatud tekst",
       "documents": "Wordi dokumentide salvestamine…",

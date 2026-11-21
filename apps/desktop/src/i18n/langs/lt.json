@@ -1141,9 +1141,9 @@
       "title": "Byla"
     },
     "matterFolder": {
-      "audioFailed": "Nepavyko išsaugoti įrašo byloje. Word dokumentai išsaugoti.",
-      "audioMissing": "Įrašas šiame lange nebeatidarytas, todėl išsaugoti tik Word dokumentai.",
-      "audioTooLarge": "Įrašas didesnis nei {size}, todėl jis neišsaugotas byloje. Word dokumentai išsaugoti.",
+      "audioFailed": "Nepavyko išsaugoti įrašo byloje.",
+      "audioMissing": "Įrašas šiame lange nebeatidarytas, todėl jis neišsaugotas byloje.",
+      "audioTooLarge": "Įrašas didesnis nei {size}, todėl jis neišsaugotas byloje.",
       "cleanedDocxFileName": "{title} – sutvarkytas tekstas.docx",
       "cleanedTitle": "{title} – sutvarkytas tekstas",
       "documents": "Išsaugomi Word dokumentai…",

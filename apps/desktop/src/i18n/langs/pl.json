@@ -1141,9 +1141,9 @@
       "title": "Sprawa"
     },
     "matterFolder": {
-      "audioFailed": "Nie udało się zapisać nagrania w sprawie. Dokumenty Word zostały zapisane.",
-      "audioMissing": "Nagranie nie jest już otwarte w tym oknie, więc zapisano tylko dokumenty Word.",
-      "audioTooLarge": "Nagranie jest większe niż {size}, więc nie zapisano go w sprawie. Dokumenty Word zostały zapisane.",
+      "audioFailed": "Nie udało się zapisać nagrania w sprawie.",
+      "audioMissing": "Nagranie nie jest już otwarte w tym oknie, więc nie zapisano go w sprawie.",
+      "audioTooLarge": "Nagranie jest większe niż {size}, więc nie zapisano go w sprawie.",
       "cleanedDocxFileName": "{title} – tekst poprawiony.docx",
       "cleanedTitle": "{title} – tekst poprawiony",
       "documents": "Zapisywanie dokumentów Word…",

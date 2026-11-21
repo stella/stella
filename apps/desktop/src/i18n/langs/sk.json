@@ -1141,9 +1141,9 @@
       "title": "Spis"
     },
     "matterFolder": {
-      "audioFailed": "Nahrávku sa nepodarilo uložiť do spisu. Dokumenty Word sú uložené.",
-      "audioMissing": "Nahrávka už v tomto okne nie je otvorená, preto sa uložili len dokumenty Word.",
-      "audioTooLarge": "Nahrávka je väčšia ako {size}, preto sa do spisu neuložila. Dokumenty Word sú uložené.",
+      "audioFailed": "Nahrávku sa nepodarilo uložiť do spisu.",
+      "audioMissing": "Nahrávka už v tomto okne nie je otvorená, preto sa do spisu neuložila.",
+      "audioTooLarge": "Nahrávka je väčšia ako {size}, preto sa do spisu neuložila.",
       "cleanedDocxFileName": "{title} – upravený text.docx",
       "cleanedTitle": "{title} – upravený text",
       "documents": "Ukladajú sa dokumenty Word…",

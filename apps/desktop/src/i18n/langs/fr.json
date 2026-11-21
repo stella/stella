@@ -1141,9 +1141,9 @@
       "title": "Dossier"
     },
     "matterFolder": {
-      "audioFailed": "Impossible d’enregistrer l’enregistrement dans le dossier. Les documents Word ont été enregistrés.",
-      "audioMissing": "L’enregistrement n’est plus ouvert dans cette fenêtre : seuls les documents Word ont été enregistrés.",
-      "audioTooLarge": "L’enregistrement dépasse {size} et n’a donc pas été enregistré dans le dossier. Les documents Word ont été enregistrés.",
+      "audioFailed": "Impossible d’enregistrer l’enregistrement dans le dossier.",
+      "audioMissing": "L’enregistrement n’est plus ouvert dans cette fenêtre et n’a donc pas été enregistré dans le dossier.",
+      "audioTooLarge": "L’enregistrement dépasse {size} et n’a donc pas été enregistré dans le dossier.",
       "cleanedDocxFileName": "{title} - texte révisé.docx",
       "cleanedTitle": "{title} - texte révisé",
       "documents": "Enregistrement des documents Word…",

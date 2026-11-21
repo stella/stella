@@ -1141,9 +1141,9 @@
       "title": "الملف"
     },
     "matterFolder": {
-      "audioFailed": "تعذّر حفظ التسجيل في الملف. تم حفظ مستندات Word.",
-      "audioMissing": "لم يعد التسجيل مفتوحًا في هذه النافذة، لذا تم حفظ مستندات Word فقط.",
-      "audioTooLarge": "التسجيل أكبر من {size}، لذا لم يُحفظ في الملف. تم حفظ مستندات Word.",
+      "audioFailed": "تعذّر حفظ التسجيل في الملف.",
+      "audioMissing": "لم يعد التسجيل مفتوحًا في هذه النافذة، لذا لم يُحفظ في الملف.",
+      "audioTooLarge": "التسجيل أكبر من {size}، لذا لم يُحفظ في الملف.",
       "cleanedDocxFileName": "{title} - النص المنقح.docx",
       "cleanedTitle": "{title} - النص المنقح",
       "documents": "جارٍ حفظ مستندات Word…",
