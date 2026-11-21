@@ -28,7 +28,7 @@ use std::{
 
 use serde::Serialize;
 use sha2::{Digest, Sha256};
-use tauri::{AppHandle, Emitter, Manager, State};
+use tauri::{AppHandle, Emitter, EventId, Listener, Manager, State};
 use tauri_plugin_global_shortcut::{
   Code, GlobalShortcutExt, Modifiers, Shortcut, ShortcutEvent, ShortcutState,
 };
@@ -40,6 +40,7 @@ use crate::{
   device_preference::DevicePreference,
   dictation_cloud::{self, CloudModels, Destination},
   dictation_context::{self, Sharing},
+  dictation_focus::{self, FocusTarget},
   dictation_hold_key::{self, Action, Gesture, HoldChoice},
   dictation_language::{self, Choice, LanguageSnapshot},
   dictation_retype::{self, LastDictation, Request},
@@ -102,14 +103,15 @@ pub(crate) fn shortcut() -> Shortcut {
   Shortcut::new(Some(Modifiers::CONTROL.union(Modifiers::ALT)), Code::Space)
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Command {
   Press,
   Release,
   /// Stop recording and discard it: a tap or a shortcut on the hold key.
   Cancel,
-  /// Type the last dictation again; ignored while one is recording.
-  Retype(Request),
+  /// Type the last dictation again into the app focused when it was asked
+  /// for; ignored while one is recording.
+  Retype(Option<FocusTarget>),
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
@@ -262,6 +264,8 @@ struct Inner {
   retype_listening: RetypeListening,
   /// Only in memory, and only while clipboard history holds it.
   last: Option<LastDictation>,
+  /// Forgets the last dictation once clipboard history no longer holds it.
+  history_listener: Option<EventId>,
   /// Counts listeners started, so a stopped one cannot report its state.
   listener_generation: u64,
   commands: Option<Sender<Command>>,
@@ -333,6 +337,7 @@ impl DictationState {
       retype_shortcut,
       retype_listening: RetypeListening::None,
       last: None,
+      history_listener: None,
       listener_generation: 0,
       commands: None,
     }))
@@ -655,6 +660,24 @@ pub fn last_dictation(app: &AppHandle) -> Option<LastDictation> {
   None
 }
 
+/// Forgets the last dictation once clipboard history no longer holds it:
+/// deleted, history cleared or paused, or turned off. Checked off the thread
+/// that announced the change, which may still hold history's lock.
+fn forget_last_unless_held(app: &AppHandle) {
+  let Some(id) = app
+    .state::<DictationState>()
+    .update(|inner| inner.last.as_ref().map(|last| last.history_id.clone()))
+  else {
+    return;
+  };
+  let app = app.clone();
+  tauri::async_runtime::spawn_blocking(move || {
+    if !crate::clipboard::holds_dictation(&app, &id) {
+      forget_last(&app);
+    }
+  });
+}
+
 fn forget_last(app: &AppHandle) {
   let forgot = app
     .state::<DictationState>()
@@ -666,7 +689,27 @@ fn forget_last(app: &AppHandle) {
 
 /// The tray's "type the last dictation again".
 pub fn retype_from_tray(app: &AppHandle) {
-  send_command(app, Command::Retype(Request::Tray));
+  request_retype(app, Request::Tray);
+}
+
+/// Reads the focus as the request arrives, off the thread that delivered
+/// it (the focus lookup waits for the main thread), and only then queues
+/// it: a request that waits behind a dictation types only into the app
+/// that was focused when it was made.
+fn request_retype(app: &AppHandle, request: Request) {
+  let app = app.clone();
+  let spawned = std::thread::Builder::new()
+    .name("dictation-retype".to_string())
+    .spawn(move || {
+      if request == Request::Tray {
+        std::thread::sleep(dictation_retype::TRAY_SETTLE);
+      }
+      let focus = dictation_focus::current(&app);
+      send_command(&app, Command::Retype(focus));
+    });
+  if let Err(error) = spawned {
+    tracing::warn!(%error, "dictation retype could not start");
+  }
 }
 
 /// Starts a dictation: marks it recording and reads the speech model under
@@ -868,7 +911,7 @@ fn listen_for_hold_key(
 
 fn on_retype_shortcut(app: &AppHandle, _shortcut: &Shortcut, event: ShortcutEvent) {
   if event.state == ShortcutState::Pressed {
-    send_command(app, Command::Retype(Request::Shortcut));
+    request_retype(app, Request::Shortcut);
   }
 }
 
@@ -934,17 +977,26 @@ fn start(app: &AppHandle) {
   }
   listen(app);
   listen_for_retype(app);
+  let history_app = app.clone();
+  let history_listener = app.listen(crate::clipboard::HISTORY_EVENT, move |_event| {
+    forget_last_unless_held(&history_app);
+  });
+  change(app, |inner| inner.history_listener = Some(history_listener));
 }
 
 fn stop(app: &AppHandle) {
   unlisten(app);
   unlisten_retype(app);
   // Dropping the sender ends the engine thread and with it the worker.
-  change(app, |inner| {
+  let history_listener = change(app, |inner| {
     inner.commands = None;
     inner.failure = None;
     inner.last = None;
+    inner.history_listener.take()
   });
+  if let Some(history_listener) = history_listener {
+    app.unlisten(history_listener);
+  }
 }
 
 /// The server's decision, applied whenever it arrives or changes. Nothing
@@ -1481,6 +1533,7 @@ mod tests {
       retype_shortcut: true,
       retype_listening: RetypeListening::None,
       last: None,
+      history_listener: None,
       listener_generation: 0,
       commands: None,
     }))

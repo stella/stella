@@ -37,7 +37,7 @@ use crate::{
   dictation_microphone::{self, Choice, InputDevice},
   dictation_pauses::Segmenter,
   dictation_preview,
-  dictation_retype::{self, LastDictation, Request},
+  dictation_retype::LastDictation,
   dictation_sounds::{self, Cue},
   dictation_spelling,
   dictation_trace::{self, Cleanup, GlobeKey, Line, Outcome, Trace},
@@ -171,10 +171,10 @@ fn run(app: &AppHandle, commands: &Receiver<Command>) {
           active.sound_start(app);
         }
       }
-      Ok(Command::Retype(request)) => {
+      Ok(Command::Retype(focus)) => {
         // A dictation recording now has the keyboard to itself.
         if active.is_none() {
-          retype(app, request);
+          retype(app, focus.as_ref());
         }
       }
       Ok(Command::Cancel) => {
@@ -563,13 +563,11 @@ fn deliver(
   (result, focus_read, kept_in_history)
 }
 
-/// Types the last dictation again where focus is now, through the same
-/// guards as a dictation's typing. A refusal is only logged: nothing new
-/// was kept, and the field shows that nothing was typed.
-fn retype(app: &AppHandle, request: Request) {
-  if request == Request::Tray {
-    thread::sleep(dictation_retype::TRAY_SETTLE);
-  }
+/// Types the last dictation again into `asked_in`, the app focused when it
+/// was asked for, through the same guards as a dictation's typing. A
+/// refusal is only logged: nothing new was kept, and the field shows that
+/// nothing was typed.
+fn retype(app: &AppHandle, asked_in: Option<&FocusTarget>) {
   let Some(last) = dictation::last_dictation(app) else {
     tracing::info!("dictation retype: no last dictation in clipboard history");
     return;
@@ -579,14 +577,13 @@ fn retype(app: &AppHandle, request: Request) {
     return;
   }
   // The app focused when it was asked for is the only one typed into.
-  let focus = dictation_focus::current(app);
   let mut focus_read = None;
   let mut moved = None;
   match type_into_focus(
     app,
     &last.transcript,
     last.cleaned.as_deref(),
-    focus.as_ref(),
+    asked_in,
     &mut focus_read,
     &mut moved,
   ) {
