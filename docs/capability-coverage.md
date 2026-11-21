@@ -833,7 +833,7 @@ mechanics, and similar), not gaps in coverage.
 | chat_thread_ui | 31 |
 | compound_consent | 1 |
 | deploy_mechanics | 1 |
-| document_processing | 27 |
+| document_processing | 28 |
 | health_infra | 2 |
 | hosted_billing | 7 |
 | human_confirmation | 3 |
