@@ -31,7 +31,7 @@ import { useFormatter } from "@/i18n/formatting-context";
 import type { TranslationKey } from "@/i18n/types";
 import { detached } from "@/lib/detached";
 import { notifyUserError } from "@/lib/errors/user-toast";
-import { fetchEInvoiceAttachment } from "@/lib/files/e-invoice-queries";
+import { fetchEInvoiceAttachment } from "@/lib/files/queries";
 import { downloadFile } from "@/lib/utils";
 
 type Syntax = (typeof E_INVOICE_SYNTAXES)[number];
