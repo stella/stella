@@ -18,16 +18,16 @@ export const usePageSelection = (
   const [selectedIds, setSelectedIds] =
     useState<readonly string[]>(EMPTY_SELECTION);
   const [selectionPage, setSelectionPage] = useState(currentPage);
-  const [prevPageDecisionIds, setPrevPageDecisionIds] =
-    useState(pageDecisionIds);
+  const pageDecisionKey = pageDecisionIds.join("\0");
+  const [prevPageKey, setPrevPageKey] = useState(pageDecisionKey);
   if (selectionPage !== currentPage) {
     setSelectionPage(currentPage);
-    setPrevPageDecisionIds(pageDecisionIds);
+    setPrevPageKey(pageDecisionKey);
     setSelectedIds(EMPTY_SELECTION);
     return [EMPTY_SELECTION, setSelectedIds] as const;
   }
-  if (prevPageDecisionIds !== pageDecisionIds) {
-    setPrevPageDecisionIds(pageDecisionIds);
+  if (prevPageKey !== pageDecisionKey) {
+    setPrevPageKey(pageDecisionKey);
     const shown = selectionShownOnPage({
       pageRowIds: pageDecisionIds,
       selectedRowIds: selectedIds,
