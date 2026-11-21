@@ -102,7 +102,7 @@
     "detectCalls": "Zaznamenávať hovory",
     "detectCallsDescription": "Keď Teams, Zoom alebo prehliadač používa mikrofón, tento čas sa počíta ako hovor, aj keď len počúvate alebo pracujete v inej aplikácii. Zvuk sa nikdy nenahráva.",
     "disclosure": {
-      "control": "Nič sa nezaznamenáva, kým v Aktivite nestlačíte Začať zaznamenávať. Kedykoľvek môžete pozastaviť, vylúčiť aplikácie alebo vymazať ktorýkoľvek deň.",
+      "control": "Nič sa nezaznamenáva, kým nestlačíte Začať zaznamenávať. Kedykoľvek môžete pozastaviť, vylúčiť aplikácie alebo vymazať ktorýkoľvek deň.",
       "never": {
         "audio": "Zvuk z mikrofónu",
         "keystrokes": "Stlačenia klávesov ani písaný text",
@@ -833,6 +833,30 @@
   },
   "onboarding": {
     "activityBody": "Uvidíte, kam sa podel váš pracovný deň, a premeníte ho na koncepty časových záznamov. O tom, čo sa zaznamená a čo sa odošle, rozhodujete vy.",
+    "activitySetup": {
+      "aiDrafts": {
+        "allow": "Navrhovať popisy pomocou stella AI",
+        "body": "stella AI môže navrhnúť popis každého časového záznamu. Povoľte to teraz alebo keď budete prvýkrát prechádzať deň.",
+        "withdraw": "Súhlas môžete kedykoľvek odvolať v Nastaveniach."
+      },
+      "calls": {
+        "body": "Započítavajte čas strávený v hovoroch.",
+        "title": "Hovory"
+      },
+      "details": {
+        "appNamesOnly": "Zaznamenávajú sa len názvy aplikácií.",
+        "body": "Pri prechádzaní dňa podľa nich ľahšie rozlíšite jednotlivé spisy.",
+        "browsers": "Prehliadače zaznamenávajú názvy kariet, až keď to povolíte. Aktivita sa na každý prehliadač opýta, keď ho prvýkrát uvidí.",
+        "title": "Názvy okien a dokumentov"
+      },
+      "screens": {
+        "aiDrafts": "Návrhy AI",
+        "calls": "Hovory",
+        "details": "Podrobnosti",
+        "recording": "Prehľad"
+      },
+      "starting": "Spúšťa sa záznam…"
+    },
     "activityStoryDraft": "Koncept",
     "activityStoryRecordTitle": "Zaznamenané",
     "activityStoryReviewCaption": "Prejdete deň a vyberiete spis",
@@ -871,7 +895,6 @@
         "choose": "Mikrofón na diktovanie",
         "title": "Nech vás stella počuje"
       },
-      "progress": "Krok {current} z {total}",
       "screens": {
         "app": "Úprava",
         "context": "Kontext",
@@ -879,7 +902,6 @@
         "transcription": "Prepis",
         "words": "Slová"
       },
-      "skipRest": "Preskočiť zvyšok",
       "transcription": {
         "body": "Neskôr to môžete zmeniť v Nastaveniach.",
         "bodyLocal": "Rečový model beží tu, takže diktovanie funguje aj offline.",
@@ -949,6 +971,7 @@
     "permissionsTitlePc": "Nastavte tento počítač",
     "progress": "Krok {current} z {total}",
     "skip": "Preskočiť",
+    "skipRest": "Preskočiť zvyšok",
     "staysLocalMac": "Zostáva v tomto Macu",
     "staysLocalPc": "Zostáva v tomto počítači",
     "tryAgain": "Skúsiť znova",

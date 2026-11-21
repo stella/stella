@@ -102,7 +102,7 @@
     "detectCalls": "Enregistrer les appels",
     "detectCallsDescription": "Lorsque Teams, Zoom ou un navigateur utilise votre micro, ce temps compte comme l’appel, même si vous ne faites qu’écouter ou travaillez dans une autre app. Aucun son n’est enregistré.",
     "disclosure": {
-      "control": "Rien n'est enregistré tant que vous n'avez pas cliqué sur Commencer l'enregistrement dans Activité. Mettez en pause, excluez des apps ou supprimez une journée quand vous le souhaitez.",
+      "control": "Rien n'est enregistré tant que vous n'avez pas cliqué sur Commencer l'enregistrement. Mettez en pause, excluez des apps ou supprimez une journée quand vous le souhaitez.",
       "never": {
         "audio": "Le son du micro",
         "keystrokes": "Frappes au clavier ou texte saisi",
@@ -833,6 +833,30 @@
   },
   "onboarding": {
     "activityBody": "Voyez où est passée votre journée de travail et transformez-la en brouillons de saisies de temps. Vous décidez de ce qui est enregistré et de ce qui est envoyé.",
+    "activitySetup": {
+      "aiDrafts": {
+        "allow": "Rédiger les descriptions avec stella AI",
+        "body": "stella AI peut rédiger la description de chaque saisie de temps. Autorisez-le maintenant ou lorsque vous passerez une journée en revue pour la première fois.",
+        "withdraw": "Vous pouvez retirer votre consentement à tout moment dans les Réglages."
+      },
+      "calls": {
+        "body": "Comptez le temps passé en appel.",
+        "title": "Appels"
+      },
+      "details": {
+        "appNamesOnly": "Seuls les noms des applications sont enregistrés.",
+        "body": "Ils vous aident à distinguer vos dossiers lorsque vous passez la journée en revue.",
+        "browsers": "Les navigateurs n’enregistrent les titres des onglets qu’une fois que vous l’autorisez. Activité vous pose la question pour chaque navigateur la première fois qu’elle le voit.",
+        "title": "Titres de fenêtres et documents"
+      },
+      "screens": {
+        "aiDrafts": "Propositions IA",
+        "calls": "Appels",
+        "details": "Détails",
+        "recording": "Aperçu"
+      },
+      "starting": "Démarrage de l’enregistrement…"
+    },
     "activityStoryDraft": "Brouillon",
     "activityStoryRecordTitle": "Enregistré",
     "activityStoryReviewCaption": "Vous passez la journée en revue et choisissez le dossier",
@@ -871,7 +895,6 @@
         "choose": "Microphone pour dicter",
         "title": "Laissez stella vous entendre"
       },
-      "progress": "Étape {current} sur {total}",
       "screens": {
         "app": "Correction",
         "context": "Contexte",
@@ -879,7 +902,6 @@
         "transcription": "Transcription",
         "words": "Mots"
       },
-      "skipRest": "Passer la suite",
       "transcription": {
         "body": "Vous pourrez le modifier plus tard dans les Réglages.",
         "bodyLocal": "Le modèle vocal tourne ici, la dictée fonctionne donc aussi hors ligne.",
@@ -949,6 +971,7 @@
     "permissionsTitlePc": "Configurer ce PC",
     "progress": "Étape {current} sur {total}",
     "skip": "Passer",
+    "skipRest": "Passer la suite",
     "staysLocalMac": "Reste sur ce Mac",
     "staysLocalPc": "Reste sur ce PC",
     "tryAgain": "Réessayer",

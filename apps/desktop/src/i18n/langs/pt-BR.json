@@ -102,7 +102,7 @@
     "detectCalls": "Registrar chamadas",
     "detectCallsDescription": "Enquanto o Teams, o Zoom ou um navegador usa seu microfone, esse tempo conta como a chamada, mesmo que você só esteja ouvindo ou trabalhando em outro app. O áudio nunca é gravado.",
     "disclosure": {
-      "control": "Nada é registrado até você clicar em Começar a registrar na Atividade. Pause, exclua apps ou apague qualquer dia quando quiser.",
+      "control": "Nada é registrado até você clicar em Começar a registrar. Pause, exclua apps ou apague qualquer dia quando quiser.",
       "never": {
         "audio": "Som do microfone",
         "keystrokes": "Teclas digitadas ou texto",
@@ -833,6 +833,30 @@
   },
   "onboarding": {
     "activityBody": "Veja para onde foi o seu dia de trabalho e transforme-o em rascunhos de lançamentos de horas. Você decide o que é registrado e o que é enviado.",
+    "activitySetup": {
+      "aiDrafts": {
+        "allow": "Redigir descrições com a stella IA",
+        "body": "A stella IA pode redigir a descrição de cada lançamento de horas. Permita agora ou quando revisar um dia pela primeira vez.",
+        "withdraw": "Você pode retirar o consentimento a qualquer momento nas Configurações."
+      },
+      "calls": {
+        "body": "Conte o tempo que você passa em chamadas.",
+        "title": "Chamadas"
+      },
+      "details": {
+        "appNamesOnly": "Só os nomes dos apps são registrados.",
+        "body": "Eles ajudam você a distinguir os casos ao revisar o dia.",
+        "browsers": "Os navegadores só registram títulos das abas depois que você permitir. A Atividade pergunta sobre cada navegador na primeira vez que o vê.",
+        "title": "Títulos de janelas e documentos"
+      },
+      "screens": {
+        "aiDrafts": "Sugestões de IA",
+        "calls": "Chamadas",
+        "details": "Detalhes",
+        "recording": "Visão geral"
+      },
+      "starting": "Começando a registrar…"
+    },
     "activityStoryDraft": "Rascunho",
     "activityStoryRecordTitle": "Registrado",
     "activityStoryReviewCaption": "Você confere o dia e escolhe o caso",
@@ -871,7 +895,6 @@
         "choose": "Microfone para ditar",
         "title": "Deixe a stella ouvir você"
       },
-      "progress": "Etapa {current} de {total}",
       "screens": {
         "app": "Revisão",
         "context": "Contexto",
@@ -879,7 +902,6 @@
         "transcription": "Transcrição",
         "words": "Palavras"
       },
-      "skipRest": "Pular o resto",
       "transcription": {
         "body": "Você pode mudar isso depois nas Configurações.",
         "bodyLocal": "O modelo de fala roda aqui, então o ditado também funciona offline.",
@@ -949,6 +971,7 @@
     "permissionsTitlePc": "Configure este computador",
     "progress": "Etapa {current} de {total}",
     "skip": "Pular",
+    "skipRest": "Pular o resto",
     "staysLocalMac": "Fica neste Mac",
     "staysLocalPc": "Fica neste computador",
     "tryAgain": "Tentar novamente",

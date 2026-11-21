@@ -102,7 +102,7 @@
     "detectCalls": "Anrufe erfassen",
     "detectCallsDescription": "Solange Teams, Zoom oder ein Browser Ihr Mikrofon verwendet, zählt diese Zeit als Anruf, auch wenn Sie nur zuhören oder in einer anderen App arbeiten. Ton wird nie aufgezeichnet.",
     "disclosure": {
-      "control": "Nichts wird aufgezeichnet, bevor Sie in Aktivität auf Aufzeichnung starten klicken. Pausieren, Apps ausschließen oder Tage löschen können Sie jederzeit.",
+      "control": "Nichts wird aufgezeichnet, bevor Sie auf Aufzeichnung starten klicken. Pausieren, Apps ausschließen oder Tage löschen können Sie jederzeit.",
       "never": {
         "audio": "Ton vom Mikrofon",
         "keystrokes": "Tastenanschläge oder getippter Text",
@@ -833,6 +833,30 @@
   },
   "onboarding": {
     "activityBody": "Sehen Sie, wohin Ihr Arbeitstag gegangen ist, und machen Sie daraus Entwürfe für Zeiteinträge. Sie entscheiden, was aufgezeichnet und was gesendet wird.",
+    "activitySetup": {
+      "aiDrafts": {
+        "allow": "Beschreibungen mit stella KI entwerfen",
+        "body": "stella KI kann die Beschreibung jedes Zeiteintrags entwerfen. Erlauben Sie es jetzt oder wenn Sie zum ersten Mal einen Tag durchgehen.",
+        "withdraw": "Sie können Ihre Einwilligung jederzeit in den Einstellungen widerrufen."
+      },
+      "calls": {
+        "body": "Erfassen Sie die Zeit, die Sie in Anrufen verbringen.",
+        "title": "Anrufe"
+      },
+      "details": {
+        "appNamesOnly": "Nur App-Namen werden aufgezeichnet.",
+        "body": "Damit unterscheiden Sie Ihre Akten leichter, wenn Sie den Tag durchgehen.",
+        "browsers": "Browser zeichnen Tab-Titel erst auf, wenn Sie es erlauben. Aktivität fragt nach jedem Browser, sobald sie ihn zum ersten Mal sieht.",
+        "title": "Fenstertitel und Dokumente"
+      },
+      "screens": {
+        "aiDrafts": "KI-Entwürfe",
+        "calls": "Anrufe",
+        "details": "Einzelheiten",
+        "recording": "Überblick"
+      },
+      "starting": "Aufzeichnung wird gestartet…"
+    },
     "activityStoryDraft": "Entwurf",
     "activityStoryRecordTitle": "Aufgezeichnet",
     "activityStoryReviewCaption": "Sie gehen den Tag durch und wählen die Akte",
@@ -871,7 +895,6 @@
         "choose": "Mikrofon zum Diktieren",
         "title": "Damit stella Sie hört"
       },
-      "progress": "Schritt {current} von {total}",
       "screens": {
         "app": "Überarbeitung",
         "context": "Kontext",
@@ -879,7 +902,6 @@
         "transcription": "Transkription",
         "words": "Wörter"
       },
-      "skipRest": "Rest überspringen",
       "transcription": {
         "body": "Sie können das später in den Einstellungen ändern.",
         "bodyLocal": "Das Sprachmodell läuft hier, daher funktioniert das Diktieren auch offline.",
@@ -949,6 +971,7 @@
     "permissionsTitlePc": "Diesen PC einrichten",
     "progress": "Schritt {current} von {total}",
     "skip": "Überspringen",
+    "skipRest": "Rest überspringen",
     "staysLocalMac": "Bleibt auf diesem Mac",
     "staysLocalPc": "Bleibt auf diesem PC",
     "tryAgain": "Erneut versuchen",
