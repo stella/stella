@@ -249,6 +249,13 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
 
+      # The release tree proof runs the candidate verifier on Bun.
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version-file: "package.json"
+          no-cache: true
+
       - name: Mint App token
         id: app-token
         uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0
