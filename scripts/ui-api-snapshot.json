@@ -2226,6 +2226,7 @@
       "cades",
       "csv",
       "dataBox",
+      "eAkta",
       "excel",
       "markdown",
       "ofd",
@@ -2235,7 +2236,8 @@
       "powerpoint",
       "rtf",
       "uyap",
-      "word"
+      "word",
+      "zep"
     ],
     "DropdownMenuCheckboxItem.variant": ["default", "switch"],
     "DropdownMenuItem.variant": ["default", "destructive"],

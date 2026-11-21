@@ -167,6 +167,8 @@
     "./structured-document-formats": "./src/structured-document-formats.ts",
     "./structured-document": "./src/structured-document.ts",
     "./asic": "./src/asic.ts",
+    "./signed-dossier": "./src/signed-dossier.ts",
+    "./signed-dossier-formats": "./src/signed-dossier-formats.ts",
     "./asic-file-formats": "./src/asic-file-formats.ts",
     "./cades": "./src/cades.ts",
     "./preview-text": "./src/preview-text.ts",

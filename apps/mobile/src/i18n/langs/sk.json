@@ -737,6 +737,8 @@
   "signedFile": {
     "layer": "Vrstva podpisov {number, number}",
     "noReadableContent": "Na náhľad nie je k dispozícii žiadny čitateľný obsah.",
+    "noSigners": "Nenašli sa žiadne údaje o podpisovateľoch.",
+    "signers": "Podpisovatelia",
     "unknownSigner": "Neznámy podpisovateľ",
     "unreadable": "Podpísaný súbor sa nepodarilo prečítať.",
     "unverified": "Podpisy neboli overené."

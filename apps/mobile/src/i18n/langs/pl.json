@@ -737,6 +737,8 @@
   "signedFile": {
     "layer": "Warstwa podpisów {number, number}",
     "noReadableContent": "Brak czytelnej zawartości do wyświetlenia w podglądzie.",
+    "noSigners": "Nie znaleziono danych podpisujących.",
+    "signers": "Podpisujący",
     "unknownSigner": "Nieznany podpisujący",
     "unreadable": "Nie udało się odczytać podpisanego pliku.",
     "unverified": "Podpisy nie zostały zweryfikowane."
