@@ -27,7 +27,51 @@ import type { TranslationKey } from "@/i18n/types";
 const IDENTIFIER_MAX_WORDS = 4;
 
 /** Punctuation the surrounding sentence leaves on a reference. */
-const SURROUNDING_PUNCTUATION = /^[([{"'«‚‘„]+|[.,;:!?)\]}"'»„“”]+$/gu;
+const OPENING_PUNCTUATION = new Set([
+  "(",
+  "[",
+  "{",
+  '"',
+  "'",
+  "«",
+  "‚",
+  "‘",
+  "„",
+]);
+const CLOSING_PUNCTUATION = new Set([
+  ".",
+  ",",
+  ";",
+  ":",
+  "!",
+  "?",
+  ")",
+  "]",
+  "}",
+  '"',
+  "'",
+  "»",
+  "„",
+  "“",
+  "”",
+]);
+
+/**
+ * The candidate without the punctuation around it, trimmed by index rather
+ * than by an anchored pattern so a long run of marks costs one pass.
+ */
+const stripSurroundingPunctuation = (candidate: string): string => {
+  const characters = [...candidate];
+  let start = 0;
+  let end = characters.length;
+  while (start < end && OPENING_PUNCTUATION.has(characters[start] ?? "")) {
+    start += 1;
+  }
+  while (end > start && CLOSING_PUNCTUATION.has(characters[end - 1] ?? "")) {
+    end -= 1;
+  }
+  return characters.slice(start, end).join("");
+};
 
 /**
  * A reference carries a court's register mark, which is never one letter.
@@ -55,10 +99,9 @@ export const findDecisionReference = (text: string): string | null => {
       span > 0;
       span -= 1
     ) {
-      const candidate = words
-        .slice(start, start + span)
-        .join(" ")
-        .replace(SURROUNDING_PUNCTUATION, "");
+      const candidate = stripSurroundingPunctuation(
+        words.slice(start, start + span).join(" "),
+      );
       if (!REGISTER_MARK.test(candidate)) {
         continue;
       }

@@ -3567,7 +3567,7 @@
   },
   "docxCitationCheck": {
     "action": "Overiť citáciu",
-    "alternatives": "{count, plural, one {Tomuto označeniu zodpovedá ešte # rozhodnutie} few {Tomuto označeniu zodpovedajú ešte # rozhodnutia} other {Tomuto označeniu zodpovedá ešte # rozhodnutí}}",
+    "alternatives": "{count, plural, one {Tomuto označeniu zodpovedá ešte # rozhodnutie} few {Tomuto označeniu zodpovedajú ešte # rozhodnutia} many {Tomuto označeniu zodpovedá ešte # rozhodnutia} other {Tomuto označeniu zodpovedá ešte # rozhodnutí}}",
     "checking": "Overujem {citation} …",
     "contradicts": "Odporuje",
     "doesNotAddress": "Nerieši",

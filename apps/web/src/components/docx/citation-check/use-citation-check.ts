@@ -19,17 +19,21 @@ import {
 } from "@/components/docx/citation-check/citation-check.logic";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
+import { invokeAppOnlyWrite } from "@/lib/capabilities/capability-request";
 import { unwrapApiResponse } from "@/lib/errors/api";
 
 type CitationCheckRequest = Parameters<typeof api.case.citations.check.post>[0];
 
+// A read posted as a body: an editor affordance with no automation
+// capability behind it.
 const requestCitationCheck = async (body: CitationCheckRequest) =>
-  unwrapApiResponse(await api.case.citations.check.post(body));
+  await invokeAppOnlyWrite("case-law.citations.check", async () =>
+    unwrapApiResponse(await api.case.citations.check.post(body)),
+  );
 
 /** The endpoint's answer, so the card cannot drift from what the API sends. */
 type CitationCheckAnswer = Awaited<ReturnType<typeof requestCitationCheck>>;
 type CheckedAnswer = Extract<CitationCheckAnswer, { status: "checked" }>;
-export type CheckedDecision = CheckedAnswer["decision"];
 
 /** What the card shows for one finished check. `key` is also its list key. */
 export type CitationCheckResult = { key: string; blockId: string | null } & (
@@ -156,7 +160,14 @@ export const useCitationCheck = (): CitationCheckController => {
       async () => await requestCitationCheck({ citation, claim }),
     );
     if (Result.isError(checked)) {
-      getAnalytics().captureError(checked.error);
+      getAnalytics().captureError(checked.error, {
+        fingerprintKey: "docx.citationCheck.request:failure",
+        scope: {
+          type: "request",
+          method: "POST",
+          routeTemplate: "/v1/case/citations/check",
+        },
+      });
       // An automatic check is quiet about its own failure: the writer did not
       // ask for it, so a red card over their draft would be noise. The next
       // edit to the sentence asks again under a new key.

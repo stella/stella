@@ -3567,7 +3567,7 @@
   },
   "docxCitationCheck": {
     "action": "Comprobar la cita",
-    "alternatives": "{count, plural, one {# resolución más responde a esta referencia} other {# resoluciones más responden a esta referencia}}",
+    "alternatives": "{count, plural, one {# resolución más responde a esta referencia} many {# resoluciones más responden a esta referencia} other {# resoluciones más responden a esta referencia}}",
     "checking": "Comprobando {citation} …",
     "contradicts": "Contradice",
     "doesNotAddress": "No aborda",

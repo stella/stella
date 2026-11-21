@@ -3567,7 +3567,7 @@
   },
   "docxCitationCheck": {
     "action": "Patikrinti citatą",
-    "alternatives": "{count, plural, one {Šią nuorodą atitinka dar # sprendimas} few {Šią nuorodą atitinka dar # sprendimai} other {Šią nuorodą atitinka dar # sprendimų}}",
+    "alternatives": "{count, plural, one {Šią nuorodą atitinka dar # sprendimas} few {Šią nuorodą atitinka dar # sprendimai} many {Šią nuorodą atitinka dar # sprendimo} other {Šią nuorodą atitinka dar # sprendimų}}",
     "checking": "Tikrinama {citation} …",
     "contradicts": "Prieštarauja",
     "doesNotAddress": "Nenagrinėja",
