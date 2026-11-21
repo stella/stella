@@ -1,5 +1,7 @@
 import type { PropsWithChildren, ReactNode } from "react";
 import {
+  lazy,
+  Suspense,
   useCallback,
   useOptimistic,
   useRef,
@@ -23,7 +25,6 @@ import { cn } from "@stll/ui/utils";
 import { useCopyControl } from "@/components/copy-control";
 import { DocumentPropertiesSection } from "@/components/inspector/document-properties-section";
 import { MetadataPanelSkeleton } from "@/components/inspector/file-facets";
-import { SimilarDocumentsSection } from "@/components/inspector/similar-documents-section";
 import { QuerySuspenseBoundary } from "@/components/query-suspense-boundary";
 import { QueryViewFeedback } from "@/components/query-view-feedback";
 import Tooltip from "@/components/tooltip";
@@ -57,6 +58,13 @@ import {
   selectJustificationByFieldId,
   useWorkspaceStore,
 } from "@/lib/workspaces/store";
+
+// Off the startup path: the panel opens with every document, while the
+// section is a collapsed list most readers never expand.
+const SimilarDocumentsSection = lazy(async () => {
+  const m = await import("@/components/inspector/similar-documents-section");
+  return { default: m.SimilarDocumentsSection };
+});
 
 type AiFieldClickArgs = {
   fieldId: string;
@@ -571,11 +579,13 @@ const EntityMetadataContent = ({
               fileFieldId={fileFieldId}
               workspaceId={workspaceId}
             />
-            <SimilarDocumentsSection
-              entityId={entity.entityId}
-              heading={(title) => <SectionHeading>{title}</SectionHeading>}
-              workspaceId={workspaceId}
-            />
+            <Suspense fallback={null}>
+              <SimilarDocumentsSection
+                entityId={entity.entityId}
+                heading={(title) => <SectionHeading>{title}</SectionHeading>}
+                workspaceId={workspaceId}
+              />
+            </Suspense>
           </>
         )}
 
