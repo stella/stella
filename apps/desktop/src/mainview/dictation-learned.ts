@@ -1,12 +1,7 @@
 /** Where a learned fix stands; mirrors `FixStatus` in `dictation_learned.rs`. */
-export const LEARNED_FIX_STATUSES = [
-  "learning",
-  "on",
-  "off",
-  "contradicted",
-] as const;
+const LEARNED_FIX_STATUSES = ["learning", "on", "off", "contradicted"] as const;
 
-export type LearnedFixStatus = (typeof LEARNED_FIX_STATUSES)[number];
+type LearnedFixStatus = (typeof LEARNED_FIX_STATUSES)[number];
 
 export type LearnedFix = {
   from: string;
@@ -16,7 +11,7 @@ export type LearnedFix = {
 };
 
 /** What the learned-fixes commands answer. */
-export type LearnedView = { fixes: LearnedFix[] };
+type LearnedView = { fixes: LearnedFix[] };
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null;

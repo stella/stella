@@ -7,7 +7,7 @@ export type FixRequest = {
 };
 
 /** Why words cannot be a fix; mirrors `Refusal` in `dictation_learned.rs`. */
-export const FIX_REFUSALS = [
+const FIX_REFUSALS = [
   "empty",
   "lineBreak",
   "tooLong",
@@ -18,7 +18,7 @@ export const FIX_REFUSALS = [
 export type FixRefusal = (typeof FIX_REFUSALS)[number];
 
 /** What `dictation_fix_save` answers; mirrors `FixSaved`. */
-export type FixSaved =
+type FixSaved =
   | { status: "saved" }
   | { reason: FixRefusal; status: "refused" }
   | { status: "notSaved" };
