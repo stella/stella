@@ -10,12 +10,22 @@ const { emit } = await import("@tauri-apps/api/event");
 const { DesktopIntlProvider, defaultMessages } = await import("../src/i18n");
 const { DictationSetting } = await import("../src/mainview/DictationSetting");
 
-afterEach(() => {
+/** One macrotask, for the mocked IPC promises and React's scheduler. */
+const nextMacrotask = async () =>
+  await new Promise<void>((resolve) => {
+    setImmediate(resolve);
+  });
+
+// A native answer that lands after a test's last assertion still renders,
+// and React schedules its effects; both settle before the DOM goes away.
+afterEach(async () => {
+  await act(nextMacrotask);
   cleanup();
   clearMocks();
 });
 
 afterAll(async () => {
+  await nextMacrotask();
   await GlobalRegistrator.unregister();
 });
 
