@@ -31,16 +31,13 @@ type PluginModelHooks<Row> = {
   };
 };
 
+/**
+ * The database hooks, typed with the context Better Auth passes at runtime:
+ * `databaseHooks: { ... } satisfies StellaDatabaseHooks` types every hook's
+ * context, so a helper narrowed to the declared `| null` cannot be handed it.
+ * Each hook still fits the shape Better Auth declares.
+ */
 export type StellaDatabaseHooks = WithHookContext<CoreDatabaseHooks> & {
   member?: PluginModelHooks<{ organizationId: string; userId: string }>;
   invitation?: PluginModelHooks<{ organizationId: string }>;
 };
-
-/**
- * The database hooks, typed with the context Better Auth passes at runtime,
- * so a helper narrowed to the declared `| null` cannot be handed it. Each
- * hook still fits the shape Better Auth declares.
- */
-export const defineDatabaseHooks = <const Hooks extends StellaDatabaseHooks>(
-  hooks: Hooks,
-): Hooks => hooks;

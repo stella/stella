@@ -144,7 +144,7 @@ import {
   withStaleIfError,
 } from "@/api/lib/auth/cimd-stale-if-error";
 import { sendManageOtp } from "@/api/lib/auth/confirmation-email";
-import { defineDatabaseHooks } from "@/api/lib/auth/database-hook-context";
+import type { StellaDatabaseHooks } from "@/api/lib/auth/database-hook-context";
 import {
   checkConfiguredDemoAccountAccess,
   checkDemoAccountOperation,
@@ -2423,7 +2423,7 @@ export const createAuth = (
       reviewAccountConfigured: isReviewAccountConfigured(),
     }),
     emailVerification: { autoSignInAfterVerification: false },
-    databaseHooks: defineDatabaseHooks({
+    databaseHooks: {
       account: {
         create: {
           before: async (account, ctx) => {
@@ -2603,7 +2603,7 @@ export const createAuth = (
           after: createUserProjectionUpdateHook(),
         },
       },
-    }),
+    } satisfies StellaDatabaseHooks,
     database: membershipAuthAdapter,
     socialProviders: createSocialProviders({
       googleClientId: env.GOOGLE_AUTH_CLIENT_ID,
