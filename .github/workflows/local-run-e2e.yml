@@ -89,11 +89,20 @@ jobs:
         with:
           persist-credentials: false
 
+      # The Acquire timeouts end an attempt whose connection goes silent; the
+      # per-attempt deadline ends one that stalls while the connection stays
+      # open, so retry.sh can start a fresh attempt. A slow but healthy mirror
+      # install takes up to about 310 s, so the install deadline stays well
+      # above it. The step deadline covers every attempt and pause retry.sh
+      # makes for both calls.
       - name: Install desktop build libraries
-        timeout-minutes: 5
+        timeout-minutes: 29
         run: |
-          bash scripts/retry.sh sudo apt-get update -qq
-          bash scripts/retry.sh sudo apt-get install -y -qq --no-install-recommends \
+          apt_options=(-o Acquire::http::Timeout=20 -o Acquire::https::Timeout=20 -o Acquire::Retries=3)
+          bash scripts/retry.sh sudo timeout --kill-after=10s 90s \
+            apt-get "${apt_options[@]}" update -qq
+          bash scripts/retry.sh sudo timeout --kill-after=10s 420s \
+            apt-get "${apt_options[@]}" install -y -qq --no-install-recommends \
             libwebkit2gtk-4.1-dev libgtk-3-dev libayatana-appindicator3-dev \
             librsvg2-dev libxdo-dev libsoup-3.0-dev libjavascriptcoregtk-4.1-dev
 
