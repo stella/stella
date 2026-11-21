@@ -5,7 +5,7 @@ import { compareCodeUnit } from "@stll/collation";
 
 import { hasZipMagic } from "@/api/lib/file-scan/zip";
 import {
-  DocumentPackageError,
+  type DocumentPackageError,
   openDocumentArchive,
   readArchiveEntry,
 } from "@/api/lib/files/document-archive";
@@ -21,7 +21,7 @@ import { classifyXmlDocument } from "@/api/lib/files/xml-document-class";
 import {
   documentPackageError,
   type DocumentXmlNode,
-  parseXmlDocument,
+  parseStandaloneXml,
 } from "@/api/lib/files/xml-document-package";
 
 const SYNTAX_READERS = {
@@ -92,7 +92,7 @@ const withAttachments = (
 export const readEInvoiceXml = (
   bytes: Uint8Array,
 ): Result<EInvoiceDocument | null, DocumentPackageError> => {
-  const root = parseXmlDocument(bytes);
+  const root = parseStandaloneXml(bytes);
   if (root.isErr()) {
     return Result.err(root.error);
   }
@@ -130,7 +130,7 @@ const readIsdocx = async (
     if (manifestBytes.isErr()) {
       return Result.err(manifestBytes.error);
     }
-    const manifest = parseXmlDocument(manifestBytes.value);
+    const manifest = parseStandaloneXml(manifestBytes.value);
     if (manifest.isErr()) {
       return Result.err(manifest.error);
     }
@@ -152,7 +152,7 @@ const readIsdocx = async (
   if (mainBytes.isErr()) {
     return Result.err(mainBytes.error);
   }
-  const root = parseXmlDocument(mainBytes.value);
+  const root = parseStandaloneXml(mainBytes.value);
   if (root.isErr()) {
     return Result.err(root.error);
   }
@@ -187,9 +187,3 @@ export const readEInvoiceFile = async (
   bytes: Uint8Array,
 ): Promise<Result<EInvoiceDocument | null, DocumentPackageError>> =>
   hasZipMagic(bytes) ? await readIsdocx(bytes) : readEInvoiceXml(bytes);
-
-export const notAnInvoice = () =>
-  new DocumentPackageError({
-    message: "The file is not a recognised structured invoice",
-    reason: "invalid",
-  });

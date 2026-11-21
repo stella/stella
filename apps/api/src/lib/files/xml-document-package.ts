@@ -175,7 +175,7 @@ const parseXmlPart = (
 };
 
 /** One standalone XML document under the same parser limits as a package part. */
-export const parseXmlDocument = (
+export const parseStandaloneXml = (
   bytes: Uint8Array,
 ): Result<DocumentXmlNode, DocumentPackageError> =>
   bytes.byteLength > MAX_XML_TOTAL_BYTES

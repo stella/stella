@@ -7,7 +7,7 @@ import {
   classifyXmlDocument,
   type XmlDocumentClass,
 } from "@/api/lib/files/xml-document-class";
-import { parseXmlDocument } from "@/api/lib/files/xml-document-package";
+import { parseStandaloneXml } from "@/api/lib/files/xml-document-package";
 import {
   ciiXml,
   fatturaPaXml,
@@ -51,12 +51,12 @@ describe("XML document routing", () => {
     ["a CII invoice", ciiXml(), "cii"],
     ["plain XML", plainXml(), null],
   ])("routes %s by its root namespace", (_, xml, expected) => {
-    const root = parseXmlDocument(xmlBytes(xml)).unwrap();
+    const root = parseStandaloneXml(xmlBytes(xml)).unwrap();
     expect(classifyXmlDocument(root)).toBe(expected);
   });
 
   test("an unqualified root named like an invoice stays plain XML", () => {
-    const root = parseXmlDocument(
+    const root = parseStandaloneXml(
       xmlBytes("<Invoice><ID>1</ID></Invoice>"),
     ).unwrap();
     expect(classifyXmlDocument(root)).toBeNull();
