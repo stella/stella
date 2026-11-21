@@ -1,9 +1,14 @@
 import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
+import * as pkijs from "pkijs";
 import PostalMime from "postal-mime";
 
 import { assertProperty } from "@stll/property-testing";
 
+import {
+  CMS_DATA_OID,
+  CMS_SIGNED_DATA_OID,
+} from "@/api/lib/files/cms-signed-data";
 import { wrapP7m } from "@/api/tests/fixtures/p7m";
 import {
   PEC_FIXTURE,
@@ -26,6 +31,25 @@ import {
 } from "./email-to-html";
 
 const EML = "message/rfc822";
+
+/** A detached SignedData with no SignerInfo, which CMS admits. */
+const unsignedSignedData = async () => {
+  const signedData = new pkijs.SignedData({
+    version: 1,
+    encapContentInfo: new pkijs.EncapsulatedContentInfo({
+      eContentType: CMS_DATA_OID,
+    }),
+    signerInfos: [],
+  });
+  return new Uint8Array(
+    new pkijs.ContentInfo({
+      contentType: CMS_SIGNED_DATA_OID,
+      content: signedData.toSchema(true),
+    })
+      .toSchema()
+      .toBER(false),
+  );
+};
 
 const codeOf = (character: string) => character.codePointAt(0) ?? 0;
 
@@ -125,6 +149,42 @@ describe("a PEC transport envelope", () => {
     expect(parsed.certified?.includesOriginal).toBe(true);
     expect(parsed.subject).toBe(PEC_FIXTURE.subject);
     expect(parsed.to).toHaveLength(10_001);
+  });
+
+  test("an original that only mentions certification data does not make it ambiguous", async () => {
+    const original = pecOriginalMessage().replace(
+      PEC_FIXTURE.body,
+      () => `<postacert tipo="posta-certificata"> ${PEC_FIXTURE.body}`,
+    );
+    const parsed = await parse(
+      await pecMessage({
+        original,
+        extraParts: [
+          {
+            name: "nota.txt",
+            mimeType: "text/plain",
+            content: 'Vedi <postacert tipo="esempio"> nel testo',
+          },
+        ],
+      }),
+    );
+    expect(parsed.certified?.kind).toBe("transport");
+  });
+
+  test("a signature part without signers signs nothing", async () => {
+    const parsed = await parse(
+      await pecMessage({
+        signed: false,
+        extraParts: [
+          {
+            name: "smime.p7s",
+            mimeType: "application/pkcs7-signature",
+            content: await unsignedSignedData(),
+          },
+        ],
+      }),
+    );
+    expect(parsed.certified).toBeNull();
   });
 
   test("is recognised by its content, whatever its parts are named", async () => {

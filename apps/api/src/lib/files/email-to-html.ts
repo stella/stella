@@ -481,6 +481,16 @@ const parseEmlMessage = async (
           await (nestedCharsets ??= readNestedAttachmentCharsets(parser)),
           { bytes, fileName: attachment.filename },
         );
+    // Fail if the internal contract drifts so a non-UTF-8 attachment cannot
+    // silently render as corrupted text.
+    if (charset === undefined) {
+      return Result.err(
+        new EmailParseError({
+          message: "PostalMime attachment is missing from its parser tree",
+          mimeType: EML_MIME_TYPE,
+        }),
+      );
+    }
 
     attachments.push({
       charset,
@@ -563,8 +573,11 @@ type NestedAttachmentCharset = {
   charset: EmailTextAttachmentCharset | null;
 };
 
-/** Inline messages within inline messages, as deep as a parse reads them. */
-const MAX_NESTED_MESSAGE_DEPTH = 8;
+/**
+ * Inline messages within inline messages, as deep as PostalMime parses them
+ * (its `maxRfc822NestingDepth` default).
+ */
+const MAX_NESTED_MESSAGE_DEPTH = 10;
 
 const messagePartContents = (node: unknown, found: ArrayBuffer[]) => {
   if (!isRecord(node)) {
@@ -629,7 +642,7 @@ const readNestedAttachmentCharsets = async (
 const nestedAttachmentCharset = (
   entries: readonly NestedAttachmentCharset[],
   { bytes, fileName }: { bytes: Uint8Array; fileName: string | null },
-): EmailTextAttachmentCharset | null => {
+): EmailTextAttachmentCharset | null | undefined => {
   const charsets = new Set(
     entries
       .filter(
@@ -639,10 +652,9 @@ const nestedAttachmentCharset = (
       )
       .map(({ charset }) => charset),
   );
-  // Fail if the internal contract drifts so a non-UTF-8 attachment cannot
-  // silently render as corrupted text.
+  // Undefined when no parse found the attachment at all.
   if (charsets.size === 0) {
-    return panic("PostalMime attachment is missing from its parser tree");
+    return undefined;
   }
   // Identical attachments that declare different charsets name none.
   return charsets.size === 1 ? ([...charsets][0] ?? null) : null;
@@ -707,7 +719,7 @@ const parseEml = async (
         !certified.certificationParts.has(index) ||
         (unreadOriginal !== null && bytes === unreadOriginal),
     ),
-    certified: { ...certified.envelope, includesOriginal: false },
+    certified: certified.envelope,
   });
 };
 

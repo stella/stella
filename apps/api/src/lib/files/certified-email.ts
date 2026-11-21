@@ -74,7 +74,10 @@ const RECEIPT_TYPE_BY_VALUE: ReadonlyMap<string, CertifiedEmailReceiptType> =
 const PROVIDER_HEADERS = new Set(["x-ricevuta", "x-trasporto"]);
 
 const ROOT_ELEMENT = "postacert";
-const ROOT_PREFIX = /<postacert[\s>/]/u;
+// The document's first element: after an optional byte order mark, XML
+// declaration, comments, processing instructions and document type.
+const ROOT_PREFIX =
+  /^\ufeff?(?:\s|<\?[^>]*\?>|<!--(?:[^-]|-(?!->))*-->|<!DOCTYPE[^>[]*>)*<postacert[\s>/]/u;
 const HEAD_BYTES = 2048;
 // A document type declaration may name the DTD; one with an internal subset
 // or entity definitions brings nothing this reader has a use for.
@@ -100,7 +103,10 @@ export type CertifiedEmailParts = {
   readonly certificationParts: ReadonlySet<number>;
 };
 
-/** A cheap test of a part's head, before any part is parsed as XML. */
+/**
+ * A cheap test of a part's head, before any part is parsed as XML: a
+ * document whose root element is `postacert`, not text that mentions one.
+ */
 export const mayBeCertificationData = (bytes: Uint8Array): boolean =>
   bytes.byteLength <= CERTIFIED_EMAIL_LIMITS.maxDataBytes &&
   ROOT_PREFIX.test(
@@ -290,16 +296,17 @@ const readSignature = (bytes: Uint8Array): CertifiedEmailSignature | null => {
     return null;
   }
   const signers = readDetachedCmsSigners(bytes);
-  if (signers.isErr()) {
+  // CMS admits a SignedData without signers; it signs nothing.
+  const signer = signers.isOk() ? signers.value.at(0) : undefined;
+  if (signer === undefined) {
     return null;
   }
-  const signer = signers.value.at(0);
   return {
     status: "unverified",
-    signerName: signer?.name ?? null,
-    issuerName: signer?.issuerName ?? null,
-    serialNumber: signer?.serialNumber ?? null,
-    signedAt: signer?.signedAt ?? null,
+    signerName: signer.name,
+    issuerName: signer.issuerName,
+    serialNumber: signer.serialNumber,
+    signedAt: signer.signedAt,
   };
 };
 
@@ -329,7 +336,7 @@ export const readCertifiedEmailParts = (
   // Two parts that look like certification data are ambiguous even when
   // only one of them reads: neither is taken for the provider's.
   const candidates = parts.flatMap((part, index) =>
-    mayBeCertificationData(part.bytes) ? [index] : [],
+    !isMessagePart(part) && mayBeCertificationData(part.bytes) ? [index] : [],
   );
   const [candidate] = candidates;
   const candidatePart = candidate === undefined ? undefined : parts[candidate];
