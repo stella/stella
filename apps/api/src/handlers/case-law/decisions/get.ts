@@ -589,6 +589,7 @@ const readHostDecisionBody = async ({
     fulltext,
     corpusPayloadUnavailable,
     hostSectionsPresent,
+    astIsUsable: hostAstIsUsable,
     hasReadableDocument:
       hostAstIsUsable || Boolean(fulltext) || hostSectionsPresent,
     projectionDigest: astRead.projectionDigest,
@@ -623,6 +624,7 @@ const resolveDecisionBody = async ({
   });
   let {
     documentAst,
+    astIsUsable,
     sections,
     fulltext,
     corpusPayloadUnavailable,
@@ -646,6 +648,7 @@ const resolveDecisionBody = async ({
       collectionContext.selfExtent === "section"
     ) {
       documentAst = null;
+      astIsUsable = false;
       fulltext = null;
       sections = null;
       hostSectionsPresent = false;
@@ -673,12 +676,13 @@ const resolveDecisionBody = async ({
       case "present": {
         bodySource = collection.bodySource;
         fulltext = collection.fulltext;
+        astIsUsable = hasUsableAst(collection.documentAst);
         documentAst =
-          hasUsableAst(collection.documentAst) && astProjection === "wire"
+          astIsUsable && astProjection === "wire"
             ? omitDerivablePlainText(collection.documentAst)
             : collection.documentAst;
         sections = null;
-        collectionDigest = hasUsableAst(collection.documentAst)
+        collectionDigest = astIsUsable
           ? await digestAst(collection.documentAst)
           : sha256Hex(collection.fulltext);
         break;
@@ -693,6 +697,7 @@ const resolveDecisionBody = async ({
     bodySource.textSource === "host"
   ) {
     documentAst = null;
+    astIsUsable = false;
     fulltext = null;
     sections = null;
     hostSectionsPresent = false;
@@ -704,10 +709,10 @@ const resolveDecisionBody = async ({
     sections,
     fulltext,
     bodySource,
+    // Usability is read from the stored ASTs: an empty stored AST is an
+    // object without blocks, and the wire projection omits plain text.
     hasReadableDocument:
-      (documentAst?.blocks.length ?? 0) > 0 ||
-      Boolean(fulltext) ||
-      hostSectionsPresent,
+      astIsUsable || Boolean(fulltext) || hostSectionsPresent,
     corpusPayloadUnavailable,
     projectionDigest: collectionDigest ?? host.projectionDigest,
     documentAstSource: host.documentAstSource,
