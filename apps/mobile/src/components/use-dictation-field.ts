@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import type { TextInputSelectionChangeEvent } from "react-native";
 import { useLocale } from "use-intl";
@@ -11,7 +11,9 @@ import type { Dictated, TextSelection } from "@/state/dictation";
  * `inputProps` on the field, which reports what is typed through them, and
  * hand `insert` to the microphone. The cursor counts only while the field
  * holds what was last typed or dictated into it: text the screen put there
- * since, as a sent message's empty box, takes dictation at its end.
+ * since, as a sent message's empty box, takes dictation at its end. After
+ * a dictation the field's cursor is put after the dictated text, once: the
+ * next selection the field reports hands the cursor back to the person.
  */
 export const useDictationField = (
   value: string,
@@ -26,6 +28,7 @@ export const useDictationField = (
   const cursor = useRef<{ text: string; selection: TextSelection | undefined }>(
     { text: value, selection: undefined },
   );
+  const [placed, setPlaced] = useState<TextSelection>();
 
   return {
     inputProps: {
@@ -37,7 +40,9 @@ export const useDictationField = (
         nativeEvent: { selection },
       }: TextInputSelectionChangeEvent) => {
         cursor.current = { ...cursor.current, selection };
+        setPlaced(undefined);
       },
+      selection: placed,
     },
     insert: (dictated: Dictated) => {
       const draft = latest.current;
@@ -51,6 +56,7 @@ export const useDictationField = (
       cursor.current = { text, selection: { start: caret, end: caret } };
       latest.current = text;
       onChangeText(text);
+      setPlaced({ start: caret, end: caret });
     },
   };
 };
