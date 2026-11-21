@@ -24,10 +24,7 @@ import { serveForTest, type TestServer } from "@/api/tests/helpers/test-server";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
 
-import {
-  createDesktopDictationTranscriptAudioEndpoint,
-  createDesktopDictationTranscriptEndpoint,
-} from "./desktop-transcript";
+import { createDesktopDictationTranscriptEndpoint } from "./desktop-transcript";
 
 const testState = createTestState({ file: import.meta.path, config: env });
 
@@ -388,52 +385,4 @@ test("an older desktop files the transcript alone at the matter's root, and clea
     expect(createEntity).not.toHaveBeenCalled();
     expect(createFolder).not.toHaveBeenCalled();
   }
-});
-
-test("the desktop finalizes the recording it uploaded into the folder", async () => {
-  const finalizeAudio = mock(
-    async (input: { matterId: string; uploadId: string }) =>
-      await Promise.resolve(Result.ok({ fileName: `${input.uploadId}.m4a` })),
-  );
-  type AudioOptions = NonNullable<
-    Parameters<typeof createDesktopDictationTranscriptAudioEndpoint>[0]
-  >;
-  const endpoint = createDesktopDictationTranscriptAudioEndpoint({
-    authorizeAccount: await fixtureAccount(false),
-    readMatter: asTestRaw<NonNullable<AudioOptions["readMatter"]>>(
-      async () =>
-        await Promise.resolve(
-          Result.ok({ id: toSafeId<"workspace">(MATTER_ID), status: "active" }),
-        ),
-    ),
-    finalizeAudio:
-      asTestRaw<NonNullable<AudioOptions["finalizeAudio"]>>(finalizeAudio),
-  });
-  const server = serveForTest(
-    createHttpApp({
-      middleware: [errorBoundary],
-      routes: routes({ "/audio": { POST: endpoint } }),
-    }),
-  );
-  servers.push(server);
-  const post = async (body: unknown) =>
-    await server.fetch(
-      new Request("http://localhost/audio", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify(body),
-      }),
-    );
-  const uploadId = "0198c5e2-7c1f-7a6e-9a3b-2f4d5e6f7a91";
-  const saved = await post({ matterId: MATTER_ID, uploadId });
-  expect(saved.status).toBe(200);
-  expect(await saved.json()).toEqual({ fileName: `${uploadId}.m4a` });
-  expect(finalizeAudio.mock.calls.at(0)?.[0]).toMatchObject({
-    matterId: MATTER_ID,
-    uploadId,
-  });
-  expect((await post({ matterId: MATTER_ID })).status).toBe(422);
-  testState.setConfig("API_FEATURE_ACCESS_GRANTS", {});
-  expect((await post({ matterId: MATTER_ID, uploadId })).status).toBe(403);
-  expect(finalizeAudio).toHaveBeenCalledTimes(1);
 });

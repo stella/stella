@@ -1,13 +1,9 @@
 import { Result } from "better-result";
-import type { InferOk } from "better-result";
 import * as v from "valibot";
 
-import { RESOURCE_TYPE, resourceRef } from "@stll/api-contract";
 import {
   DESKTOP_DICTATION_TRANSCRIPT_LIMITS,
   type DesktopDictationTranscriptAudioOutcome,
-  type DesktopDictationTranscriptAudioSaved,
-  desktopDictationTranscriptAudioSavedSchema,
   desktopDictationTranscriptAudioSchema,
   desktopDictationTranscriptCleanedSchema,
   desktopDictationTranscriptFolderSchema,
@@ -16,7 +12,6 @@ import {
   desktopDictationTranscriptSavedSchema,
   MAX_DESKTOP_DICTATION_TRANSCRIPT_AUDIO_BYTES,
 } from "@stll/api-contract/desktop-dictation-transcription";
-import type { DesktopFeatureId } from "@stll/api-contract/desktop-feature-access";
 import {
   cleanedTranscriptDocx,
   transcriptDocx,
@@ -24,10 +19,6 @@ import {
 import { classifyFailure } from "@stll/errors";
 
 import { safeDbFromScoped } from "@/api/db/safe-db";
-import {
-  finalizeOwnPendingUpload,
-  UPLOAD_NOT_FOUND_CODE,
-} from "@/api/handlers/uploads/update";
 import {
   ACCOUNT_ACCESS,
   createSafeBoundedPublicHandler,
@@ -39,6 +30,11 @@ import { authorizeDesktopAccount } from "@/api/lib/business-registries/desktop/a
 import { resourceIdSchema } from "@/api/lib/custom-schema";
 import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration";
 import {
+  authorizeDesktopTranscriptSave,
+  type DesktopTranscriptAccount,
+  readDesktopTranscriptMatter,
+} from "@/api/lib/dictation/desktop-transcript-access";
+import {
   authorizeDocumentWriteAccess,
   documentWriteRefusalHandlerError,
   DocumentWriteRefusedError,
@@ -46,7 +42,6 @@ import {
 import { CALLER_AUTHORIZED } from "@/api/lib/entities/buffer-write-authority";
 import { createEntityFromBuffer } from "@/api/lib/entities/create-from-buffer";
 import { HandlerError, unreachable } from "@/api/lib/errors/tagged-errors";
-import { isFeatureEnabled } from "@/api/lib/feature-access/policy";
 import { serverBuiltFileEncryption } from "@/api/lib/files/detect-file-encryption";
 import {
   OrganizationFileUsageError,
@@ -55,20 +50,11 @@ import {
 import { LIMITS } from "@/api/lib/limits";
 import { failureSink } from "@/api/lib/observability/failure";
 import { observeFailure } from "@/api/lib/observability/observe-failure";
-import { broadcastWorkspaceResourceUpdated } from "@/api/lib/resource-realtime";
 import { sanitizeFilenamePreservingExtension } from "@/api/lib/sanitize-filename";
 import { reservePresignedUpload } from "@/api/lib/uploads/reserve-presigned-upload";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
 
 import { createTranscriptFolder } from "./transcript-folder";
-
-// Filing a transcript belongs with dictation on the desktop: it is what the
-// member transcribed there, on this computer or with stella AI.
-const REQUIRED_FEATURE_ID = "desktop-dictation" satisfies DesktopFeatureId;
-
-type DesktopAccount = InferOk<
-  Awaited<ReturnType<typeof authorizeDesktopAccount>>
->;
 
 /** The transcript a desktop files: the matter, a title (the recording's
  *  name) and its paragraphs. A desktop that names the documents in
@@ -95,45 +81,6 @@ type TranscriptBody = v.InferOutput<
   typeof desktopDictationTranscriptBodySchema
 >;
 
-const authorizeTranscriptSave = async (
-  request: Request,
-  authorizeAccount: typeof authorizeDesktopAccount,
-) =>
-  await Result.gen(async function* () {
-    const account = yield* Result.await(authorizeAccount(request));
-    if (
-      !isFeatureEnabled(
-        account.featureAccessSnapshot,
-        REQUIRED_FEATURE_ID,
-        account,
-      )
-    ) {
-      return Result.err(
-        new HandlerError({
-          status: 403,
-          message: "Recording transcription is unavailable",
-        }),
-      );
-    }
-    return Result.ok(account);
-  });
-
-/** The matter under the member's own access, as a document write sees it. */
-const readMatterAccess = async (
-  account: DesktopAccount,
-  matterId: TranscriptBody["matterId"],
-) =>
-  await safeDbFromScoped(account.scopedDb)(
-    async (tx) =>
-      (await tx.query.workspaces.findFirst({
-        where: {
-          id: { eq: matterId },
-          organizationId: { eq: account.organizationId },
-        },
-        columns: { id: true, status: true },
-      })) ?? null,
-  );
-
 const documentLayoutError = (message: string) => (cause: unknown) =>
   // The renderer's own tagged error says what failed.
   classifyFailure(
@@ -150,7 +97,7 @@ const renderedTranscript = async (
   );
 
 type ReserveAudioInput = {
-  account: DesktopAccount;
+  account: DesktopTranscriptAccount;
   matterId: TranscriptBody["matterId"];
   folderId: SafeId<"entity">;
   audio: NonNullable<TranscriptBody["audio"]>;
@@ -258,13 +205,13 @@ const audioOutcome = async (
  */
 export const createDesktopDictationTranscriptEndpoint = ({
   authorizeAccount = authorizeDesktopAccount,
-  readMatter = readMatterAccess,
+  readMatter = readDesktopTranscriptMatter,
   createEntity = createEntityFromBuffer,
   createFolder = createTranscriptFolder,
   reserveAudio = reserveAudioUpload,
 }: {
   authorizeAccount?: typeof authorizeDesktopAccount;
-  readMatter?: typeof readMatterAccess;
+  readMatter?: typeof readDesktopTranscriptMatter;
   createEntity?: typeof createEntityFromBuffer;
   createFolder?: typeof createTranscriptFolder;
   reserveAudio?: typeof reserveAudioUpload;
@@ -296,7 +243,7 @@ export const createDesktopDictationTranscriptEndpoint = ({
           );
         }
         const account = yield* Result.await(
-          authorizeTranscriptSave(request, authorizeAccount),
+          authorizeDesktopTranscriptSave(request, authorizeAccount),
         );
         const workspace = yield* Result.await(
           readMatter(account, body.matterId),
@@ -457,126 +404,6 @@ export const createDesktopDictationTranscriptEndpoint = ({
     },
   );
 
-/** The recording a desktop uploaded into a transcript's folder. */
-const desktopDictationTranscriptAudioBodySchema = v.strictObject({
-  matterId: resourceIdSchema("workspace"),
-  uploadId: resourceIdSchema("pendingUpload"),
-});
-
-type AudioBody = v.InferOutput<
-  typeof desktopDictationTranscriptAudioBodySchema
->;
-
-/** Finalizes the member's own recording upload: only a new document, the
- *  one purpose this route reserves. */
-const finalizeAudioUpload = async ({
-  account,
-  request,
-  matterId,
-  uploadId,
-}: AudioBody & { account: DesktopAccount; request: Request }) =>
-  await Result.gen(async function* () {
-    const finalized = yield* finalizeOwnPendingUpload({
-      safeDb: safeDbFromScoped(account.scopedDb),
-      organizationId: account.organizationId,
-      workspaceId: matterId,
-      userId: account.userId,
-      memberRole: account.memberRole,
-      uploadId,
-      recordAuditEvent: createAuditRecorder({
-        organizationId: account.organizationId,
-        userId: account.userId,
-        workspaceId: matterId,
-        request,
-        server: null,
-      }),
-      authorizeConsent: (purpose) =>
-        purpose === "entity_create"
-          ? Result.ok(undefined)
-          : Result.err(
-              new HandlerError({
-                code: UPLOAD_NOT_FOUND_CODE,
-                status: 404,
-                message: "Upload not found",
-              }),
-            ),
-    });
-    if (Result.isError(finalized)) {
-      return Result.err(finalized.error);
-    }
-    const result = finalized.value.finalizedResult;
-    if (result.type !== "entity_create") {
-      return unreachable("A recording upload always creates a document");
-    }
-    broadcastWorkspaceResourceUpdated(
-      matterId,
-      resourceRef({ type: RESOURCE_TYPE.ENTITY, id: result.entityId }),
-    );
-    return Result.ok({ fileName: result.fileName });
-  });
-
-/**
- * A linked desktop finalizes the recording it uploaded into a transcript's
- * folder: the stored bytes are checked against the size and checksum it
- * declared, scanned, and filed as a document in the folder. Finalizing
- * again answers with the same document.
- */
-export const createDesktopDictationTranscriptAudioEndpoint = ({
-  authorizeAccount = authorizeDesktopAccount,
-  readMatter = readMatterAccess,
-  finalizeAudio = finalizeAudioUpload,
-}: {
-  authorizeAccount?: typeof authorizeDesktopAccount;
-  readMatter?: typeof readMatterAccess;
-  finalizeAudio?: typeof finalizeAudioUpload;
-} = {}) =>
-  declareAggregateMutation(
-    createSafeBoundedPublicHandler(
-      {
-        contract: "patch",
-        accountAccess: ACCOUNT_ACCESS.sandbox,
-        mcp: { type: "internal", reason: "auth_plumbing" },
-        cache: { kind: "none" },
-        body: desktopDictationTranscriptAudioBodySchema,
-        response: safePublicHandlerResponseSchemasWithStatusText(
-          desktopDictationTranscriptAudioSavedSchema,
-        ),
-      },
-      async function* ({ request, body }) {
-        const account = yield* Result.await(
-          authorizeTranscriptSave(request, authorizeAccount),
-        );
-        const workspace = yield* Result.await(
-          readMatter(account, body.matterId),
-        );
-        const access = authorizeDocumentWriteAccess({
-          authority: account.memberRole,
-          workspace,
-          operation: { type: "create", workspaceId: body.matterId },
-        });
-        if (Result.isError(access)) {
-          return Result.err(documentWriteRefusalHandlerError(access.error));
-        }
-        const saved = yield* Result.await(
-          finalizeAudio({
-            account,
-            request,
-            matterId: access.value.operation.workspaceId,
-            uploadId: body.uploadId,
-          }),
-        );
-        return Result.ok({
-          fileName: saved.fileName,
-        } satisfies DesktopDictationTranscriptAudioSaved);
-      },
-    ),
-    {
-      type: "independent",
-      reason:
-        "Finalizes one upload the member reserved through the shared upload finalize, which claims the upload row and takes its own workspace and entity locks.",
-    },
-  );
-
 const missingFilePropertyError = () =>
   new HandlerError({
     code: "transcript_matter_file_property_missing",
@@ -627,6 +454,3 @@ const toHandlerError = (
 
 export const saveDesktopDictationTranscript =
   createDesktopDictationTranscriptEndpoint();
-
-export const saveDesktopDictationTranscriptAudio =
-  createDesktopDictationTranscriptAudioEndpoint();
