@@ -27,34 +27,8 @@ import type { TranslationKey } from "@/i18n/types";
 const IDENTIFIER_MAX_WORDS = 4;
 
 /** Punctuation the surrounding sentence leaves on a reference. */
-const OPENING_PUNCTUATION = new Set([
-  "(",
-  "[",
-  "{",
-  '"',
-  "'",
-  "«",
-  "‚",
-  "‘",
-  "„",
-]);
-const CLOSING_PUNCTUATION = new Set([
-  ".",
-  ",",
-  ";",
-  ":",
-  "!",
-  "?",
-  ")",
-  "]",
-  "}",
-  '"',
-  "'",
-  "»",
-  "„",
-  "“",
-  "”",
-]);
+const OPENING_PUNCTUATION = "([{\"'«‚‘„";
+const CLOSING_PUNCTUATION = ".,;:!?)]}\"'»„“”";
 
 /**
  * The candidate without the punctuation around it, trimmed by index rather
@@ -64,10 +38,16 @@ const stripSurroundingPunctuation = (candidate: string): string => {
   const characters = [...candidate];
   let start = 0;
   let end = characters.length;
-  while (start < end && OPENING_PUNCTUATION.has(characters[start] ?? "")) {
+  while (
+    start < end &&
+    OPENING_PUNCTUATION.includes(characters[start] ?? " ")
+  ) {
     start += 1;
   }
-  while (end > start && CLOSING_PUNCTUATION.has(characters[end - 1] ?? "")) {
+  while (
+    end > start &&
+    CLOSING_PUNCTUATION.includes(characters[end - 1] ?? " ")
+  ) {
     end -= 1;
   }
   return characters.slice(start, end).join("");
