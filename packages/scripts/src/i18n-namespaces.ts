@@ -124,7 +124,7 @@ export const checkNamespaces = async (i18nDir: string): Promise<string[]> => {
       const parsedResult = Result.try<unknown>(() => JSON.parse(rawText));
       if (parsedResult.isErr()) {
         errors.push(
-          `${locale}/${domain}.json: invalid JSON (${String(parsedResult.error)})`,
+          `${locale}/${domain}.json: invalid JSON (${parsedResult.error.message})`,
         );
         continue;
       }
