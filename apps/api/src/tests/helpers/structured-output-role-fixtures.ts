@@ -152,14 +152,14 @@ export const STRUCTURED_OUTPUT_ROLE_FIXTURES: readonly StructuredOutputRoleFixtu
       outputSchema: "desktopBillingDraftModelResponseSchema",
       schema: desktopBillingDraftModelResponseSchema,
       answer:
-        '{"drafts":[{"entryId":"entry_1","narrative":"Reviewed the supplied agreement.","classification":{"type":"activity_group","activityGroup":"client"},"flags":[],"matchedEarlierEntryIds":[],"operations":[]}],"checkedGuidelines":[]}',
+        '{"drafts":[{"entryId":"entry_1","narrative":"Reviewed the supplied agreement.","narrativeLanguage":"en","classification":{"type":"activity_group","activityGroup":"client"},"flags":[],"matchedEarlierEntryIds":[],"operations":[]}],"checkedGuidelines":[]}',
     },
     {
       file: "handlers/desktop-time-entries/billing-drafts.ts",
       outputSchema: "desktopBillingPlainDraftModelResponseSchema",
       schema: desktopBillingPlainDraftModelResponseSchema,
       answer:
-        '{"drafts":[{"entryId":"entry_1","narrative":"Reviewed the supplied agreement.","matchedEarlierEntryIds":[]}]}',
+        '{"drafts":[{"entryId":"entry_1","narrative":"Reviewed the supplied agreement.","narrativeLanguage":"en","matchedEarlierEntryIds":[]}]}',
     },
     {
       file: "handlers/dictation/cleanup.ts",

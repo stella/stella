@@ -534,6 +534,7 @@ const installNativeBoundary = async ({
                   entryId: entry.entryId,
                   narrative:
                     "steer" in request ? refinedNarrative : generatedNarrative,
+                  narrativeLanguage: "en",
                   classification: {
                     type: "ledes",
                     taskCode: "L120",
@@ -563,6 +564,7 @@ const installNativeBoundary = async ({
                 ],
               },
               earlierEntries: [earlierEntry],
+              codeNames: [],
             };
           }
           return {
@@ -572,10 +574,12 @@ const installNativeBoundary = async ({
                 entryId: entry.entryId,
                 narrative:
                   "steer" in request ? refinedNarrative : generatedNarrative,
+                narrativeLanguage: "en",
                 matchedEarlierEntryIds: [earlierEntry.id],
               })),
             },
             earlierEntries: [earlierEntry],
+            codeNames: [],
           };
         },
         activity_set_recording_status: (args) => {
@@ -3763,6 +3767,7 @@ test("refining a draft proposes the change, accepting applies it and Undo restor
           {
             entryId: "entry_1",
             narrative: GENERATED_NARRATIVE,
+            narrativeLanguage: "en",
             matchedEarlierEntryIds: [EARLIER_ENTRY.id],
           },
         ],
@@ -3770,7 +3775,7 @@ test("refining a draft proposes the change, accepting applies it and Undo restor
     },
   });
   await proposal
-    .getByRole("button", { name: enMessages.activity.aiAccept })
+    .getByRole("button", { name: enMessages.activity.aiApplyChange })
     .click();
   await expect(narrative).toHaveValue(REFINED_NARRATIVE);
   await card.getByRole("button", { name: enMessages.activity.aiUndo }).click();
@@ -3900,7 +3905,7 @@ test("a failed draft keeps the template and offers to try again", async ({
   ).toBeEnabled();
 });
 
-test("with drafting switched off for the firm, a card offers no stella AI and sends nothing", async ({
+test("with drafting switched off for the firm, a card says so quietly and sends nothing", async ({
   page,
 }) => {
   await installNativeBoundary({
@@ -3911,6 +3916,7 @@ test("with drafting switched off for the firm, a card offers no stella AI and se
   await openSuggestion(page, "Example matter");
   const card = suggestionCard(page, "Example matter");
   await expect(card).toBeFocused();
+  await expect(card.getByText(enMessages.activity.aiDraftOff)).toBeVisible();
   await expect(card.getByText(enMessages.activity.aiDraftConsent)).toHaveCount(
     0,
   );
@@ -3941,5 +3947,28 @@ test("Settings withdraws consent to stella AI drafts and sends nothing else", as
     command: "billing_draft_withdraw_consent",
     args: { scopeKey: '["org_fixture","user_fixture"]' },
   });
+  expect(await draftInvocations(page)).toEqual([]);
+});
+
+test("Settings allows stella AI drafts again with the consent a card asks for", async ({
+  page,
+}) => {
+  await installNativeBoundary({
+    page,
+    view: "settings",
+    drafting: { ...DRAFTING, consent: "revoked" },
+  });
+  await expect(page.getByText(enMessages.activity.aiDraftOffer)).toBeVisible();
+  await page
+    .getByRole("button", { name: enMessages.activity.aiDraftAllow })
+    .click();
+  await expect(
+    page.getByText(enMessages.activity.billingDraftsGranted),
+  ).toBeVisible();
+  await expect
+    .poll(async () =>
+      (await tauriInvocations(page)).map(({ command }) => command),
+    )
+    .toContain("billing_draft_grant_consent");
   expect(await draftInvocations(page)).toEqual([]);
 });
