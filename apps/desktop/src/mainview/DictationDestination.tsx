@@ -328,7 +328,7 @@ export const CloudModelSelect = ({
 
 /** Who runs the chosen model, whether it leaves the region, and whether its
  *  provider keeps the audio. */
-export const DictationModelTags = ({ model }: { model: CloudModel }) => {
+const DictationModelTags = ({ model }: { model: CloudModel }) => {
   const t = useTranslations("dictation.destination");
   return (
     <span className="mt-1 flex flex-wrap gap-1.5">
