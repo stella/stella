@@ -715,6 +715,19 @@
       "failed": "No se pudo abrir la ventana. Inténtalo de nuevo.",
       "open": "Abrir",
       "title": "Transcribir una grabación"
+    },
+    "whileDictating": {
+      "choices": {
+        "lower": "Bajar el resto del sonido",
+        "nothing": "No hacer nada",
+        "pause": "Pausar Música y Spotify"
+      },
+      "description": "Qué pasa con el resto del sonido mientras stella graba, para que no acabe en el texto. Vuelve cuando termina la grabación.",
+      "speakersOnly": {
+        "description": "Deja los auriculares como están: el micrófono no los oye.",
+        "title": "Solo por altavoces"
+      },
+      "title": "Al dictar"
     }
   },
   "keepAwake": {

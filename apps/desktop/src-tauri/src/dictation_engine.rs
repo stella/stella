@@ -34,6 +34,7 @@ use crate::{
   dictation_hold_key::{HoldChoice, MINIMUM_HOLD},
   dictation_input,
   dictation_live::{Ended, Live, Transcribe, Transcription},
+  dictation_media::{self, MediaGuard},
   dictation_microphone::{self, Choice, InputDevice},
   dictation_pauses::Segmenter,
   dictation_preview,
@@ -85,16 +86,23 @@ struct Active {
 }
 
 impl Active {
-  /// Sounds the start once the hold is long enough to be a dictation, not
-  /// a tap, when the speaker wants sounds.
-  fn sound_start(&mut self, app: &AppHandle) {
-    if !self.capture.sounded
-      && self.trace.since_press() >= MINIMUM_HOLD
-      && dictation::sounds_enabled(app)
-    {
+  /// Once the hold is long enough to be a dictation, not a tap: the start
+  /// sound when the speaker wants sounds, then whatever the speaker chose
+  /// for other sound, after the start sound so it is heard in full.
+  fn reach_hold(&mut self, app: &AppHandle) {
+    if self.capture.held || self.trace.since_press() < MINIMUM_HOLD {
+      return;
+    }
+    self.capture.held = true;
+    let delay = if dictation::sounds_enabled(app) {
       self.capture.sounded = true;
       dictation_sounds::play(Cue::Start);
-    }
+      dictation_sounds::CUE_LENGTH
+    } else {
+      Duration::ZERO
+    };
+    let (choice, speakers_only) = dictation::while_dictating(app);
+    self.capture.media = dictation_media::begin(choice, speakers_only, delay);
   }
 }
 
@@ -165,7 +173,7 @@ fn run(app: &AppHandle, commands: &Receiver<Command>) {
       Ok(Command::Press) => {
         if let Some(active) = active.as_mut() {
           active.capture.listen();
-          active.sound_start(app);
+          active.reach_hold(app);
         }
       }
       Ok(Command::Retype(focus)) => {
@@ -223,7 +231,7 @@ fn run(app: &AppHandle, commands: &Receiver<Command>) {
       Err(RecvTimeoutError::Timeout) => match active.as_mut() {
         Some(active) => {
           active.capture.listen();
-          active.sound_start(app);
+          active.reach_hold(app);
           // Between transcription results too: a password field that takes
           // focus while the panel shows hides it at once.
           if active.password_watch.due(dictation_preview::showing(app))
@@ -311,8 +319,12 @@ struct Capture {
   sharing: Sharing,
   /// Mono samples taken so far, for the local log.
   recorded: usize,
-  /// Whether the start sound played, so the stop sound plays too.
+  /// Whether the hold became a dictation, and whether the start sound
+  /// played then, so the stop sound plays too.
+  held: bool,
   sounded: bool,
+  /// What was done to other sound; dropping it puts that back.
+  media: Option<MediaGuard>,
 }
 
 impl Capture {
@@ -393,7 +405,9 @@ fn begin(
     cleanup,
     sharing,
     recorded: 0,
+    held: false,
     sounded: false,
+    media: None,
   })
 }
 
@@ -424,6 +438,7 @@ fn finish(
     cleanup: cleanup_enabled,
     recorded,
     sounded,
+    media,
     ..
   } = capture;
   let channels = recorder.channels;
@@ -433,6 +448,8 @@ fn finish(
   // A microphone that stopped midway leaves what it already delivered: the
   // stretches sent while the key was down still count.
   let Finished { last, lost } = recorder.finish();
+  // Recording stopped: other sound comes back, before the stop sound.
+  drop(media);
   // Counted once the stream stopped, so the last frames it delivered count.
   log_hold(
     app,

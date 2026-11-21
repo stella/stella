@@ -44,6 +44,7 @@ use crate::{
   dictation_focus::{self, FocusTarget},
   dictation_hold_key::{self, Action, Gesture, HoldChoice},
   dictation_language::{self, Choice, LanguageSnapshot},
+  dictation_media::{self, WhileDictating},
   dictation_retype::{self, LastDictation, Request},
   dictation_words,
   feature_gate::{DesktopFeature, FeatureGates},
@@ -182,6 +183,11 @@ pub struct DictationSnapshot {
   cleanup: bool,
   /// Whether a short sound marks the start and the end of listening.
   sounds: bool,
+  /// What happens to other sound while recording, what this computer
+  /// offers, and whether only while it plays through speakers.
+  while_dictating: WhileDictating,
+  while_dictating_offered: &'static [WhileDictating],
+  speakers_only: bool,
   /// Whether cleanup also gets the focused window's title.
   share_window_title: bool,
   /// Whether cleanup also gets the text before the cursor.
@@ -256,6 +262,8 @@ struct Inner {
   /// Only in memory.
   recent_apps: Vec<RecentApp>,
   sounds: bool,
+  while_dictating: WhileDictating,
+  speakers_only: bool,
   share_window_title: bool,
   share_text_before_cursor: bool,
   language: Choice,
@@ -298,6 +306,17 @@ impl DictationState {
         .read()
         .as_deref()
         != Some(DISABLED_VALUE);
+    let while_dictating = WhileDictating::parse(
+      DevicePreference::in_app_data(dictation_media::PREFERENCE_FILE_NAME)
+        .read()
+        .as_deref(),
+    );
+    let speakers_only = DevicePreference::in_app_data(
+      dictation_media::SPEAKERS_ONLY_PREFERENCE_FILE_NAME,
+    )
+    .read()
+    .as_deref()
+      != Some(DISABLED_VALUE);
     let shared = |file_name: &str| {
       DevicePreference::in_app_data(file_name).read().as_deref() == Some(ENABLED_VALUE)
     };
@@ -333,6 +352,8 @@ impl DictationState {
       app_settings,
       recent_apps: Vec::new(),
       sounds,
+      while_dictating,
+      speakers_only,
       share_window_title,
       share_text_before_cursor,
       language,
@@ -371,6 +392,9 @@ impl DictationState {
       enabled: inner.enabled,
       cleanup: inner.cleanup,
       sounds: inner.sounds,
+      while_dictating: inner.while_dictating,
+      while_dictating_offered: WhileDictating::OFFERED,
+      speakers_only: inner.speakers_only,
       share_window_title: inner.share_window_title,
       share_text_before_cursor: inner.share_text_before_cursor
         && dictation_context::TEXT_BEFORE_CURSOR_SUPPORTED,
@@ -771,6 +795,14 @@ fn request_retype(app: &AppHandle, request: Request) {
   if let Err(error) = spawned {
     tracing::warn!(%error, "dictation retype could not start");
   }
+}
+
+/// What happens to other sound while recording, and whether only while it
+/// plays through speakers.
+pub fn while_dictating(app: &AppHandle) -> (WhileDictating, bool) {
+  app
+    .state::<DictationState>()
+    .update(|inner| (inner.while_dictating, inner.speakers_only))
 }
 
 /// Starts a dictation: marks it recording and reads the speech model under
@@ -1198,6 +1230,48 @@ pub fn dictation_set_retype_shortcut(
   Ok(read_snapshot(&app, &state))
 }
 
+/// What happens to other sound while recording, from the next one.
+#[tauri::command]
+pub fn dictation_set_while_dictating(
+  app: AppHandle,
+  state: State<'_, DictationState>,
+  choice: String,
+) -> Result<DictationSnapshot, String> {
+  if !available(&app) {
+    return Err("dictation is not available on this computer".to_string());
+  }
+  let parsed = WhileDictating::parse(Some(&choice));
+  if parsed.stored() != choice {
+    return Err("this is not offered on this computer".to_string());
+  }
+  change_preference(
+    &app,
+    dictation_media::PREFERENCE_FILE_NAME,
+    parsed.stored(),
+    |inner| inner.while_dictating = parsed,
+  )?;
+  Ok(read_snapshot(&app, &state))
+}
+
+/// Whether other sound is changed only while it plays through speakers.
+#[tauri::command]
+pub fn dictation_set_speakers_only(
+  app: AppHandle,
+  state: State<'_, DictationState>,
+  enabled: bool,
+) -> Result<DictationSnapshot, String> {
+  if !available(&app) {
+    return Err("dictation is not available on this computer".to_string());
+  }
+  change_preference(
+    &app,
+    dictation_media::SPEAKERS_ONLY_PREFERENCE_FILE_NAME,
+    stored_switch(enabled),
+    |inner| inner.speakers_only = enabled,
+  )?;
+  Ok(read_snapshot(&app, &state))
+}
+
 /// Whether cleanup also gets the focused window's title.
 #[tauri::command]
 pub fn dictation_set_share_window_title(
@@ -1605,6 +1679,8 @@ mod tests {
       app_settings: Vec::new(),
       recent_apps: Vec::new(),
       sounds: true,
+      while_dictating: WhileDictating::Nothing,
+      speakers_only: true,
       share_window_title: false,
       share_text_before_cursor: false,
       language: Choice::Automatic,
@@ -1745,6 +1821,8 @@ mod tests {
     assert_eq!(snapshot["shareWindowTitle"], false);
     assert_eq!(snapshot["shareTextBeforeCursor"], false);
     assert_eq!(snapshot["sounds"], true);
+    assert_eq!(snapshot["whileDictating"], "nothing");
+    assert_eq!(snapshot["speakersOnly"], true);
     assert_eq!(
       snapshot["textBeforeCursorAvailable"],
       dictation_context::TEXT_BEFORE_CURSOR_SUPPORTED

@@ -715,6 +715,19 @@
       "failed": "Não foi possível abrir a janela. Tente novamente.",
       "open": "Abrir",
       "title": "Transcrever uma gravação"
+    },
+    "whileDictating": {
+      "choices": {
+        "lower": "Abaixar os outros sons",
+        "nothing": "Não fazer nada",
+        "pause": "Pausar Música e Spotify"
+      },
+      "description": "O que acontece com os outros sons enquanto o stella grava, para que não entrem no texto. Tudo volta quando a gravação termina.",
+      "speakersOnly": {
+        "description": "Os fones ficam como estão: o microfone não os ouve.",
+        "title": "Só nos alto-falantes"
+      },
+      "title": "Ao ditar"
     }
   },
   "keepAwake": {

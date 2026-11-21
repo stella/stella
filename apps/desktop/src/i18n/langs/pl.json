@@ -715,6 +715,19 @@
       "failed": "Nie udało się otworzyć okna. Spróbuj ponownie.",
       "open": "Otwórz",
       "title": "Transkrypcja nagrania"
+    },
+    "whileDictating": {
+      "choices": {
+        "lower": "Ścisz inne dźwięki",
+        "nothing": "Nic nie rób",
+        "pause": "Wstrzymaj Muzykę i Spotify"
+      },
+      "description": "Co dzieje się z innymi dźwiękami, gdy stella nagrywa, aby nie trafiły do tekstu. Wracają po zakończeniu nagrywania.",
+      "speakersOnly": {
+        "description": "Słuchawki zostają bez zmian: mikrofon ich nie słyszy.",
+        "title": "Tylko przez głośniki"
+      },
+      "title": "Podczas dyktowania"
     }
   },
   "keepAwake": {

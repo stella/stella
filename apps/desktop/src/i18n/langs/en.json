@@ -715,6 +715,19 @@
       "failed": "The window could not be opened. Try again.",
       "open": "Open",
       "title": "Transcribe a recording"
+    },
+    "whileDictating": {
+      "choices": {
+        "lower": "Lower other sound",
+        "nothing": "Do nothing",
+        "pause": "Pause Music and Spotify"
+      },
+      "description": "What happens to other sound while stella records, so it does not end up in the text. It comes back when recording stops.",
+      "speakersOnly": {
+        "description": "Leave headphones alone: what plays in them does not reach the recording.",
+        "title": "Only through speakers"
+      },
+      "title": "While dictating"
     }
   },
   "keepAwake": {

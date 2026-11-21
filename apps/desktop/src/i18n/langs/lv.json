@@ -715,6 +715,19 @@
       "failed": "Neizdevās atvērt logu. Mēģiniet vēlreiz.",
       "open": "Atvērt",
       "title": "Ieraksta transkribēšana"
+    },
+    "whileDictating": {
+      "choices": {
+        "lower": "Klusināt citas skaņas",
+        "nothing": "Neko nedarīt",
+        "pause": "Pauzēt Mūziku un Spotify"
+      },
+      "description": "Kas notiek ar citām skaņām, kamēr stella ieraksta, lai tās nenonāktu tekstā. Pēc ieraksta viss atgriežas.",
+      "speakersOnly": {
+        "description": "Austiņas paliek kā ir: mikrofons tās nedzird.",
+        "title": "Tikai caur skaļruņiem"
+      },
+      "title": "Diktējot"
     }
   },
   "keepAwake": {

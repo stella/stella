@@ -104,7 +104,10 @@ export const SETTINGS_DICTATION = {
   shareWindowTitle: false,
   shortcutTaken: false,
   sounds: true,
+  speakersOnly: true,
   textBeforeCursorAvailable: true,
+  whileDictating: "lower",
+  whileDictatingOffered: ["nothing", "lower", "pause"],
 } as const satisfies DictationSettingSnapshot;
 
 /** The region's stella AI transcription models. */

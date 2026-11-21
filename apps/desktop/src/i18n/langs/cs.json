@@ -715,6 +715,19 @@
       "failed": "Okno se nepodařilo otevřít. Zkuste to znovu.",
       "open": "Otevřít",
       "title": "Přepsat nahrávku"
+    },
+    "whileDictating": {
+      "choices": {
+        "lower": "Ztlumit ostatní zvuk",
+        "nothing": "Nic nedělat",
+        "pause": "Pozastavit Hudbu a Spotify"
+      },
+      "description": "Co se stane s ostatním zvukem, když stella nahrává, aby se nedostal do textu. Po skončení nahrávání se vrátí.",
+      "speakersOnly": {
+        "description": "Sluchátka nechat být: mikrofon je neslyší.",
+        "title": "Jen přes reproduktory"
+      },
+      "title": "Během diktování"
     }
   },
   "keepAwake": {
