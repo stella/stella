@@ -12,6 +12,7 @@ import { visualizer } from "rollup-plugin-visualizer";
 import {
   defineConfig,
   type Logger,
+  parseSync,
   type Plugin,
   type PluginOption,
 } from "vite";
@@ -133,18 +134,46 @@ export const serverPackageImports = (
   );
 };
 
-/** Rewrites `#` import specifiers in module source to their package names. */
-export const rewritePackageImports = (
-  code: string,
-  targets: ReadonlyMap<string, string>,
-): string =>
-  code.replace(
-    /(?<=\b(?:from|import)\s*\(?\s*)(["'])(#[\w/-]+)\1/gu,
-    (literal, quote: string, specifier: string) => {
-      const target = targets.get(specifier);
-      return target === undefined ? literal : `${quote}${target}${quote}`;
-    },
-  );
+const QUOTED_SPECIFIER = /^(["'])(.*)\1$/su;
+const SCRIPT_MODULE = /\.[cm]?[jt]sx?$/u;
+
+type RewritePackageImportsOptions = {
+  code: string;
+  /** The module path; its extension selects the parser's language. */
+  file: string;
+  targets: ReadonlyMap<string, string>;
+};
+
+/**
+ * Rewrites the module specifiers of imports, re-exports and dynamic imports
+ * that name a `#` import to its package. Other strings are left alone.
+ */
+export const rewritePackageImports = ({
+  code,
+  file,
+  targets,
+}: RewritePackageImportsOptions): string => {
+  const { module } = parseSync(file, code);
+  const spans = [
+    ...module.staticImports.map(({ moduleRequest }) => moduleRequest),
+    ...module.staticExports.flatMap(({ entries }) =>
+      entries.flatMap(({ moduleRequest }) =>
+        moduleRequest === null ? [] : [moduleRequest],
+      ),
+    ),
+    ...module.dynamicImports.map(({ moduleRequest }) => moduleRequest),
+  ].toSorted((a, b) => b.start - a.start);
+  let rewritten = code;
+  for (const { start, end } of spans) {
+    const [, quote = "", specifier = ""] =
+      QUOTED_SPECIFIER.exec(code.slice(start, end)) ?? [];
+    const target = targets.get(specifier);
+    if (target !== undefined) {
+      rewritten = `${rewritten.slice(0, start)}${quote}${target}${quote}${rewritten.slice(end)}`;
+    }
+  }
+  return rewritten;
+};
 
 // The dev server's module runner externalizes a dependency only when the
 // import specifier itself is a package name, and it ignores `external` from
@@ -162,9 +191,11 @@ const serverPackageImportsPlugin = (): Plugin => {
     apply: "serve",
     applyToEnvironment: (environment) =>
       environment.config.consumer === "server",
-    transform(code) {
-      return [...targets.keys()].some((specifier) => code.includes(specifier))
-        ? rewritePackageImports(code, targets)
+    transform(code, id) {
+      const file = id.split("?", 1)[0] ?? id;
+      return SCRIPT_MODULE.test(file) &&
+        [...targets.keys()].some((specifier) => code.includes(specifier))
+        ? rewritePackageImports({ code, file, targets })
         : null;
     },
   };

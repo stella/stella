@@ -19,9 +19,14 @@ import {
 } from "./check-bun-runtime";
 
 const ROOT = path.resolve(import.meta.dir, "..");
+const PACKAGE_SCRIPTS: Readonly<Record<string, readonly string[]>> = {
+  ".": ["build", "generate", "knip"],
+  "apps/web": ["dev", "vite"],
+};
 const context = {
   executables: new Set(["vite", "playwright", "tsdown", "knip"]),
-  scripts: new Set(["build", "generate", "knip"]),
+  scriptsIn: (directory: string) => new Set(PACKAGE_SCRIPTS[directory]),
+  directory: ".",
 };
 
 const node = (program: string): Launch => ({ program, runs: "node" });
@@ -50,7 +55,17 @@ const cases: [string, Launch[]][] = [
   ["bun --bun knip", [{ program: "knip", runs: "script" }]],
   ["bunx --bun knip", [bun("knip")]],
   ["bun --filter @stll/web vite", []],
-  ["bun run --cwd ../web vite", []],
+  ["bunx --no-install --bun vite --version", [bun("vite")]],
+  ["bunx --no-install vite --version", [node("vite")]],
+  ["bunx -p vite --bun vite", [bun("vite")]],
+  ["bun --cwd apps/api vite --version", [node("vite")]],
+  ["bun --cwd=apps/api --bun vite", [bun("vite")]],
+  ["bun run --cwd apps/web vite", []],
+  ["bun --cwd apps/web --bun vite", [{ program: "vite", runs: "script" }]],
+  ['bun --cwd "$PACKAGE" vite', []],
+  ["cd apps/web && bun run vite", []],
+  ["cd apps/api && bun vite", [node("vite")]],
+  ["(cd apps/web && bun run vite) && bun vite", [node("vite")]],
   ["bun --preload ./setup.ts scripts/run.ts", []],
   ["bun test src", []],
   ["cargo build && git status", []],
@@ -152,7 +167,8 @@ test("the web dev server starts on the runtime the web image serves on", () => {
   );
   const dev = launches(scripts["dev"] ?? "", {
     executables: packageExecutables(ROOT),
-    scripts: new Set(Object.keys(scripts)),
+    scriptsIn: () => new Set(Object.keys(scripts)),
+    directory: "apps/web",
   });
   expect(dev.map(({ program, runs }) => [program, runs])).toEqual([
     ["vite", runtime],

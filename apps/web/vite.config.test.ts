@@ -338,21 +338,29 @@ describe("server package imports", () => {
     ).toEqual(new Map([["#plain", "pkg"]]));
   });
 
-  test("rewrites import specifiers and leaves other text alone", () => {
+  test("rewrites module specifiers and leaves other text alone", () => {
+    const untouched = [
+      'import "#unmapped";',
+      'const text = "#aho-corasick";',
+      "const quoted = 'import(\"#aho-corasick\")';",
+      'registry.import("#aho-corasick");',
+    ];
     const source = [
       'import { AhoCorasick } from "#aho-corasick";',
       "export { RegexSet } from '#regex-set';",
+      'export * from "#regex-set";',
       'const lazy = import("#aho-corasick");',
-      'import "#unmapped";',
-      'const text = "#aho-corasick";',
+      ...untouched,
     ].join("\n");
-    expect(rewritePackageImports(source, targets)).toBe(
+    expect(
+      rewritePackageImports({ code: source, file: "module.ts", targets }),
+    ).toBe(
       [
         'import { AhoCorasick } from "@stll/aho-corasick";',
         "export { RegexSet } from '@stll/regex-set';",
+        'export * from "@stll/regex-set";',
         'const lazy = import("@stll/aho-corasick");',
-        'import "#unmapped";',
-        'const text = "#aho-corasick";',
+        ...untouched,
       ].join("\n"),
     );
   });

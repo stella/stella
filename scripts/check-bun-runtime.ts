@@ -109,13 +109,26 @@ const workspaceDirectories = (root: string): string[] =>
       .toSorted(),
   );
 
-/** What runs an executable `bunx` or `bun x` fetches: Bun only with `--bun`. */
+/** bunx options that take the next word as their value. */
+const BUNX_VALUE_FLAGS = new Set(["--package", "-p"]);
+
+/**
+ * What runs the executable `bunx` or `bun x` starts: Bun only when `--bun`
+ * appears among the options before it.
+ */
 const bunxLaunch = (words: readonly string[]): Launch[] => {
-  const forced = BUN_RUNTIME_FLAGS.has(words.at(0) ?? "");
-  const program = (forced ? words.slice(1) : words).find(
-    (word) => !word.startsWith("-"),
-  );
-  return program === undefined ? [] : [{ program, runs: forced ? BUN : NODE }];
+  let forced = false;
+  for (let index = 0; index < words.length; index += 1) {
+    const word = words[index] ?? "";
+    if (BUN_RUNTIME_FLAGS.has(word)) {
+      forced = true;
+    } else if (BUNX_VALUE_FLAGS.has(word)) {
+      index += 1;
+    } else if (!word.startsWith("-")) {
+      return [{ program: word, runs: forced ? BUN : NODE }];
+    }
+  }
+  return [];
 };
 
 /** Bun flags that take the next word as their value. */
@@ -130,42 +143,56 @@ const BUN_VALUE_FLAGS = new Set([
   "-c",
   "-r",
 ]);
-/** After these, the first positional word names another package's script. */
-const BUN_PACKAGE_FLAGS = new Set(["--cwd", "--filter", "-F", "--workspaces"]);
+/** After these, the first positional word names other packages' scripts. */
+const BUN_WORKSPACE_FLAGS = new Set(["--filter", "-F", "--workspaces"]);
+const CWD_FLAG = "--cwd";
 
 type LaunchContext = {
   executables: ReadonlySet<string>;
-  /** Script names of the package the command runs in. */
-  scripts: ReadonlySet<string>;
+  /** Script names of the package in a directory relative to the root. */
+  scriptsIn: (directory: string) => ReadonlySet<string>;
+  /** The directory the command starts in, relative to the root. */
+  directory: string;
 };
 
+/** A literal directory, or undefined when the shell computes it. */
+const literalDirectory = (from: string, to: string | undefined) =>
+  to === undefined || to.includes("$") ? undefined : path.join(from, to);
+
 /**
- * `bun [run] <name>` runs the package script `<name>` when one exists, and
- * otherwise the executable, on the runtime its shebang names unless `--bun`
- * precedes it. `bun --bun <name>` where a script shadows the executable
- * runs that script instead, which recurses when it is the script itself.
+ * `bun [run] <name>` runs the package script `<name>` when the package in
+ * the working directory has one, and otherwise the executable, on the
+ * runtime its shebang names unless `--bun` precedes it. `bun --bun <name>`
+ * where a script shadows the executable runs that script instead, which
+ * recurses when it is the script itself.
  */
 const bunLaunch = (
   args: readonly string[],
-  { executables, scripts }: LaunchContext,
+  { executables, scriptsIn, directory }: LaunchContext,
 ): Launch[] => {
   let forced = false;
+  let cwd: string | undefined = directory;
   for (let index = 0; index < args.length; index += 1) {
     const arg = args[index] ?? "";
-    if (BUN_PACKAGE_FLAGS.has(arg.split("=", 1)[0] ?? "")) {
+    const [flag = "", inline] = arg.split(/[=](.*)/su);
+    if (BUN_WORKSPACE_FLAGS.has(flag)) {
       return [];
     }
-    if (BUN_RUNTIME_FLAGS.has(arg)) {
+    if (flag === CWD_FLAG) {
+      const target = inline ?? args[(index += 1)];
+      cwd = cwd === undefined ? undefined : literalDirectory(cwd, target);
+    } else if (BUN_RUNTIME_FLAGS.has(arg)) {
       forced = true;
     } else if (BUN_VALUE_FLAGS.has(arg)) {
       index += 1;
     } else if (arg === "x" && index === 0) {
       return bunxLaunch(args.slice(1));
     } else if (arg !== "run" && !arg.startsWith("-")) {
-      if (!executables.has(arg)) {
+      // A computed directory names an unknown package; nothing to classify.
+      if (!executables.has(arg) || cwd === undefined) {
         return [];
       }
-      if (scripts.has(arg)) {
+      if (scriptsIn(cwd).has(arg)) {
         return forced ? [{ program: arg, runs: SCRIPT }] : [];
       }
       return [{ program: arg, runs: forced ? BUN : NODE }];
@@ -175,29 +202,52 @@ const bunLaunch = (
 };
 
 /** The JavaScript programs a shell command starts, and their runtime. */
-export const launches = (command: string, context: LaunchContext): Launch[] =>
-  lexShell(command).flatMap((event): Launch[] => {
-    if (event.type === "unparsed") {
-      return panic(`cannot parse ${JSON.stringify(command)}: ${event.reason}`);
+export const launches = (command: string, context: LaunchContext): Launch[] => {
+  const found: Launch[] = [];
+  const directories: (string | undefined)[] = [];
+  let directory: string | undefined = context.directory;
+  for (const event of lexShell(command)) {
+    switch (event.type) {
+      case "unparsed":
+        return panic(
+          `cannot parse ${JSON.stringify(command)}: ${event.reason}`,
+        );
+      case "subshell-start":
+        directories.push(directory);
+        break;
+      case "subshell-end":
+        directory = directories.pop();
+        break;
+      case "control-flow":
+        break;
+      case "command": {
+        const [program, ...args] = programWords(event.words);
+        if (program === undefined) {
+          break;
+        }
+        if (program === "cd") {
+          directory =
+            directory === undefined
+              ? undefined
+              : literalDirectory(directory, args.at(0));
+        } else if (NODE_PROGRAMS.has(program)) {
+          found.push({ program, runs: NODE });
+        } else if (program === "bunx") {
+          found.push(...bunxLaunch(args));
+        } else if (program === BUN && directory !== undefined) {
+          found.push(...bunLaunch(args, { ...context, directory }));
+        } else if (context.executables.has(program)) {
+          found.push({ program, runs: NODE });
+        }
+        break;
+      }
+      default:
+        event satisfies never;
+        return panic("unknown shell event");
     }
-    if (event.type !== "command") {
-      return [];
-    }
-    const [program, ...args] = programWords(event.words);
-    if (program === undefined) {
-      return [];
-    }
-    if (NODE_PROGRAMS.has(program)) {
-      return [{ program, runs: NODE }];
-    }
-    if (program === "bunx") {
-      return bunxLaunch(args);
-    }
-    if (program === BUN) {
-      return bunLaunch(args, context);
-    }
-    return context.executables.has(program) ? [{ program, runs: NODE }] : [];
-  });
+  }
+  return found;
+};
 
 export type Finding = {
   file: string;
@@ -213,6 +263,22 @@ const scriptLine = (source: string, name: string): number => {
     : source.slice(0, index).split("\n").length;
 };
 
+/** Script names by package directory, read once each. */
+const packageScripts = (root: string) => {
+  const cache = new Map<string, ReadonlySet<string>>();
+  return (directory: string): ReadonlySet<string> => {
+    const cached = cache.get(directory);
+    if (cached !== undefined) {
+      return cached;
+    }
+    const file = path.join(root, directory, "package.json");
+    const scripts = existsSync(file) ? readManifest(file)["scripts"] : {};
+    const names = new Set(isRecord(scripts) ? Object.keys(scripts) : []);
+    cache.set(directory, names);
+    return names;
+  };
+};
+
 type ScanResult = { findings: Finding[]; unusedExceptions: string[] };
 
 /** Every package script command that starts a program on Node. */
@@ -221,6 +287,7 @@ export const scanPackageScripts = (
   exceptions: Readonly<Record<string, string>> = NODE_RUNTIME_EXCEPTIONS,
 ): ScanResult => {
   const executables = packageExecutables(root);
+  const scriptsIn = packageScripts(root);
   const findings: Finding[] = [];
   const usedExceptions = new Set<string>();
   for (const directory of [".", ...workspaceDirectories(root)]) {
@@ -230,7 +297,7 @@ export const scanPackageScripts = (
     if (!isRecord(scripts)) {
       continue;
     }
-    const context = { executables, scripts: new Set(Object.keys(scripts)) };
+    const context = { executables, scriptsIn, directory };
     for (const [script, command] of Object.entries(scripts)) {
       if (typeof command !== "string") {
         continue;
