@@ -577,6 +577,20 @@ describe("organization SSO", () => {
     ]);
   });
 
+  test("creates a session outside any endpoint without SSO provenance", async () => {
+    testState.setConfig("FEATURE_ENTERPRISE_SSO", true);
+    const member = await signInHuman(`sso-server-${unique()}@stella.dev`);
+    const { internalAdapter } = await getAuth().$context;
+    // A server call runs the production database hooks with no endpoint
+    // context, as a worker creating a session does.
+    const created = await internalAdapter.createSession(member.userId);
+    const stored = await testDb
+      .select({ userId: session.userId, ssoProviderId: session.ssoProviderId })
+      .from(session)
+      .where(eq(session.id, created.id));
+    expect(stored).toEqual([{ userId: member.userId, ssoProviderId: null }]);
+  });
+
   test("a provider recreated under the same id does not inherit the earlier provider's identities or sessions", async () => {
     testState.setConfig("FEATURE_ENTERPRISE_SSO", true);
     const idp = await createIdentityProvider();
