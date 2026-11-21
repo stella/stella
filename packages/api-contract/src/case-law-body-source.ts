@@ -1,6 +1,8 @@
 import { panic } from "better-result";
 import * as v from "valibot";
 
+import { API_STORABLE_INSTANT_CHECK } from "./api-date";
+
 export const DECISION_BODY_TEXT_SOURCE = {
   HOST: "host",
   COLLECTION: "collection",
@@ -50,7 +52,12 @@ const sourceSchema = v.strictObject({
 });
 const sourceUrlSchema = v.pipe(v.string(), v.url(), v.maxLength(8192));
 const retrievedAtSchema = v.nullable(
-  v.pipe(v.string(), v.isoTimestamp(), v.maxLength(32)),
+  v.pipe(
+    v.string(),
+    v.isoTimestamp(),
+    API_STORABLE_INSTANT_CHECK,
+    v.maxLength(32),
+  ),
 );
 const positiveInteger = v.pipe(
   v.number(),
