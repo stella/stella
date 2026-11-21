@@ -101,6 +101,7 @@ export const FAILURE_TAGS = [
   "ClaudeCliRequestError",
   "ClientDocumentUnsupportedError",
   "CodexTerminalListError",
+  "CollectionDocumentCompositionError",
   "CollectionDocumentPartInvalid",
   "ComparisonAppError",
   "CompatibilityCheckError",
