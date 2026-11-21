@@ -329,7 +329,7 @@ const main = async (): Promise<number> => {
     `Starting Metro on port ${String(port)}; the app signs in to ${server.value}.\n`,
   );
   const metro = Bun.spawn(
-    ["bunx", "expo", "start", "--dev-client", "--port", String(port)],
+    ["bunx", "--bun", "expo", "start", "--dev-client", "--port", String(port)],
     {
       cwd: APP_ROOT,
       env: {

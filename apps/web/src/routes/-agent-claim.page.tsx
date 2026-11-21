@@ -128,6 +128,11 @@ export function AgentClaimPage() {
               <Button
                 className="w-full"
                 disabled={status === "pending" || userCode.trim().length === 0}
+                disabledReason={
+                  status === "pending"
+                    ? t("common.approving")
+                    : t("agentClaim.codeLabel")
+                }
                 loading={status === "pending"}
                 type="submit"
               >

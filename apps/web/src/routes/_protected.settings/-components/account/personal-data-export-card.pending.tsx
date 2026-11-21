@@ -1,25 +1,25 @@
 import type { ReactNode } from "react";
 
 import { ButtonFace } from "@stll/ui/control-face";
-import { FramePanel } from "@stll/ui/frame";
+import { SettingsPanel } from "@stll/ui/settings";
 
 import { PendingText } from "@/components/pending-text";
-import { SettingsCardPending } from "@/routes/_protected.settings/-components/settings-card.pending";
+import { SettingsSectionPending } from "@/routes/_protected.settings/-components/settings-section.pending";
 
-/** The data export card (`PersonalDataExportCard`): header and panel. */
+/** The data export section (`PersonalDataExportCard`): header and panel. */
 export const PersonalDataExportCardFrame = ({
   children,
 }: {
   children: ReactNode;
 }) => (
-  <SettingsCardPending
+  <SettingsSectionPending
     description="settings.account.personalDataExportDescription"
     title="settings.account.personalDataExportTitle"
   >
-    <FramePanel>
-      <div className="flex flex-col items-start gap-3 p-4">{children}</div>
-    </FramePanel>
-  </SettingsCardPending>
+    <SettingsPanel>
+      <div className="flex flex-col items-start gap-3">{children}</div>
+    </SettingsPanel>
+  </SettingsSectionPending>
 );
 
 /**
@@ -35,7 +35,7 @@ export const PersonalDataExportStatusPending = () => (
   </ButtonFace>
 );
 
-/** The card in its pending phase. */
+/** The section in its pending phase. */
 export const PersonalDataExportCardPending = () => (
   <PersonalDataExportCardFrame>
     <PersonalDataExportStatusPending />

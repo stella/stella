@@ -61,6 +61,31 @@ type AnswerRevisionHistoryProps = {
   onAnswerEdited?: ((messageId: string) => Promise<void>) | undefined;
 };
 
+type RevisionRestoreDisabledReasonOptions = {
+  canRestore: boolean;
+  disabled: boolean;
+  t: (
+    key:
+      | "chat.answerEdit.restoringUnavailable"
+      | "chat.answerEdit.waitForAnswer"
+      | "common.restoring",
+  ) => string;
+};
+
+const revisionRestoreDisabledReason = ({
+  canRestore,
+  disabled,
+  t,
+}: RevisionRestoreDisabledReasonOptions) => {
+  if (!canRestore) {
+    return t("chat.answerEdit.restoringUnavailable");
+  }
+  if (disabled) {
+    return t("chat.answerEdit.waitForAnswer");
+  }
+  return t("common.restoring");
+};
+
 export const AnswerRevisionHistoryContent = ({
   threadId,
   messageId,
@@ -93,6 +118,11 @@ export const AnswerRevisionHistoryContent = ({
     (writeState.status === "awaiting-revision" &&
       revision >= writeState.revision)
   );
+  const restoreDisabledReason = revisionRestoreDisabledReason({
+    canRestore: onAnswerEdited !== undefined,
+    disabled,
+    t,
+  });
   const restore = async (toRevision: number) => {
     if (disabled || onAnswerEdited === undefined || writeBlocked) {
       return;
@@ -284,6 +314,7 @@ export const AnswerRevisionHistoryContent = ({
                                 onAnswerEdited === undefined ||
                                 writeBlocked
                               }
+                              disabledReason={restoreDisabledReason}
                               onClick={() =>
                                 detached(
                                   restore(row.revision),
@@ -304,6 +335,7 @@ export const AnswerRevisionHistoryContent = ({
                     size="sm"
                     variant="ghost"
                     disabled={query.isFetchingNextPage}
+                    disabledReason={t("common.loading")}
                     onClick={() =>
                       detached(query.fetchNextPage(), "answer-history.more")
                     }

@@ -185,6 +185,7 @@ export const SearchCaseLawResults = ({
           <Button
             className="min-h-11"
             disabled={result.isFetchingNextPage}
+            disabledReason={t("caseLaw.loadingMore")}
             onClick={() =>
               detached(result.fetchNextPage(), "search-case-law.load-more")
             }

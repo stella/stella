@@ -21,25 +21,25 @@
     "subject": "{documentType, select, credit_note {الإشعار الدائن} advance {فاتورة الدفعة المقدمة} other {الفاتورة}} {invoiceNumber} من {firmName}"
   },
   "newDeviceLogin": {
-    "action": "مراجعة الجلسات",
-    "body": "تم تسجيل الدخول إلى حسابك من جهاز أو موقع جديد.",
+    "action": "مراجعة الأجهزة المسجَّل الدخول منها",
+    "body": "سُجِّل الدخول إلى حسابك للتو من جهاز أو موقع جديد.",
     "device": "الجهاز",
     "deviceName": {
       "browserOnOs": "{browser} على {os}",
       "unknown": "جهاز غير معروف"
     },
-    "heading": "تم رصد تسجيل دخول جديد",
-    "ignore": "إذا كنت أنت من قام بذلك، فلا حاجة لاتخاذ أي إجراء. وإذا لم تتعرّف على هذا النشاط، فراجع جلساتك النشطة وألغِ أي جلسة لا تتعرّف عليها.",
+    "heading": "تسجيل دخول جديد إلى حسابك",
+    "ignore": "إذا كنت أنت، فلا داعي لأي إجراء. وإذا لم تتعرّف على تسجيل الدخول هذا، فسجِّل خروج هذا الجهاز.",
     "ipAddress": "عنوان IP",
     "ipAddressUnknown": "غير معروف",
-    "location": "الموقع التقريبي",
-    "locationNote": "يُقدَّر الموقع استنادًا إلى عنوان IP وقد لا يكون دقيقًا.",
+    "location": "الموقع",
     "mapAlt": "خريطة تُظهر الموقع التقريبي لتسجيل الدخول: {location}",
     "place": {
       "cityCountry": "{city}، {country}",
       "cityRegionCountry": "{city}، {region}، {country}",
       "regionCountry": "{region}، {country}"
     },
+    "placeApproximate": "{place} (تقريبًا)",
     "preview": "تسجيل دخول جديد من {device}",
     "previewUnknownDevice": "تسجيل دخول جديد من جهاز غير معروف",
     "subject": "تسجيل دخول جديد إلى حساب stella الخاص بك",
@@ -63,7 +63,7 @@
     "flowRunAwaitingApproval": "مسار عمل بانتظار موافقتك",
     "flowRunCompleted": "اكتمل مسار عمل",
     "flowRunFailed": "فشل مسار عمل",
-    "localRunLimitReset": "يمكن لوكيل البرمجة على حاسوبك متابعة محادثتك",
+    "localRunLimitReset": "يمكن لوكيل البرمجة على حاسوبك متابعة دردشتك",
     "mention": "تمت الإشارة إليك في تعليق",
     "taskAssigned": "تم إسناد مهمة إليك"
   },

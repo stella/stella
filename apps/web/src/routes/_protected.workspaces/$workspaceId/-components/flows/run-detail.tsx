@@ -186,6 +186,7 @@ const RunDetailContent = ({
                 </AlertDialogClose>
                 <Button
                   disabled={cancelling}
+                  disabledReason={t("common.cancelling")}
                   onClick={() => {
                     detached(handleCancel(), "run-detail.cancel");
                   }}
@@ -449,6 +450,9 @@ const ReviewGateCard = ({
       <div className="flex justify-end gap-2">
         <Button
           disabled={!canReview || submitting}
+          disabledReason={
+            submitting ? t("common.saving") : t("errors.api.forbidden")
+          }
           onClick={() => {
             detached(submit("rejected"), "run-detail.submit");
           }}
@@ -459,6 +463,9 @@ const ReviewGateCard = ({
         </Button>
         <Button
           disabled={!canReview || submitting}
+          disabledReason={
+            submitting ? t("common.saving") : t("errors.api.forbidden")
+          }
           loading={submitting}
           onClick={() => {
             detached(submit("approved"), "run-detail.submit");

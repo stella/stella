@@ -1,9 +1,10 @@
 import type { ReactNode } from "react";
 
 import { CheckboxFace, FieldFace, LabelFace } from "@stll/ui/control-face";
-import { Frame, FramePanel } from "@stll/ui/frame";
+import { SettingsPanel } from "@stll/ui/settings";
 
 import { PendingText } from "@/components/pending-text";
+import { SettingsSectionPending } from "@/routes/_protected.settings/-components/settings-section.pending";
 
 /*
  * The billing drafts card (`BillingDraftsCard`), beside its pending phase:
@@ -19,25 +20,14 @@ export const BillingDraftsCardFrame = ({
   /** The card's controls under its heading. */
   children: ReactNode;
 }) => (
-  <Frame>
-    <FramePanel>
-      <div className="flex flex-col gap-4">
-        <h2 className="text-sm font-medium">
-          <PendingText
-            barClassName="w-32"
-            id="settings.organization.billingDrafts.title"
-          />
-        </h2>
-        <p className="text-muted-foreground text-xs">
-          <PendingText
-            barClassName="w-80 max-w-full"
-            id="settings.organization.billingDrafts.description"
-          />
-        </p>
-        {children}
-      </div>
-    </FramePanel>
-  </Frame>
+  <SettingsSectionPending
+    description="settings.organization.billingDrafts.description"
+    title="settings.organization.billingDrafts.title"
+  >
+    <SettingsPanel>
+      <div className="flex flex-col gap-4">{children}</div>
+    </SettingsPanel>
+  </SettingsSectionPending>
 );
 
 /** The billing drafts card while its configuration is read. */

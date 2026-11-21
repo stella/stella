@@ -45,6 +45,7 @@ import {
 import { PromptEditorContent } from "@/components/prompt-editor";
 import { ReferenceRenderScope } from "@/components/references/reference-chip";
 import { RenderStormRegion } from "@/components/render-storm-canary";
+import { useAISendBlockReason } from "@/components/require-ai-key";
 import { guideAnchor } from "@/features/guides/guide-anchor";
 import { GUIDE_ANCHORS } from "@/features/guides/guide-anchors";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
@@ -146,28 +147,51 @@ type ChatInputSurfaceProps = {
   mcpOrganizationId?: string | undefined;
 };
 
-/**
- * What the disabled Send and Improve prompt buttons say instead of their
- * labels. Only the empty draft is this surface's to explain; a caller that
- * disables input or sending owns that message. `t` is typed to the keys it
- * reads, so the full message tree is not re-instantiated here.
- */
-const composerDisabledReasons = ({
-  canSubmit,
-  inputDisabled,
-  isBlank,
-  submitDisabled,
-  t,
-}: {
-  canSubmit: boolean;
+type ChatComposerDisabledReasonsOptions = {
   inputDisabled: boolean;
   isBlank: boolean;
+  sendDisabled: boolean | undefined;
   submitDisabled: boolean;
-  t: (key: "chat.improvePromptEmpty" | "chat.sendPromptEmpty") => string;
-}) => ({
-  improve: !inputDisabled && isBlank ? t("chat.improvePromptEmpty") : undefined,
-  send: !submitDisabled && !canSubmit ? t("chat.sendPromptEmpty") : undefined,
-});
+  aiSendBlockReason: string | undefined;
+  t: (
+    key:
+      | "chat.composer.waitForChat"
+      | "chat.sendPromptEmpty"
+      | "chat.improvePromptEmpty",
+  ) => string;
+};
+
+const chatComposerDisabledReasons = ({
+  inputDisabled,
+  isBlank,
+  sendDisabled,
+  submitDisabled,
+  aiSendBlockReason,
+  t,
+}: ChatComposerDisabledReasonsOptions) => {
+  let improveReason: string | undefined;
+  if (inputDisabled) {
+    improveReason = t("chat.composer.waitForChat");
+  } else if (isBlank) {
+    improveReason = t("chat.improvePromptEmpty");
+  }
+  if (sendDisabled && aiSendBlockReason !== undefined) {
+    return {
+      sendDisabledReason: aiSendBlockReason,
+      improvePromptDisabledReason: improveReason,
+    };
+  }
+  if (submitDisabled) {
+    return {
+      sendDisabledReason: t("chat.composer.waitForChat"),
+      improvePromptDisabledReason: improveReason,
+    };
+  }
+  return {
+    sendDisabledReason: t("chat.sendPromptEmpty"),
+    improvePromptDisabledReason: improveReason,
+  };
+};
 
 export const ChatInputSurface = ({
   autoFocus,
@@ -216,6 +240,7 @@ export const ChatInputSurface = ({
   // the response finishes, so overlapping requests can't happen.
   const submitDisabled = Boolean(disabled || sendDisabled);
   const canSend = !submitDisabled && canSubmit;
+  const aiSendBlockReason = useAISendBlockReason();
 
   // A failed send has already restored the draft (see `submit` in
   // chat-editor-provider), so the only thing missing is a user-visible
@@ -260,13 +285,15 @@ export const ChatInputSurface = ({
   };
 
   const isBlank = isEmpty && attachments.length === 0;
-  const disabledReasons = composerDisabledReasons({
-    canSubmit,
-    inputDisabled,
-    isBlank,
-    submitDisabled,
-    t,
-  });
+  const { sendDisabledReason, improvePromptDisabledReason } =
+    chatComposerDisabledReasons({
+      inputDisabled,
+      isBlank,
+      sendDisabled,
+      submitDisabled,
+      aiSendBlockReason,
+      t,
+    });
   // Compact rows seat every control in the shared slot so it centres on the
   // text line; the large variant lays its controls out in a plain action row.
   const ControlGroup = variant === "compact" ? ComposerControlSlot : "div";
@@ -406,7 +433,7 @@ export const ChatInputSurface = ({
                     anonymized={anonymized}
                     controller={controller}
                     disabled={inputDisabled || isBlank}
-                    disabledReason={disabledReasons.improve}
+                    disabledReason={improvePromptDisabledReason}
                   />
                 </span>
                 {/* The single primary affordance morphs in place: the button
@@ -415,11 +442,12 @@ export const ChatInputSurface = ({
                 <ChatComposerQueueButton
                   canSend={canSend}
                   offered={queueOffered}
+                  sendDisabledReason={sendDisabledReason}
                   submitDraft={submitDraft}
                 />
                 <ChatComposerActionButton
                   canSend={canSend}
-                  disabledReason={disabledReasons.send}
+                  disabledReason={sendDisabledReason}
                   guideAnchorsEnabled={guideAnchorsEnabled}
                   isGenerating={isGenerating}
                   onSend={() => {

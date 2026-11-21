@@ -639,6 +639,7 @@ const EntityViewContent = ({
           size="sm"
           variant="ghost"
           disabled={loadingMore}
+          disabledReason={t("caseLaw.loadingMore")}
           onClick={onLoadMore}
         >
           {t(loadingMore ? "common.loading" : "common.loadMore")}

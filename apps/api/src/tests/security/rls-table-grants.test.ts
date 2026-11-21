@@ -235,6 +235,9 @@ const POST_BOOTSTRAP_SCOPED_HANDOFF_TABLES = new Set([
 // apply. Their migration must REVOKE ALL from stella instead.
 const POST_BOOTSTRAP_DENY_STELLA_TABLES = new Set([
   "organization_creation_requests",
+  // Sign-in locations and review state: auth data read and written only by
+  // the owner connection, scoped to the authenticated user in each query.
+  "session_sign_ins",
   // Work-identifier aliases are served through the public-law reader; the
   // request role has no direct access to this ingestion-owned relation.
   "legislation_work_identifiers",
@@ -322,6 +325,10 @@ const POST_BOOTSTRAP_DENY_STELLA_TABLES = new Set([
   "oauth_grant_revocations",
   "mcp_web_handoff",
   "service_oauth_clients",
+  // Organization SSO providers (sealed client secrets) and policies: read
+  // only by the auth layer on the owner connection.
+  "sso_provider",
+  "organization_sso_policy",
   // Machine API keys: credential digests plus the permission set each key
   // carries. A tenant-scoped connection must be able to neither read a digest
   // nor widen a key's permissions, so every access goes through better-auth on

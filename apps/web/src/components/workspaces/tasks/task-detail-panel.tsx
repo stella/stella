@@ -802,6 +802,7 @@ const TaskDetailPanelContent = ({
                     </span>
                     <Button
                       disabled={workflowActionMutation.isPending}
+                      disabledReason={tCommon("saving")}
                       onClick={() =>
                         workflowActionMutation.mutate({ type: "acknowledge" })
                       }
@@ -817,6 +818,7 @@ const TaskDetailPanelContent = ({
                   workflow.status === "cancelled") && (
                   <Button
                     disabled={workflowActionMutation.isPending}
+                    disabledReason={tCommon("saving")}
                     onClick={() =>
                       workflowActionMutation.mutate({
                         type: "transition",

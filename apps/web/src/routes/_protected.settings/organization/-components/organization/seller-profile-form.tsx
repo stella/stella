@@ -213,11 +213,16 @@ export const SellerProfileForm = ({
           type="button"
           variant="outline"
           disabled={disabled}
+          disabledReason={t("common.saving")}
           onClick={onCancel}
         >
           {t("common.cancel")}
         </Button>
-        <Button type="submit" disabled={disabled}>
+        <Button
+          type="submit"
+          disabled={disabled}
+          disabledReason={t("common.saving")}
+        >
           {t("common.save")}
         </Button>
       </DialogFooter>

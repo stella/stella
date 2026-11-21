@@ -60,6 +60,7 @@ import {
   createTestHandlerContext,
   NO_AUDIT,
 } from "@/api/tests/helpers/handler-context";
+import { CREDENTIAL_AUTHENTICATION } from "@/api/tests/helpers/member-authorization";
 import { deleteOrganizationsForTest } from "@/api/tests/helpers/organization-deletion";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { writeScalingViolations } from "@/api/tests/read-scaling/measurement";
@@ -269,7 +270,11 @@ const contextForActor = async ({
   actor,
 }: ActorContextOptions) => {
   const membership = await resolveMemberAuthorization(
-    { organizationId, userId: actor.userId },
+    {
+      authentication: CREDENTIAL_AUTHENTICATION,
+      organizationId,
+      userId: actor.userId,
+    },
     db,
   );
   if (!membership) {

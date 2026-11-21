@@ -551,6 +551,7 @@ const DocxFinalizeButton = ({
     <Button
       className={cn(isCollaborating && "min-h-11")}
       disabled={isCollaborating && !isCollaborationPublishable}
+      disabledReason={t("folio.syncing")}
       onClick={() => {
         const finalize = docxActionsRef.current.get(tabId)?.finalize();
         if (finalize) {

@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 
 import { ButtonFace, FaceLabelPending } from "@stll/ui/control-face";
-import { Frame, FramePanel } from "@stll/ui/frame";
+import { SettingsPanel, SettingsSection } from "@stll/ui/settings";
 import { cn } from "@stll/ui/utils";
 
 /** The state tile's box; the card adds its tone. */
@@ -30,9 +30,9 @@ export const DesktopConnectionCardFrame = ({
   tile,
   title,
 }: DesktopConnectionCardFrameProps) => (
-  <Frame>
-    <FramePanel>
-      <div className="flex flex-col gap-4 p-1 sm:flex-row sm:items-center">
+  <SettingsSection>
+    <SettingsPanel>
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
         {tile}
         <div className="min-w-0 flex-1">
           <h2 className="text-base font-semibold text-balance">{title}</h2>
@@ -45,8 +45,8 @@ export const DesktopConnectionCardFrame = ({
         </div>
       </div>
       {children}
-    </FramePanel>
-  </Frame>
+    </SettingsPanel>
+  </SettingsSection>
 );
 
 /**

@@ -6,6 +6,7 @@ import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment
 GlobalRegistrator.register();
 const { cleanup, fireEvent, render } = await import("@testing-library/react");
 const { Button } = await import("./button");
+const { SplitButton } = await import("./split-button");
 
 afterAll(async () => {
   cleanup();
@@ -93,4 +94,113 @@ test("labels that wrap, sit in a sentence or lay out their own content are not c
     expect(button.querySelector('[data-slot="button-label"]')).toBeNull();
     expect(button.classList.contains("max-w-full")).toBe(true);
   }
+});
+
+test("focus stays on a button as its disabled reason appears and clears", () => {
+  const action = (disabled: boolean) => (
+    <Button
+      disabled={disabled}
+      disabledReason={disabled ? "Saving changes…" : undefined}
+    >
+      Save changes
+    </Button>
+  );
+  const view = render(action(false));
+  const button = view.getByRole("button", { name: "Save changes" });
+  button.focus();
+  for (const disabled of [true, false]) {
+    view.rerender(action(disabled));
+    expect(document.activeElement).toBe(button);
+    expect(button.getAttribute("aria-disabled")).toBe(disabled ? "true" : null);
+  }
+});
+
+test("the split primary keeps focus as its disabled reason appears and clears", () => {
+  const action = (reason: string | undefined) => (
+    <SplitButton
+      menu={null}
+      menuLabel="More create options"
+      onPrimaryClick={() => undefined}
+      primaryDisabledReason={reason}
+    >
+      Create document
+    </SplitButton>
+  );
+  const view = render(action(undefined));
+  const button = view.getByRole("button", { name: "Create document" });
+  button.focus();
+  for (const reason of ["A document is being created.", undefined]) {
+    view.rerender(action(reason));
+    expect(document.activeElement).toBe(button);
+    expect(button.getAttribute("aria-disabled")).toBe(reason ? "true" : null);
+  }
+});
+
+test("a disabled reason composes with descriptions without remounting the button", () => {
+  const action = (
+    disabled: boolean,
+    rich: boolean,
+    renderHelp = "render-help",
+  ) => (
+    <>
+      <span id="button-help">This changes your account.</span>
+      <span id="render-help">Only on this device.</span>
+      <span id="different-help">Use the managed account.</span>
+      <Button
+        aria-describedby="button-help"
+        disabled={disabled}
+        disabledReason={
+          rich ? (
+            <span id="formatted-reason">
+              Wait for <strong>verification</strong>
+            </span>
+          ) : (
+            "Saving changes."
+          )
+        }
+        render={<button type="button" aria-describedby={renderHelp} />}
+      >
+        Save
+      </Button>
+    </>
+  );
+  const view = render(action(false, false));
+  const button = view.getByRole("button", { name: "Save" });
+  button.focus();
+
+  view.rerender(action(true, false));
+  expect(
+    view.getByRole("button", {
+      name: "Save",
+      description:
+        "This changes your account. Only on this device. Saving changes.",
+    }),
+  ).toBe(button);
+  expect(document.activeElement).toBe(button);
+
+  view.rerender(action(true, true));
+  expect(
+    view.getByRole("button", {
+      name: "Save",
+      description:
+        "This changes your account. Only on this device. Wait for verification",
+    }),
+  ).toBe(button);
+  expect(document.querySelectorAll("#formatted-reason")).toHaveLength(1);
+  expect(document.activeElement).toBe(button);
+
+  view.rerender(action(true, true, "different-help"));
+  expect(
+    view.getByRole("button", {
+      name: "Save",
+      description:
+        "This changes your account. Use the managed account. Wait for verification",
+    }),
+  ).toBe(button);
+  expect(document.activeElement).toBe(button);
+
+  view.rerender(action(false, true, "different-help"));
+  expect(button.getAttribute("aria-describedby")).toBe("different-help");
+  expect(document.querySelector("#formatted-reason")).toBeNull();
+  expect(document.activeElement).toBe(button);
 });

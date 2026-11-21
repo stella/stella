@@ -12,17 +12,9 @@ import { useTranslations } from "use-intl";
 import { Temporal } from "@stll/time";
 import { Button } from "@stll/ui/button";
 import { DetailsGrid, DetailsItem } from "@stll/ui/details-grid";
-import {
-  Frame,
-  FrameDescription,
-  FrameHeader,
-  FramePanel,
-  FrameTitle,
-} from "@stll/ui/frame";
+import { FrameDescription, FrameTitle } from "@stll/ui/frame";
 import { DownloadIcon } from "@stll/ui/icons";
 import { OutcomeScreen } from "@stll/ui/outcome-screen";
-import { Skeleton } from "@stll/ui/skeleton";
-import { cn } from "@stll/ui/utils";
 
 import { useFormatter } from "@/i18n/formatting-context";
 import { invoiceLinkDownload, invoiceLinkView } from "@/lib/api";
@@ -42,6 +34,12 @@ import {
   qrImageSource,
 } from "./-invoice-link.logic";
 import type { InvoiceLinkFile } from "./-invoice-link.logic";
+import {
+  InvoiceFact,
+  InvoiceLinkShell,
+  InvoiceSummaryPending,
+  InvoiceSummaryShape,
+} from "./-invoice-link.pending";
 
 /** The `invoiceLink` message stating each settled outcome. */
 const SETTLEMENT_STATEMENT = {
@@ -102,11 +100,9 @@ export function InvoiceLinkPage() {
   const invoice = useQuery(invoiceLinkViewOptions(token));
 
   return (
-    <div className="flex min-h-full flex-1 justify-center px-4 py-10">
-      <div className="w-full max-w-xl">
-        <InvoiceLinkBody invoice={invoice} token={token} />
-      </div>
-    </div>
+    <InvoiceLinkShell>
+      <InvoiceLinkBody invoice={invoice} token={token} />
+    </InvoiceLinkShell>
   );
 }
 
@@ -121,7 +117,7 @@ const InvoiceLinkBody = ({
     return <InvoiceLinkUnavailable reason="unavailable" />;
   }
   if (invoice.isPending) {
-    return <InvoiceLinkSkeleton />;
+    return <InvoiceSummaryPending />;
   }
   if (invoice.isError) {
     return (
@@ -133,20 +129,6 @@ const InvoiceLinkBody = ({
   }
   return <InvoiceSummary invoice={invoice.data} token={token} />;
 };
-
-const InvoiceLinkSkeleton = () => (
-  <Frame>
-    <FrameHeader>
-      <Skeleton className="h-6 w-48" />
-      <Skeleton className="mt-2 h-4 w-32" />
-    </FrameHeader>
-    <FramePanel className="flex flex-col gap-3">
-      <Skeleton className="h-4 w-full" />
-      <Skeleton className="h-4 w-2/3" />
-      <Skeleton className="h-9 w-40" />
-    </FramePanel>
-  </Frame>
-);
 
 const InvoiceLinkUnavailable = ({
   reason,
@@ -201,16 +183,14 @@ export const InvoiceSummary = ({
   const { eInvoice } = invoice.files;
 
   return (
-    <Frame>
-      <FrameHeader>
-        <div dir={invoice.dir} lang={invoice.language}>
-          <FrameTitle>{invoice.title}</FrameTitle>
-          {invoice.seller === null ? null : (
-            <FrameDescription>{invoice.seller}</FrameDescription>
-          )}
-        </div>
-      </FrameHeader>
-      <FramePanel className="flex flex-col gap-5">
+    <InvoiceSummaryShape
+      expiry={t("validUntil", {
+        date: format.dateTime(
+          Temporal.Instant.from(invoice.expiresAt).epochMilliseconds,
+          { dateStyle: "long" },
+        ),
+      })}
+      facts={
         <div
           className="flex flex-col gap-4"
           dir={invoice.dir}
@@ -221,34 +201,23 @@ export const InvoiceSummary = ({
           )}
           <DetailsGrid>
             {invoice.meta.map((field) => (
-              <DetailsItem key={field.label} label={field.label}>
-                <span className="tabular-nums">{field.value}</span>
-              </DetailsItem>
+              <InvoiceFact
+                emphasis="none"
+                key={field.label}
+                label={field.label}
+                value={field.value}
+              />
             ))}
-            {invoice.totals.map((field, index) => {
-              const isAmountDue = index === invoice.totals.length - 1;
-              return (
-                <DetailsItem
-                  key={field.label}
-                  label={
-                    isAmountDue ? (
-                      <span className="font-semibold">{field.label}</span>
-                    ) : (
-                      field.label
-                    )
-                  }
-                >
-                  <span
-                    className={cn(
-                      "tabular-nums",
-                      isAmountDue && "font-semibold",
-                    )}
-                  >
-                    {field.value}
-                  </span>
-                </DetailsItem>
-              );
-            })}
+            {invoice.totals.map((field, index) => (
+              <InvoiceFact
+                emphasis={
+                  index === invoice.totals.length - 1 ? "amount-due" : "none"
+                }
+                key={field.label}
+                label={field.label}
+                value={field.value}
+              />
+            ))}
           </DetailsGrid>
           {invoice.settlement.kind === "open" ? null : (
             <p className="text-sm font-medium">
@@ -286,7 +255,9 @@ export const InvoiceSummary = ({
             </section>
           )}
         </div>
-        <div className="flex flex-wrap gap-2">
+      }
+      files={
+        <>
           <Button
             loading={download.isPending && download.variables.file === "pdf"}
             onClick={() =>
@@ -316,16 +287,16 @@ export const InvoiceSummary = ({
               {t(`downloadEInvoice.${eInvoice.format}`)}
             </Button>
           )}
+        </>
+      }
+      header={
+        <div dir={invoice.dir} lang={invoice.language}>
+          <FrameTitle>{invoice.title}</FrameTitle>
+          {invoice.seller === null ? null : (
+            <FrameDescription>{invoice.seller}</FrameDescription>
+          )}
         </div>
-        <p className="text-muted-foreground text-xs">
-          {t("validUntil", {
-            date: format.dateTime(
-              Temporal.Instant.from(invoice.expiresAt).epochMilliseconds,
-              { dateStyle: "long" },
-            ),
-          })}
-        </p>
-      </FramePanel>
-    </Frame>
+      }
+    />
   );
 };

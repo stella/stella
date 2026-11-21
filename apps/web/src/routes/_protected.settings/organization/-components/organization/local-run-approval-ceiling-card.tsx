@@ -7,7 +7,6 @@ import {
   CHAT_LOCAL_RUN_APPROVAL_CEILINGS,
   type ChatLocalRunApprovalCeiling,
 } from "@stll/api-contract/chat-run-target";
-import { Frame, FramePanel } from "@stll/ui/frame";
 import { Label } from "@stll/ui/label";
 import {
   Select,
@@ -16,6 +15,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@stll/ui/select";
+import { SettingsRow, SettingsSection } from "@stll/ui/settings";
 
 import { LOCAL_RUN_PERMISSION_KEYS } from "@/components/chat/chat-run-target-menu.logic";
 import { chatKeys } from "@/features/chat/chat-query-contract";
@@ -107,42 +107,43 @@ export const LocalRunApprovalCeilingCard = () => {
   const selected = settingsView.items.localRunMaxApprovalMode;
 
   return (
-    <Frame>
-      <FramePanel>
-        <div className="flex flex-col gap-3 p-1">
-          <Label className="text-sm font-medium" htmlFor={selectId}>
-            {t("settings.organization.localRuns.title")}
-          </Label>
-          <p className="text-muted-foreground text-xs text-pretty">
-            {t("settings.organization.localRuns.description")}
-          </p>
-          <Select
-            disabled={!canEdit || mutation.isPending}
-            onValueChange={(next) => {
-              if (isApprovalCeiling(next) && next !== selected) {
-                mutation.mutate(next);
-              }
-            }}
-            value={selected}
-          >
-            <SelectTrigger className="w-56" id={selectId}>
-              <SelectValue>
-                {t(LOCAL_RUN_PERMISSION_KEYS[selected].label)}
-              </SelectValue>
-            </SelectTrigger>
-            <SelectPopup>
-              {CHAT_LOCAL_RUN_APPROVAL_CEILINGS.map((mode) => (
-                <SelectItem key={mode} value={mode}>
-                  {t(LOCAL_RUN_PERMISSION_KEYS[mode].label)}
-                </SelectItem>
-              ))}
-            </SelectPopup>
-          </Select>
+    <SettingsSection>
+      <SettingsRow
+        description={t("settings.organization.localRuns.description")}
+        footer={
           <p className="text-muted-foreground text-2xs text-pretty">
             {t(LOCAL_RUN_PERMISSION_KEYS[selected].description)}
           </p>
-        </div>
-      </FramePanel>
-    </Frame>
+        }
+        title={
+          <Label className="text-sm font-medium" htmlFor={selectId}>
+            {t("settings.organization.localRuns.title")}
+          </Label>
+        }
+      >
+        <Select
+          disabled={!canEdit || mutation.isPending}
+          onValueChange={(next) => {
+            if (isApprovalCeiling(next) && next !== selected) {
+              mutation.mutate(next);
+            }
+          }}
+          value={selected}
+        >
+          <SelectTrigger className="w-56" id={selectId}>
+            <SelectValue>
+              {t(LOCAL_RUN_PERMISSION_KEYS[selected].label)}
+            </SelectValue>
+          </SelectTrigger>
+          <SelectPopup>
+            {CHAT_LOCAL_RUN_APPROVAL_CEILINGS.map((mode) => (
+              <SelectItem key={mode} value={mode}>
+                {t(LOCAL_RUN_PERMISSION_KEYS[mode].label)}
+              </SelectItem>
+            ))}
+          </SelectPopup>
+        </Select>
+      </SettingsRow>
+    </SettingsSection>
   );
 };

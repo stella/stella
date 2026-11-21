@@ -94,7 +94,13 @@ export function getRouter() {
     routeTree,
     dehydrate: () =>
       documentPresentationSnapshot(readRequestPresentationPrefs()),
-    hydrate: restoreHydratedDocumentPresentation,
+    hydrate: async (snapshot) => {
+      await restoreHydratedDocumentPresentation(snapshot);
+      // A member page's root does not load on the server, so its document is
+      // painted from the router's context; the hydrating matches take the
+      // same snapshot, before any match is built.
+      router.options.context.presentationPrefs = snapshot.prefs;
+    },
     defaultPreload: "intent",
     // A scalar param reaches its schema as the URL's text, never as a number
     // or a boolean the default guessed from it.
@@ -104,7 +110,13 @@ export function getRouter() {
       analyticsValue,
       queryClient,
       routeErrorLifecycle,
-      presentationPrefs: defaultPresentationPrefs,
+      // The request's presentation on the server: a page whose root does not
+      // load there (every member page) still paints the member's theme,
+      // direction and frame. The browser takes the dehydrated snapshot of the
+      // same cookie in `hydrate`.
+      presentationPrefs: import.meta.env.SSR
+        ? readRequestPresentationPrefs()
+        : defaultPresentationPrefs,
     },
     defaultOnCatch: createRouteCatchHandler(routeErrorLifecycle, () =>
       readCaughtRouteTemplate(),

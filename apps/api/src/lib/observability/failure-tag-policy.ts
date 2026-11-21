@@ -500,6 +500,7 @@ export const TAGGED_FAILURE_REASON = {
   SesInboundError: "tagged_failure",
   SharedPostgresDockerError: "tagged_failure",
   SharedTestPostgresError: "tagged_failure",
+  SignInMapCountryUnresolvedError: "tagged_failure",
   SkCollectionIssueError: "tagged_failure",
   SkDocumentRawMissingError: "tagged_failure",
   SkDocumentRawStorageError: "tagged_failure",

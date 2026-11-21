@@ -19,7 +19,7 @@ const SplitButtonFixture = () => {
     menuLabel: "More document actions",
     primaryDescriptionId: "primary-description",
     menuDescriptionId: "menu-description",
-    primaryDisabled: params.get("disabled") === "primary",
+    primaryDisabledReason: params.get("disabled") === "primary" ? "A document is already being created." : undefined,
     menuDisabled: params.get("disabled") === "menu",
     size: params.get("size") === "sm" ? "sm" : "md",
     open,

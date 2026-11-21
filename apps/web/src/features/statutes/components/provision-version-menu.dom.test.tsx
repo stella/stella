@@ -266,18 +266,25 @@ test("a grouped row lists the act's versions inside it from a keyboard-reachable
     throw new Error("Expected the grouped row");
   }
   const members = within(row).getAllByRole("listitem");
-  expect(members.map((member) => member.textContent)).toEqual([
+  const versionNames = [
     "Jan 1, 2099 – Dec 31, 2099",
     "Jan 1, 2026 – Dec 31, 2098",
     "Jan 1, 2025 – Dec 31, 2025",
     "Jan 1, 2024 – Dec 31, 2024",
-  ]);
+  ];
+  const versionButtons = members.map((member) =>
+    within(member).getByRole("button"),
+  );
+  expect(versionButtons).toEqual(
+    versionNames.map((name) => within(row).getByRole("button", { name })),
+  );
   // The version on screen is marked and cannot be reopened; another one
   // inside the run opens.
   const onScreen = within(row).getByRole("button", {
     name: "Jan 1, 2026 – Dec 31, 2098",
   });
   expect(onScreen.getAttribute("aria-current")).toBe("true");
+  expect(onScreen.getAttribute("aria-disabled")).toBe("true");
   fireEvent.click(
     within(row).getByRole("button", { name: "Jan 1, 2025 – Dec 31, 2025" }),
   );

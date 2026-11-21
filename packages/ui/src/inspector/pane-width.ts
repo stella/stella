@@ -75,6 +75,18 @@ type InspectorPaneWidthInput = {
 };
 
 /**
+ * The pane's two viewport-relative ceilings, as what each leaves out of the
+ * viewport's width. Both bind. The readable one ignores the sidebar, which
+ * yields its width before the pane has to (see `shouldForceSidebarCollapsed`);
+ * the available one is what is actually left in the row once the sidebar has
+ * taken its share.
+ */
+const paneCeilingOffsets = (sidebarWidth: number) => [
+  INSPECTOR_EDITOR_MIN_WIDTH,
+  sidebarWidth + INSPECTOR_CONTENT_MIN_WIDTH,
+];
+
+/**
  * Largest width the pane may take without starving the content column.
  * Never returns less than {@link INSPECTOR_PANE_MIN_WIDTH}: a pane too
  * narrow to read is no better than a content column too narrow to read,
@@ -89,15 +101,14 @@ export const resolveInspectorPaneMaxWidth = ({
     return INSPECTOR_PANE_MIN_WIDTH;
   }
 
-  // Two ceilings, both binding. `readable` is viewport-relative and ignores
-  // the sidebar, which yields its width before the pane has to (see
-  // `shouldForceSidebarCollapsed`); `available` is what is actually left in
-  // the row once the sidebar has taken its share.
-  const readable = viewportWidth - INSPECTOR_EDITOR_MIN_WIDTH;
-  const available = viewportWidth - sidebarWidth - INSPECTOR_CONTENT_MIN_WIDTH;
   return Math.max(
     INSPECTOR_PANE_MIN_WIDTH,
-    Math.min(INSPECTOR_PANE_MAX_WIDTH, readable, available),
+    Math.min(
+      INSPECTOR_PANE_MAX_WIDTH,
+      ...paneCeilingOffsets(sidebarWidth).map(
+        (offset) => viewportWidth - offset,
+      ),
+    ),
   );
 };
 
@@ -128,6 +139,24 @@ export const resolveInspectorPaneWidth = ({
     clampInspectorPaneWidth(desiredWidth),
     resolveInspectorPaneMaxWidth({ sidebarWidth, viewportWidth }),
   );
+
+/**
+ * `resolveInspectorPaneWidth` as CSS, for a frame drawn before the viewport
+ * is known (a server's paint, and the hydration of it): the same bounds and
+ * ceilings with `100vw` for the viewport's width, so the pane the frame
+ * reserves is the width the measured pane takes at any viewport.
+ */
+export const inspectorPaneWidthCss = ({
+  desiredWidth,
+  sidebarWidth,
+}: Omit<InspectorPaneWidthInput, "viewportWidth">): string => {
+  const ceilings = paneCeilingOffsets(sidebarWidth)
+    .map((offset) => `100vw - ${String(offset)}px`)
+    .join(", ");
+  return `min(${String(clampInspectorPaneWidth(desiredWidth))}px, max(${String(
+    INSPECTOR_PANE_MIN_WIDTH,
+  )}px, min(${String(INSPECTOR_PANE_MAX_WIDTH)}px, ${ceilings})))`;
+};
 
 /**
  * Width the dock reserves in the layout: the full pane while content is

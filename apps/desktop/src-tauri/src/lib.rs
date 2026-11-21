@@ -111,6 +111,7 @@ mod sse;
 mod test_child_processes;
 mod time_entry_commands;
 mod time_entry_submit;
+mod transcribe_history;
 mod transcribe_recording;
 mod transcribe_window;
 mod tray;
@@ -244,6 +245,7 @@ pub fn run() {
     .manage(clipboard_window::ClipboardStartupTrace::default())
     .manage(dictation::DictationState::load())
     .manage(transcribe_recording::TranscribeState::default())
+    .manage(transcribe_history::TranscribeHistoryState::default())
     .manage(dictation_notice::DictationNotice::default())
     .manage(dictation_microphone::MicrophoneTest::default())
     .manage(dictation_preview::PreviewState::new())
@@ -329,6 +331,7 @@ pub fn run() {
       chatgpt_auth_commands::manage(&handle);
       claude_code_auth_commands::manage(&handle);
       activity::start(handle.clone(), Arc::clone(&activity_manager));
+      transcribe_history::start_retention_sweep(handle.clone());
       {
         let manager = Arc::clone(&manager);
         feature_access::start(
@@ -443,9 +446,9 @@ pub fn run() {
                 }
               }
               tray::MenuAction::CheckForUpdates => {
-                let active_edit_sessions = {
-                  let mgr = manager.lock().await;
-                  mgr.has_active_edit_sessions()
+                let sessions = &*manager;
+                let active_edit_sessions = move || async move {
+                  sessions.lock().await.has_active_edit_sessions()
                 };
 
                 match updater::run_check(&handle, active_edit_sessions).await {

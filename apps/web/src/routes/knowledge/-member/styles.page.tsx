@@ -90,7 +90,10 @@ const MemberStyleSetsPage = () => {
   const [editorTarget, setEditorTarget] = useState<StyleSetEditorTarget | null>(
     null,
   );
-  const [busy, setBusy] = useState(false);
+  const [pendingAction, setPendingAction] = useState<
+    "uploading" | "deleting" | null
+  >(null);
+  const busy = pendingAction !== null;
 
   const invalidate = async () => {
     await queryClient.invalidateQueries({
@@ -103,7 +106,7 @@ const MemberStyleSetsPage = () => {
       notifyUserProblem(t("templates.invalidFileType"));
       return;
     }
-    setBusy(true);
+    setPendingAction("uploading");
     const response = await invokeCapability(
       "style-sets.replace",
       async (capability) => {
@@ -113,7 +116,7 @@ const MemberStyleSetsPage = () => {
         return { error };
       },
     );
-    setBusy(false);
+    setPendingAction(null);
     if (response.error) {
       showError(
         t("styleSets.replaceFailed"),
@@ -153,7 +156,7 @@ const MemberStyleSetsPage = () => {
 
   const handleReplace = (target: StyleSetItem, file: File) => {
     replace(target, file).catch((error: unknown) => {
-      setBusy(false);
+      setPendingAction(null);
       showThrownError(
         t("styleSets.replaceFailed"),
         error,
@@ -167,7 +170,7 @@ const MemberStyleSetsPage = () => {
     if (!deleteTarget) {
       return "close";
     }
-    setBusy(true);
+    setPendingAction("deleting");
     const response = await invokeCapability(
       "style-sets.delete",
       async (capability) => {
@@ -177,7 +180,7 @@ const MemberStyleSetsPage = () => {
         return { error };
       },
     );
-    setBusy(false);
+    setPendingAction(null);
     if (response.error) {
       showError(
         t("styleSets.deleteFailed"),
@@ -297,6 +300,11 @@ const MemberStyleSetsPage = () => {
                       <Button
                         aria-label={t("styleSets.replace")}
                         disabled={busy}
+                        disabledReason={t(
+                          pendingAction === "deleting"
+                            ? "common.deleting"
+                            : "common.uploading",
+                        )}
                         onClick={() =>
                           openFilePicker({
                             accept: ".docx",
@@ -474,6 +482,16 @@ const StyleSetFormDialog = ({
     });
   };
 
+  const resolveStyleSetImportDisabledReason = () => {
+    if (saving) {
+      return t(styleSet ? "common.saving" : "common.uploading");
+    }
+    if (name.trim() === "") {
+      return t("common.enterName");
+    }
+    return t("common.selectFile");
+  };
+
   return (
     <Dialog onOpenChange={onOpenChange} open={open}>
       <DialogPopup>
@@ -527,6 +545,7 @@ const StyleSetFormDialog = ({
           </DialogClose>
           <Button
             disabled={saving || name.trim() === "" || (!styleSet && !file)}
+            disabledReason={resolveStyleSetImportDisabledReason()}
             onClick={handleSave}
           >
             {saving ? t("common.loading") : t("common.save")}

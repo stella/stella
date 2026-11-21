@@ -426,7 +426,7 @@
   },
   {
     "id": "no-real-time-wait::apps/extension/e2e/containment.spec.ts::<module>::waitForTimeout",
-    "count": 5,
+    "count": 3,
     "reason": "Predates the rule: a fixed Playwright wait; wait on a locator, response or event instead."
   },
   {

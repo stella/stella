@@ -113,6 +113,18 @@ const OrganizationInstructionsEditor = ({
     onError: () => setEditorRevision((revision) => revision + 1),
   });
 
+  const resolveInstructionsSaveDisabledReason = () => {
+    if (mutation.isPending) {
+      return t("common.saving");
+    }
+    if (tooLong) {
+      return t("organization.aiInstructions.tooLong", {
+        maxLength: format.number(settings.aiInstructionsMaxLength),
+      });
+    }
+    return t("common.noChangesToSave");
+  };
+
   return (
     <>
       <OrganizationInstructionsCardFrame
@@ -147,6 +159,7 @@ const OrganizationInstructionsEditor = ({
               size="sm"
               loading={mutation.isPending}
               disabled={!dirty || tooLong || mutation.isPending}
+              disabledReason={resolveInstructionsSaveDisabledReason()}
               onClick={() => {
                 const next = editor.current?.captureForSave() ?? draft;
                 setDraft(next);
@@ -163,6 +176,11 @@ const OrganizationInstructionsEditor = ({
               size="sm"
               variant="ghost"
               disabled={draft.length === 0 || mutation.isPending}
+              disabledReason={
+                mutation.isPending
+                  ? t("common.saving")
+                  : t("common.noTextToRemove")
+              }
               onClick={() => {
                 editor.current?.resetMarkdown("");
                 setDraft("");

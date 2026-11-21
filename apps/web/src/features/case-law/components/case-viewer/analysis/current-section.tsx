@@ -126,6 +126,7 @@ export const CurrentSection = ({
           "bg-background absolute inset-x-0 top-0 pb-2 transition-opacity duration-150",
           current === null ? "pointer-events-none opacity-0" : "opacity-100",
         )}
+        inert={current === null}
       >
         {/* The category's colour marks the section on its start edge; the
             reader's sans face for chrome inherits into the button. */}
@@ -141,6 +142,7 @@ export const CurrentSection = ({
           <Button
             className="group/plain flex flex-1"
             disabled={current === null}
+            disabledReason={t("caseLaw.analysis.noCurrentSection")}
             onClick={jumpBack}
             tooltip={
               current === null ? undefined : t("caseLaw.analysis.backToSection")

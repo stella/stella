@@ -29,6 +29,7 @@ export const AUTH_ACCOUNT_REQUEST_BUDGET_RULES = {
 export const AUTH_REQUEST_BUDGET_RULES = {
   ...AUTH_ACCOUNT_REQUEST_BUDGET_RULES,
   "/sign-in/social": AUTH_RATE_LIMITS.authSharedAddress,
+  "/sign-in/sso": AUTH_RATE_LIMITS.authSharedAddress,
   "/oauth2/authorize": AUTH_RATE_LIMITS.oauthAuthorization,
   "/oauth2/token": AUTH_RATE_LIMITS.oauthToken,
   "/oauth2/register": AUTH_RATE_LIMITS.oauthClientRegistration,
@@ -66,6 +67,10 @@ const AUTH_BUDGET_OBSERVATIONS = {
   "/sign-in/social": {
     account: "auth.social.user",
     address: "auth.social.address",
+  },
+  "/sign-in/sso": {
+    account: "auth.sso.user",
+    address: "auth.sso.address",
   },
   "/oauth2/authorize": {
     account: "auth.authorize.user",

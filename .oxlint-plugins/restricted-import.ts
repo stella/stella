@@ -21,11 +21,13 @@ import type {
   VisitorWithHooks,
 } from "@oxlint/plugins";
 
+import { guardEnforcesLine } from "../scripts/guard-rollouts.ts";
 import { type IconEntry, readIconEntries } from "./icon-ownership.ts";
 import {
   type AstNode,
   canonicalModuleId,
   dynamicModuleSourceForEnforcement,
+  filenameForContext,
   getImportedName,
   getPropertyName,
   invokedCallee,
@@ -126,6 +128,8 @@ const RETENTION_ORACLE_MODULE =
 const RETENTION_ORACLE_MODULE_FILE = `${RETENTION_ORACLE_MODULE}.ts`;
 const RETENTION_CHECK_MODULE_FILE =
   "apps/api/src/handlers/case-law/ingestion/retention/retention-check.ts";
+
+const SETTINGS_ROUTES = "apps/web/src/routes/_protected.settings";
 
 const LUCIDE = packageWithSubpaths("lucide-react");
 // Every icon reaches the app through one module, so a glyph restricted to an
@@ -295,6 +299,60 @@ const RESTRICTED_IMPORT_RULES = {
         dynamicImports: DYNAMIC_IMPORTS.restricted,
       },
       owners: [],
+    },
+  ],
+  // Settings and admin pages are composed from one set of pieces (sections
+  // of rows on one list surface) so they cannot drift back into ad-hoc cards
+  // or inventory tables. The scope (the settings and admin route trees) is
+  // set by the rule's override in oxlint.config.ts. `@stll/ui` also
+  // publishes each component under `components/`.
+  "settings-layout-primitives": [
+    {
+      messageId: "settingsLayoutCard",
+      message:
+        "Compose settings and admin pages from '@stll/ui/settings' " +
+        "(SettingsSection, SettingsRow, SettingsPanel), not '{{name}}'.",
+      modules: ["@stll/ui/frame", "@stll/ui/components/frame"],
+      restriction: {
+        type: "module",
+        typeOnlyImports: TYPE_ONLY_IMPORTS.allowed,
+        dynamicImports: DYNAMIC_IMPORTS.restricted,
+      },
+      owners: [],
+    },
+    {
+      messageId: "settingsLayoutTable",
+      message:
+        "List named things on a settings or admin page as '@stll/ui/settings' " +
+        "rows, not with '{{name}}'. A table stays only where people compare " +
+        "values across columns; add its file to this row's owners with that " +
+        "reason.",
+      modules: [
+        "@stll/ui/table",
+        "@stll/ui/components/table",
+        "@stll/ui/table-shell",
+      ],
+      restriction: {
+        type: "module",
+        typeOnlyImports: TYPE_ONLY_IMPORTS.allowed,
+        dynamicImports: DYNAMIC_IMPORTS.restricted,
+      },
+      owners: [
+        // The audit log: time, actor, action and target across columns.
+        `${SETTINGS_ROUTES}/-organization.audit-logs.page.tsx`,
+        `${SETTINGS_ROUTES}/-organization.audit-logs.pending.tsx`,
+        // A change: each field's value before and after.
+        `${SETTINGS_ROUTES}/organization/-components/audit-change-details.tsx`,
+        // Members, sorted by name, role and joining date.
+        `${SETTINGS_ROUTES}/-organization.members.page.tsx`,
+        `${SETTINGS_ROUTES}/-organization.members.pending.tsx`,
+        // Invitations: role, status, invited and expiry dates beside members.
+        `${SETTINGS_ROUTES}/organization/-components/members-invitations.tsx`,
+        `${SETTINGS_ROUTES}/organization/-components/members-invitations.pending.tsx`,
+        // VAT rates, number series and seller profiles: rates, validity
+        // dates and number patterns across columns.
+        `${SETTINGS_ROUTES}/organization/-components/organization/billing-settings-table.pending.tsx`,
+      ],
     },
   ],
   // nanoid is a removed dependency: IDs come from Bun.randomUUIDv7() and
@@ -802,9 +860,16 @@ export const restrictedImportMeta = (ruleName: RestrictedImportRuleName) => ({
   ),
 });
 
+type RestrictedImportOptions = {
+  /** A rule in its first-week rollout reports only the lines a change
+   *  touched; names its file in scripts/guard-rollouts/. */
+  rollout?: string | undefined;
+};
+
 export const restrictedImportVisitors = (
   context: Context,
   ruleName: RestrictedImportRuleName,
+  { rollout }: RestrictedImportOptions = {},
 ): VisitorWithHooks => {
   const entries: readonly RestrictedImportEntry[] =
     RESTRICTED_IMPORT_RULES[ruleName];
@@ -815,6 +880,16 @@ export const restrictedImportVisitors = (
     entry: RestrictedImportEntry,
     name: string,
   ): void => {
+    if (
+      rollout !== undefined &&
+      !guardEnforcesLine({
+        guard: rollout,
+        file: filenameForContext(context),
+        line: context.sourceCode.getLocFromIndex(node.range[0]).line,
+      })
+    ) {
+      return;
+    }
     context.report({ node, messageId: entry.messageId, data: { name } });
   };
 

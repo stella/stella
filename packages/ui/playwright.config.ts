@@ -31,7 +31,7 @@ export default defineConfig({
     baseURL: "http://127.0.0.1:4174",
   },
   webServer: {
-    command: "vite --host 127.0.0.1 --port 4174",
+    command: "bun --bun vite --host 127.0.0.1 --port 4174",
     port: 4174,
     reuseExistingServer: !process.env["CI"],
   },

@@ -658,6 +658,35 @@ type PlaybookEditorFormProps = {
   onReload?: () => void;
 };
 
+type PlaybookSaveDisabledReasonOptions = {
+  pendingMutation: "deleting" | "saving" | null;
+  canSave: boolean;
+  t: (
+    key:
+      | "common.deleting"
+      | "common.saving"
+      | "errors.api.forbidden"
+      | "common.noChangesToSave",
+  ) => string;
+};
+
+const playbookSaveDisabledReason = ({
+  pendingMutation,
+  canSave,
+  t,
+}: PlaybookSaveDisabledReasonOptions) => {
+  if (pendingMutation === "deleting") {
+    return t("common.deleting");
+  }
+  if (pendingMutation === "saving") {
+    return t("common.saving");
+  }
+  if (!canSave) {
+    return t("errors.api.forbidden");
+  }
+  return t("common.noChangesToSave");
+};
+
 const PlaybookEditorForm = ({
   autosaveQueryKey,
   detailQueryKey,
@@ -729,7 +758,15 @@ const PlaybookEditorForm = ({
   const editedIdsRef = useRef(new Set<string>());
   const undoToastIdsRef = useRef<string[]>([]);
   const [attemptedSave, setAttemptedSave] = useState(false);
-  const [saving, setSaving] = useState(false);
+  const [pendingMutation, setPendingMutation] = useState<
+    "saving" | "deleting" | null
+  >(null);
+  const saving = pendingMutation !== null;
+  const saveDisabledReason = playbookSaveDisabledReason({
+    pendingMutation,
+    canSave,
+    t,
+  });
   const [saveRequest, setSaveRequest] = useState<SaveRequestState>(() =>
     initial.leaveState === "save-failed" ? "failed" : "idle",
   );
@@ -1252,9 +1289,9 @@ const PlaybookEditorForm = ({
       return false;
     }
 
-    setSaving(true);
+    setPendingMutation("saving");
     const { outcome } = await queueSave(draft);
-    setSaving(false);
+    setPendingMutation(null);
     setSaveRequest(outcome.type === "saved" ? "idle" : "failed");
     switch (outcome.type) {
       case "saved":
@@ -1419,12 +1456,12 @@ const PlaybookEditorForm = ({
     if (playbookId === null) {
       return;
     }
-    setSaving(true);
+    setPendingMutation("deleting");
     deletionRef.current = "in-flight";
     const response = await api
       .playbooks({ playbookId: toSafeId<"playbookDefinition">(playbookId) })
       .delete();
-    setSaving(false);
+    setPendingMutation(null);
 
     if (response.error) {
       deletionRef.current = "idle";
@@ -1537,6 +1574,7 @@ const PlaybookEditorForm = ({
             approvedAt={approvedAt}
             approving={approveMutation.isPending}
             busy={saving}
+            busyReason={saveDisabledReason}
             canApprove={canApprove}
             canDelete={canDelete}
             deleteOpen={deleteOpen}
@@ -1571,6 +1609,7 @@ const PlaybookEditorForm = ({
                 : {
                     type: "button",
                     disabled: !canSave || !isDirty || saving,
+                    disabledReason: saveDisabledReason,
                     loading: saving,
                     onSave: () => {
                       detached(saveThen(leaveIfSaved), "playbook-editor.save");

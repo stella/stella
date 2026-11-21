@@ -75,6 +75,7 @@ export function CorrespondenceDetailPage() {
           <Button
             className="min-h-11"
             disabled={update.isPending}
+            disabledReason={t("common.saving")}
             onClick={() =>
               update.mutate({
                 workspaceId,

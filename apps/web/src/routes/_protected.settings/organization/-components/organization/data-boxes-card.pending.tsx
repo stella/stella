@@ -1,8 +1,8 @@
 import type { ReactNode } from "react";
 
 import { ButtonFace, InputFace } from "@stll/ui/control-face";
-import { Frame, FramePanel } from "@stll/ui/frame";
 import { PlusIcon } from "@stll/ui/icons";
+import { SettingsPanel, SettingsSection } from "@stll/ui/settings";
 
 import { PendingText } from "@/components/pending-text";
 
@@ -27,9 +27,9 @@ export const OrganizationDataBoxesCardFrame = ({
   /** A failed refresh's notice, above the line. */
   feedback?: ReactNode;
 }) => (
-  <Frame>
-    <FramePanel>
-      <div className="flex flex-col gap-3 p-1">
+  <SettingsSection>
+    <SettingsPanel>
+      <div className="flex flex-col gap-3">
         {feedback}
         <p className="text-muted-foreground text-sm">
           <PendingText
@@ -39,8 +39,8 @@ export const OrganizationDataBoxesCardFrame = ({
         </p>
         {children}
       </div>
-    </FramePanel>
-  </Frame>
+    </SettingsPanel>
+  </SettingsSection>
 );
 
 /** The card while the organization's data boxes are on their way. */

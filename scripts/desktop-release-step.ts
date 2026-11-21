@@ -307,6 +307,7 @@ const runTauriSigner: CommandRunner = ({ cwd, file, appVersion }) => {
     [
       "bun",
       "x",
+      "--bun",
       "@tauri-apps/cli",
       "signer",
       "sign",

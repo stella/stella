@@ -316,7 +316,15 @@ export const TimeEntryForm = ({
             {t("common.cancel")}
           </Button>
         )}
-        <Button type="submit" disabled={pricingStatus !== "ready"}>
+        <Button
+          type="submit"
+          disabled={pricingStatus !== "ready"}
+          disabledReason={
+            pricingStatus === "invalid"
+              ? t("billing.timeEntry.checkRate")
+              : t("common.loading")
+          }
+        >
           {submitLabel ?? t("common.save")}
         </Button>
       </div>

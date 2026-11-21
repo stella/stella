@@ -548,7 +548,11 @@ const AddSkillForm = () => {
             {t("publicTools.contribute.form.openPr")}
           </Button>
         ) : (
-          <Button disabled type="button">
+          <Button
+            disabled
+            disabledReason={t("publicTools.contribute.form.invalidHint")}
+            type="button"
+          >
             {t("publicTools.contribute.form.openPr")}
           </Button>
         )}
@@ -628,6 +632,7 @@ const GithubSourceFields = ({
           />
           <Button
             disabled={commitStatus === "loading"}
+            disabledReason={t("publicTools.contribute.form.resolvingCommit")}
             onClick={onResolveLatestCommit}
             size="sm"
             type="button"

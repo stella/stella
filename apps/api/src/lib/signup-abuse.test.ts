@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
 import { sha256Hex as hashSha256Hex } from "@stll/sha256/node";
+import { createTestClock } from "@stll/test-kit";
 
 import { env } from "@/api/env";
 import { normalizeRateLimitClientAddress } from "@/api/lib/client-ip";
@@ -13,6 +14,8 @@ import {
   evaluateNewAccountOtpPolicy,
   isDisposableEmailAddress,
 } from "./signup-abuse";
+
+const testClock = createTestClock();
 
 describe("new-account OTP abuse policy", () => {
   test("recognizes disposable domains across harmless email normalization", () => {
@@ -51,10 +54,33 @@ describe("new-account OTP abuse policy", () => {
     });
 
     // Exhausted counters do not turn into a refusal for an address that
-    // already has an account: sign-in stays governed by the auth limits.
+    // already has an account: sign-in stays governed by the auth limits. The
+    // result says a new address would not get a code right now.
     expect(result).toEqual({
       status: "allowed",
       reason: "existing_account",
+      newAccounts: "rate_limited",
+    });
+  });
+
+  test("says when a new address would get a code too", async () => {
+    const result = await evaluateNewAccountOtpPolicy({
+      accountExists: async () => true,
+      clientIp: "192.0.2.1",
+      context: {
+        increment: async () => ({
+          count: 1,
+          nextReset: new Date(testClock.now() + 60_000),
+          start: testClock.now(),
+        }),
+      },
+      email: "user@example.com",
+    });
+
+    expect(result).toEqual({
+      status: "allowed",
+      reason: "existing_account",
+      newAccounts: "allowed",
     });
   });
 
@@ -78,6 +104,7 @@ describe("new-account OTP abuse policy", () => {
     ).toEqual({
       status: "allowed",
       reason: "existing_account",
+      newAccounts: "rate_limited",
     });
     expect(
       await evaluate(OTP_DELIVERY_RATE_LIMITS.existingAccountEmailMax + 1),

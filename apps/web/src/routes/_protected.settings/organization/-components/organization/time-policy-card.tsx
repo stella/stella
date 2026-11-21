@@ -274,6 +274,9 @@ export const TimePolicyForm = ({ settings, canEdit }: TimePolicyFormProps) => {
                 />
                 <Button
                   disabled={disabled || field.state.value === ""}
+                  disabledReason={
+                    disabled ? t("common.saving") : t("common.noDateToClear")
+                  }
                   onClick={() => field.handleChange("")}
                   type="button"
                   variant="ghost"
@@ -326,6 +329,11 @@ export const TimePolicyForm = ({ settings, canEdit }: TimePolicyFormProps) => {
           <Button
             className="self-start"
             disabled={!dirty || mutation.isPending}
+            disabledReason={
+              mutation.isPending
+                ? t("common.saving")
+                : t("common.noChangesToSave")
+            }
             type="submit"
           >
             {t("common.saveChanges")}

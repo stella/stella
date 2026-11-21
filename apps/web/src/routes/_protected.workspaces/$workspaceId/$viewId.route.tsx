@@ -56,6 +56,7 @@ import {
   workspaceViewsInclude,
 } from "@/lib/workspaces/view-params.logic";
 import { routeSearchSchema } from "@/route-search-params";
+import { VIEW_SWITCH_PENDING } from "@/routes/-pending-view.logic";
 import { includesListItems } from "@/routes/_protected.workspaces/$workspaceId/-components/view/view-kind-filters";
 
 import { ViewPage } from "./-$viewId.route.page";
@@ -74,6 +75,8 @@ export const Route = createFileRoute(
 )({
   component: ViewPage,
   pendingComponent: ViewPending,
+  pendingMs: VIEW_SWITCH_PENDING.pendingMs,
+  pendingMinMs: VIEW_SWITCH_PENDING.pendingMinMs,
   validateSearch: searchSchema,
   // Annotated: the context this returns is part of the `matches` type it
   // reads, so an inferred return would be circular.

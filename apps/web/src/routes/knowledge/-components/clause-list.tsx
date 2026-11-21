@@ -274,6 +274,7 @@ export const ClauseList = ({
           <div className="flex justify-center border-t p-3">
             <Button
               disabled={loading}
+              disabledReason={t("common.loading")}
               onClick={onLoadMore}
               size="sm"
               variant="ghost"

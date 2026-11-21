@@ -21,25 +21,25 @@
     "subject": "{documentType, select, credit_note {Nota de crédito} advance {Fatura de adiantamento} other {Fatura}} {invoiceNumber} de {firmName}"
   },
   "newDeviceLogin": {
-    "action": "Revisar sessões",
-    "body": "Sua conta recebeu um acesso de um novo dispositivo ou local.",
+    "action": "Revisar dispositivos conectados",
+    "body": "Alguém acabou de entrar na sua conta a partir de um novo dispositivo ou local.",
     "device": "Dispositivo",
     "deviceName": {
       "browserOnOs": "{browser} no {os}",
       "unknown": "Dispositivo desconhecido"
     },
-    "heading": "Novo acesso detectado",
-    "ignore": "Se foi você, nenhuma ação é necessária. Se não reconhece esta atividade, revise suas sessões ativas e revogue as que não reconhecer.",
+    "heading": "Novo acesso à sua conta",
+    "ignore": "Se foi você, não é preciso fazer nada. Se não reconhece este acesso, desconecte este dispositivo.",
     "ipAddress": "Endereço IP",
     "ipAddressUnknown": "Desconhecido",
-    "location": "Local aproximado",
-    "locationNote": "O local é estimado com base no endereço IP e pode não ser exato.",
+    "location": "Local",
     "mapAlt": "Mapa com o local aproximado do acesso: {location}",
     "place": {
       "cityCountry": "{city}, {country}",
       "cityRegionCountry": "{city}, {region}, {country}",
       "regionCountry": "{region}, {country}"
     },
+    "placeApproximate": "{place} (aproximado)",
     "preview": "Novo acesso de {device}",
     "previewUnknownDevice": "Novo acesso de um dispositivo desconhecido",
     "subject": "Novo acesso à sua conta stella",

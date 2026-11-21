@@ -172,6 +172,15 @@ an outcome with `@stll/ui/toast`, and put a field error next to the field.
 
 ## Lists, Settings Pages & Search
 
+- **A settings page answers the questions people arrive with.** Start from
+  the one to three questions that bring someone to the page; what needs
+  their action leads it. Compose web and desktop settings only from
+  `@stll/ui/settings` (`packages/ui/src/components/settings.tsx`):
+  `SettingsSection`s over one surface of `SettingsRow`s, a form in a
+  `SettingsPanel`. One option is one row: its title and one line at the
+  start, its control at the end. The section title names the group and is
+  never repeated in a row; a lone switch never gets its own card.
+  [test: packages/ui/src/components/settings.dom.test.tsx]
 - **Inventories of named things are grouped lists, not tables.**
   Connections, sessions, keys, integrations: use `@stll/ui/list`. A
   `ListGroup` has a header (title + `ListGroupCount` + one quiet line +

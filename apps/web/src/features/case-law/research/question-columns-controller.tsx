@@ -574,6 +574,11 @@ export const QuestionColumnControls = ({
             </AlertDialogClose>
             <Button
               disabled={surface.isRunning || !surface.grants.run}
+              disabledReason={
+                surface.isRunning
+                  ? t("caseLaw.research.runInProgress")
+                  : t("caseLaw.research.runPermissionRequired")
+              }
               onClick={controller.onConfirmRun}
             >
               {t("caseLaw.research.runConfirm")}

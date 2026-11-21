@@ -1191,6 +1191,7 @@ const ClipboardEditor = ({ onIdle }: ClipboardEditorProps) => {
           </div>
           <Button
             disabled={groupCreationPending}
+            disabledReason={t("creatingGroup")}
             onClick={requestClose}
             type="button"
             variant="ghost"
@@ -1199,6 +1200,7 @@ const ClipboardEditor = ({ onIdle }: ClipboardEditorProps) => {
           </Button>
           <Button
             disabled={state.save.type === "saving"}
+            disabledReason={t("savingChanges")}
             onClick={save}
             type="button"
           >
@@ -1222,6 +1224,7 @@ const ClipboardEditor = ({ onIdle }: ClipboardEditorProps) => {
             <div className="mt-4 flex items-center justify-end gap-3">
               <Button
                 disabled={groupCreationPending}
+                disabledReason={t("creatingGroup")}
                 onClick={() => setGroupDraft({ type: "closed" })}
                 type="button"
                 variant="ghost"
@@ -1230,6 +1233,11 @@ const ClipboardEditor = ({ onIdle }: ClipboardEditorProps) => {
               </Button>
               <Button
                 disabled={!state.groupDraft.name.trim() || groupCreationPending}
+                disabledReason={
+                  groupCreationPending
+                    ? t("creatingGroup")
+                    : t("enterGroupName")
+                }
                 onClick={createGroup}
                 type="button"
               >
