@@ -5,12 +5,18 @@
  * use-intl to parse ICU variables at the type level and
  * enforce interpolation parameters.
  *
- * Usage: i18n-typegen <langs-dir> [--check]
+ * Usage: i18n-typegen <langs-dir> [--check] [--compact]
  *
- * --check  Verify the on-disk messages.gen.ts matches what
- *          would be generated from en.json. Exits non-zero on
- *          drift without writing.
+ * --check    Verify the on-disk messages.gen.ts matches what
+ *            would be generated from en.json. Exits non-zero on
+ *            drift without writing.
+ * --compact  Strip static prose from message literals while
+ *            preserving all ICU placeholders, select/plural branches
+ *            and rich tags so use-intl enforces identical parameter
+ *            types with far fewer TypeScript instantiations.
  */
+import { parse, TYPE } from "@formatjs/icu-messageformat-parser";
+import type { MessageFormatElement } from "@formatjs/icu-messageformat-parser";
 import path from "node:path";
 
 type JsonValue = string | JsonObject;
@@ -39,12 +45,66 @@ const parseMessages = (json: string): JsonObject => {
   return parsed;
 };
 
+const compactElements = (elements: readonly MessageFormatElement[]): string => {
+  let out = "";
+  for (const el of elements) {
+    switch (el.type) {
+      case TYPE.literal:
+      case TYPE.pound:
+        break;
+      case TYPE.argument:
+        out += `{${el.value}}`;
+        break;
+      case TYPE.number:
+        out += `{${el.value}, number}`;
+        break;
+      case TYPE.date:
+        out += `{${el.value}, date}`;
+        break;
+      case TYPE.time:
+        out += `{${el.value}, time}`;
+        break;
+      case TYPE.select: {
+        const opts = Object.entries(el.options)
+          .map(([key, opt]) => `${key} {${compactElements(opt.value)}}`)
+          .join(" ");
+        out += `{${el.value}, select, ${opts}}`;
+        break;
+      }
+      case TYPE.plural: {
+        const kind = el.pluralType === "ordinal" ? "selectordinal" : "plural";
+        const nested = Object.values(el.options)
+          .map((opt) => compactElements(opt.value))
+          .join("");
+        out += `{${el.value}, ${kind}, other {#${nested}}}`;
+        break;
+      }
+      case TYPE.tag:
+        out += `<${el.value}>${compactElements(el.children)}</${el.value}>`;
+        break;
+    }
+  }
+  return out;
+};
+
+const compactMessage = (value: string): string => {
+  if (!value.includes("{") && !value.includes("<")) {
+    return "";
+  }
+  try {
+    return compactElements(parse(value, { ignoreTag: false }));
+  } catch {
+    return value;
+  }
+};
+
 const args = process.argv.slice(2);
 const langsDir = args.find((a) => !a.startsWith("--"));
 const checkOnly = args.includes("--check");
+const compact = args.includes("--compact");
 
 if (!langsDir) {
-  console.error("Usage: i18n-typegen <langs-dir> [--check]");
+  console.error("Usage: i18n-typegen <langs-dir> [--check] [--compact]");
   process.exit(1);
 }
 
@@ -60,7 +120,7 @@ let keyCount = 0;
 
 const toLiteral = (value: JsonValue, depth: number): string => {
   if (typeof value === "string") {
-    return JSON.stringify(value);
+    return JSON.stringify(compact ? compactMessage(value) : value);
   }
 
   if (typeof value === "object" && !Array.isArray(value)) {
