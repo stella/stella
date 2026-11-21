@@ -184,7 +184,7 @@
     "unreadableEraseNotice": "Some saved activity cannot be read. You can erase unreadable saved activity and its draft recovery.",
     "unrecoverableOtherHistoryConfirmation": "Saved history from other accounts will be deleted, including pending draft recovery with missing keys or unreadable files. Created drafts may already exist. This cannot be undone.",
     "welcomeControlFact": "Idle time excluded. Pause or delete anytime.",
-    "welcomeDetails": "App activity is sampled every few seconds and never uploaded automatically. Window titles and open-document paths are captured too, unless you turn details off. Summaries reach the clipboard only when requested. You can exclude apps and choose how long history is kept. Turning details off stops new details; past details remain until retention or deletion. Window titles of a suggestion leave this device only when you approve a stella AI description, once or always; they are not stored.",
+    "welcomeDetails": "App activity is sampled every few seconds and never uploaded automatically. Window titles and open-document paths are captured too, unless you turn details off. Summaries reach the clipboard only when requested. You can exclude apps and choose how long history is kept. Turning details off stops new details; past details remain until retention or deletion. Window titles of a suggestion leave this device only when you request a stella AI draft after granting drafting consent, once or always; they are not stored.",
     "welcomeLearnMore": "Learn more",
     "welcomeLocalFact": "Encrypted on this device.",
     "welcomePreviewMatter": "Riverside lease renewal",
@@ -763,7 +763,7 @@
     "takenOverTitle": "Editing moved to another device"
   },
   "onboarding": {
-    "activityAiNote": "Window titles of a suggestion leave this device only when you approve a stella AI description, once or always. They are not stored.",
+    "activityAiNote": "Window titles of a suggestion leave this device only when you request a stella AI draft after granting drafting consent, once or always. They are not stored.",
     "activityBody": "See where your working day went and turn it into draft time entries. You decide what is recorded and what is sent.",
     "activityConsentNote": "Nothing is recorded until you press Start recording in Activity. Pause, exclude apps or delete any day whenever you like.",
     "activityNeverKeys": "Keystrokes or typed text",

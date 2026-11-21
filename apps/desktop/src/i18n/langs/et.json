@@ -184,7 +184,7 @@
     "unreadableEraseNotice": "Mõnda salvestatud tegevust ei saa lugeda. Saate kustutada loetamatu salvestatud tegevuse ja selle mustandite taastamisandmed.",
     "unrecoverableOtherHistoryConfirmation": "Teiste kontode salvestatud ajalugu kustutatakse, sealhulgas puuduvate võtmete või loetamatute failidega pooleliolevate mustandite taastamisandmed. Loodud mustandid võivad juba olemas olla. Seda ei saa tagasi võtta.",
     "welcomeControlFact": "Jõudeaega ei arvestata. Peatage või kustutage igal ajal.",
-    "welcomeDetails": "Rakenduste tegevust salvestatakse iga paari sekundi järel ja seda ei laadita kunagi automaatselt üles. Salvestatakse ka akende pealkirjad ja avatud dokumentide teed, kui te üksikasju välja ei lülita. Kokkuvõtted jõuavad lõikelauale ainult teie soovil. Saate rakendusi välistada ja valida ajaloo säilitamise aja. Üksikasjade väljalülitamine peatab uute üksikasjade salvestamise; varasemad säilivad säilitusaja lõpuni või kustutamiseni. Soovituse akende pealkirjad lahkuvad sellest seadmest ainult siis, kui kinnitate stella AI selgituse, üks kord või alati; neid ei salvestata.",
+    "welcomeDetails": "Rakenduste tegevust salvestatakse iga paari sekundi järel ja seda ei laadita kunagi automaatselt üles. Salvestatakse ka akende pealkirjad ja avatud dokumentide teed, kui te üksikasju välja ei lülita. Kokkuvõtted jõuavad lõikelauale ainult teie soovil. Saate rakendusi välistada ja valida ajaloo säilitamise aja. Üksikasjade väljalülitamine peatab uute üksikasjade salvestamise; varasemad säilivad säilitusaja lõpuni või kustutamiseni. Soovituse akende pealkirjad lahkuvad sellest seadmest ainult siis, kui taotlete pärast nõusoleku andmist stella AI mustandit, üks kord või alati; neid ei salvestata.",
     "welcomeLearnMore": "Lisateave",
     "welcomeLocalFact": "Selles seadmes krüptitud.",
     "welcomePreviewMatter": "Riverside’i üürilepingu pikendamine",
@@ -763,7 +763,7 @@
     "takenOverTitle": "Muutmine teisaldatud teise seadmesse"
   },
   "onboarding": {
-    "activityAiNote": "Soovituse akende pealkirjad lahkuvad sellest seadmest ainult siis, kui kinnitate stella AI selgituse, üks kord või alati. Neid ei salvestata.",
+    "activityAiNote": "Soovituse akende pealkirjad lahkuvad sellest seadmest ainult siis, kui taotlete pärast nõusoleku andmist stella AI mustandit, üks kord või alati. Neid ei salvestata.",
     "activityBody": "Vaadake, kuhu tööpäev kulus, ja tehke sellest ajakannete mustandid. Teie otsustate, mida salvestatakse ja mida saadetakse.",
     "activityConsentNote": "Midagi ei salvestata enne, kui vajutate Tegevustes nuppu Alusta salvestamist. Peatage, välistage rakendusi või kustutage mis tahes päev, millal soovite.",
     "activityNeverKeys": "Klahvivajutused või sisestatud tekst",

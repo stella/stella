@@ -184,7 +184,7 @@
     "unreadableEraseNotice": "Einige gespeicherte Aktivitäten können nicht gelesen werden. Sie können unlesbare gespeicherte Aktivitäten und ihre Entwurfswiederherstellungsdaten löschen.",
     "unrecoverableOtherHistoryConfirmation": "Die gespeicherte Historie anderer Konten wird gelöscht, einschließlich der Wiederherstellungsdaten ausstehender Entwürfe mit fehlenden Schlüsseln oder unlesbaren Dateien. Erstellte Entwürfe können bereits vorhanden sein. Dies kann nicht rückgängig gemacht werden.",
     "welcomeControlFact": "Inaktive Zeit zählt nicht. Jederzeit pausieren oder löschen.",
-    "welcomeDetails": "App-Aktivitäten werden alle paar Sekunden erfasst und nie automatisch hochgeladen. Fenstertitel und Pfade geöffneter Dokumente werden ebenfalls erfasst, solange Sie Details nicht abschalten. Zusammenfassungen gelangen nur auf Anforderung in die Zwischenablage. Sie können Apps ausschließen und die Aufbewahrungsdauer festlegen. Das Abschalten von Details beendet die Erfassung neuer Details; bisherige bleiben bis zum Ablauf der Aufbewahrungsdauer oder zur Löschung erhalten. Fenstertitel eines Vorschlags verlassen dieses Gerät nur, wenn Sie einer Beschreibung durch stella KI zustimmen, einmal oder immer; sie werden nicht gespeichert.",
+    "welcomeDetails": "App-Aktivitäten werden alle paar Sekunden erfasst und nie automatisch hochgeladen. Fenstertitel und Pfade geöffneter Dokumente werden ebenfalls erfasst, solange Sie Details nicht abschalten. Zusammenfassungen gelangen nur auf Anforderung in die Zwischenablage. Sie können Apps ausschließen und die Aufbewahrungsdauer festlegen. Das Abschalten von Details beendet die Erfassung neuer Details; bisherige bleiben bis zum Ablauf der Aufbewahrungsdauer oder zur Löschung erhalten. Fenstertitel eines Vorschlags verlassen dieses Gerät nur, wenn Sie nach erteilter Einwilligung einen Entwurf von stella KI anfordern, einmal oder immer; sie werden nicht gespeichert.",
     "welcomeLearnMore": "Mehr erfahren",
     "welcomeLocalFact": "Auf diesem Gerät verschlüsselt.",
     "welcomePreviewMatter": "Verlängerung des Mietvertrags Riverside",
@@ -763,7 +763,7 @@
     "takenOverTitle": "Bearbeitung auf anderes Gerät verschoben"
   },
   "onboarding": {
-    "activityAiNote": "Fenstertitel eines Vorschlags verlassen dieses Gerät nur, wenn Sie einer Beschreibung durch stella KI zustimmen, einmal oder immer. Sie werden nicht gespeichert.",
+    "activityAiNote": "Fenstertitel eines Vorschlags verlassen dieses Gerät nur, wenn Sie nach erteilter Einwilligung einen Entwurf von stella KI anfordern, einmal oder immer. Sie werden nicht gespeichert.",
     "activityBody": "Sehen Sie, wohin Ihr Arbeitstag gegangen ist, und machen Sie daraus Entwürfe für Zeiteinträge. Sie entscheiden, was aufgezeichnet und was gesendet wird.",
     "activityConsentNote": "Nichts wird aufgezeichnet, bevor Sie in Aktivität auf Aufzeichnung starten klicken. Pausieren, Apps ausschließen oder Tage löschen können Sie jederzeit.",
     "activityNeverKeys": "Tastenanschläge oder getippter Text",
