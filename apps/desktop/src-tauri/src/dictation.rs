@@ -39,7 +39,7 @@ use crate::{
   config::APP_DATA_DIR_NAME,
   device_preference::DevicePreference,
   dictation_app_settings::{self, AppSetting, RecentApp},
-  dictation_cloud::{self, CloudModels, Destination},
+  dictation_cloud::{self, CloudModels, Destination, ModelClass},
   dictation_context::{self, Sharing},
   dictation_focus::{self, FocusTarget},
   dictation_hold_key::{self, Action, Gesture, HoldChoice},
@@ -61,6 +61,10 @@ const DESTINATION_PREFERENCE_FILE_NAME: &str = "dictation-destination";
 /// The stella AI transcription model the user picked; absent: the default.
 /// A recording transcribed with stella AI uses it too.
 const CLOUD_MODEL_PREFERENCE_FILE_NAME: &str = "dictation-cloud-model";
+/// Who runs the stored model, on which side of the region and whether its
+/// provider keeps the audio, as the list said when it was stored; empty
+/// where the list named no provider.
+const CLOUD_MODEL_CLASS_PREFERENCE_FILE_NAME: &str = "dictation-cloud-model-class";
 /// Off unless the user turned it on: cleanup also gets the window title.
 const SHARE_WINDOW_TITLE_PREFERENCE_FILE_NAME: &str = "dictation-share-window-title";
 /// Off unless the user turned it on: cleanup also gets the text before the
@@ -269,6 +273,7 @@ struct Inner {
   language: Choice,
   destination: Destination,
   cloud_model: Option<String>,
+  cloud_model_class: Option<ModelClass>,
   model: ModelState,
   phase: Phase,
   failure: Option<Failed>,
@@ -341,6 +346,10 @@ impl DictationState {
     let cloud_model = DevicePreference::in_app_data(CLOUD_MODEL_PREFERENCE_FILE_NAME)
       .read()
       .filter(|model_id| valid_model_id(model_id));
+    let cloud_model_class =
+      DevicePreference::in_app_data(CLOUD_MODEL_CLASS_PREFERENCE_FILE_NAME)
+        .read()
+        .and_then(|stored| serde_json::from_str(&stored).ok());
     let hold_key = HoldChoice::parse(
       DevicePreference::in_app_data(HOLD_KEY_PREFERENCE_FILE_NAME)
         .read()
@@ -359,6 +368,7 @@ impl DictationState {
       language,
       destination,
       cloud_model,
+      cloud_model_class,
       model: if installed_model().is_some() {
         ModelState::Ready
       } else {
@@ -635,6 +645,13 @@ pub fn destination(app: &AppHandle) -> (Destination, Option<String>) {
   })
 }
 
+/// The stored model's class, as the list gave it when the model was stored.
+pub fn cloud_model_class(app: &AppHandle) -> Option<ModelClass> {
+  app
+    .state::<DictationState>()
+    .update(|inner| inner.cloud_model_class.clone())
+}
+
 /// Read before every chunk sent to stella AI: dictation is still on and
 /// still set to stella AI, and the server still enables both.
 pub fn cloud_chosen(app: &AppHandle) -> bool {
@@ -646,16 +663,33 @@ pub fn cloud_chosen(app: &AppHandle) -> bool {
 
 /// Replaces a stored model the region no longer offers, or none, with the
 /// one dictation now uses, so the window shows and keeps what is used.
-pub fn adopt_cloud_model(app: &AppHandle, model_id: &str) -> Result<(), String> {
+pub fn adopt_cloud_model(
+  app: &AppHandle,
+  model_id: &str,
+  class: Option<ModelClass>,
+) -> Result<(), String> {
   if !valid_model_id(model_id) {
     return Err("this transcription model is not offered".to_string());
   }
-  let stored = app
+  let (stored, stored_class) = app
     .state::<DictationState>()
-    .update(|inner| inner.cloud_model.clone());
-  if stored.as_deref() == Some(model_id) {
+    .update(|inner| (inner.cloud_model.clone(), inner.cloud_model_class.clone()));
+  if stored.as_deref() == Some(model_id) && stored_class == class {
     return Ok(());
   }
+  // The class first: a model is never stored with another one's class.
+  let encoded = class
+    .as_ref()
+    .and_then(|class| serde_json::to_string(class).ok())
+    .unwrap_or_default();
+  change_preference(
+    app,
+    CLOUD_MODEL_CLASS_PREFERENCE_FILE_NAME,
+    &encoded,
+    |inner| {
+      inner.cloud_model_class = class;
+    },
+  )?;
   change_preference(app, CLOUD_MODEL_PREFERENCE_FILE_NAME, model_id, |inner| {
     inner.cloud_model = Some(model_id.to_string());
   })
@@ -1447,13 +1481,16 @@ pub async fn dictation_get_cloud_models(app: AppHandle) -> Result<CloudModels, S
     return Err("stella AI transcription is not available".to_string());
   }
   let offered = dictation_cloud::models(&app).await?;
-  let stored = app
+  let (stored, stored_class) = app
     .state::<DictationState>()
-    .update(|inner| inner.cloud_model.clone());
-  if let Some(choice) = dictation_cloud::choose_model(stored.as_deref(), &offered)
+    .update(|inner| (inner.cloud_model.clone(), inner.cloud_model_class.clone()));
+  // A withdrawn model with no same-class successor stays stored, and the
+  // window shows it as no longer offered until another is picked.
+  if let Ok(choice) =
+    dictation_cloud::choose_model(stored.as_deref(), stored_class.as_ref(), &offered)
     && choice.replaces_stored
   {
-    adopt_cloud_model(&app, &choice.model_id)?;
+    adopt_cloud_model(&app, &choice.model_id, offered.class_of(&choice.model_id))?;
   }
   Ok(offered)
 }
@@ -1467,12 +1504,11 @@ pub async fn dictation_set_cloud_model(
     return Err("stella AI transcription is not available".to_string());
   }
   // Only a model the organization is offered right now can be chosen.
-  if !valid_model_id(&model_id)
-    || !dictation_cloud::models(&app).await?.offers(&model_id)
-  {
+  let offered = dictation_cloud::models(&app).await?;
+  if !valid_model_id(&model_id) || !offered.offers(&model_id) {
     return Err("this transcription model is not offered".to_string());
   }
-  adopt_cloud_model(&app, &model_id)?;
+  adopt_cloud_model(&app, &model_id, offered.class_of(&model_id))?;
   let state = app.state::<DictationState>();
   Ok(read_snapshot(&app, &state))
 }
@@ -1686,6 +1722,7 @@ mod tests {
       language: Choice::Automatic,
       destination: Destination::parse(None),
       cloud_model: None,
+      cloud_model_class: None,
       model: ModelState::Missing,
       phase: Phase::Idle,
       failure: None,
