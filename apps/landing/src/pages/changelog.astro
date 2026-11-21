@@ -9,8 +9,8 @@ import {
 import {
   CHANGELOG_ENTRIES_PER_PAGE,
   formatMaintenanceReleaseRange,
-  getReleaseKind,
   getMaintenanceReleaseTitle,
+  isFeatureRelease,
 } from "../lib/changelog-release";
 import LandingFooter from "../components/LandingFooter.astro";
 
@@ -164,7 +164,7 @@ const formatReleaseDate = (publishedAt: string) =>
                 }
 
                 const { release } = entry;
-                if (getReleaseKind(release.tagName) === "patch") {
+                if (!isFeatureRelease(release.heading)) {
                   return (
                     <details
                       id={release.slug}
@@ -495,9 +495,9 @@ const formatReleaseDate = (publishedAt: string) =>
       CHANGELOG_ENTRIES_PER_PAGE,
       type ChangelogReleaseEntry,
       formatMaintenanceReleaseRange,
-      getReleaseKind,
       getMaintenanceReleaseTitle,
       groupMaintenanceReleases,
+      isFeatureRelease,
       isStellaReleaseTag,
     } from "../lib/changelog-release";
     import { parseChangelogMarkdown } from "../lib/changelog-markdown";
@@ -863,12 +863,12 @@ const formatReleaseDate = (publishedAt: string) =>
       return article;
     };
 
-    const renderPatchRelease = (release: GitHubRelease) => {
+    const renderCompactRelease = (release: GitHubRelease) => {
       const details = document.createElement("details");
       details.id = releaseAnchorId(release.tag_name);
       details.className = "changelog-entry changelog-patch-release rounded-lg";
-      // A patch that carries real notes reads like any other release; only
-      // maintenance groups start collapsed.
+      // A release without a headline still shows its notes; only maintenance
+      // groups start collapsed.
       details.open = true;
 
       const summary = document.createElement("summary");
@@ -1025,9 +1025,11 @@ const formatReleaseDate = (publishedAt: string) =>
         case "maintenance":
           return renderMaintenanceReleases(entry.releases);
         case "release":
-          return getReleaseKind(entry.release.tag_name) === "patch"
-            ? renderPatchRelease(entry.release)
-            : renderFeatureRelease(entry.release);
+          return isFeatureRelease(
+            findMarkdownHeading(entry.release.body ?? "", 1),
+          )
+            ? renderFeatureRelease(entry.release)
+            : renderCompactRelease(entry.release);
         default: {
           entry satisfies never;
           return panic(`Unhandled changelog entry: ${String(entry)}`);
