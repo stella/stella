@@ -65,6 +65,8 @@ const CACHE_FREE_BUN_JOBS: Record<string, string> = {
     "validates and publishes the immutable main network recording",
   ".github/workflows/release-mobile-ios.yml#testflight":
     "builds the iOS app shipped to TestFlight",
+  ".github/workflows/release-proof.yml#dispatch":
+    "runs main's release candidate verifier and dispatches the release tag with an actions: write token",
   ".github/workflows/release-rehearsal.yml#rehearse":
     "rehearses the release from the release revision",
 };
