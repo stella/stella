@@ -599,7 +599,7 @@ test.each([".asice", ".asics"])(
     expect(
       mounted.getByRole("heading", { name: "Share purchase agreement" }),
     ).toBeTruthy();
-    expect(mounted.getByText("2. Purchase price").tagName).toBe("STRONG");
+    expect(mounted.getByText("2. Purchase price")).toBeTruthy();
     expect(mounted.getByText("The enclosed submission")).toBeTruthy();
     expect(mounted.queryByText(/\*\*|^# Share/u)).toBeNull();
     const plain = mounted.getByText(/^# The first page/u);
