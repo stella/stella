@@ -170,7 +170,7 @@ describe("learned dictation fixes", () => {
   test("the account export reads the fixes back", async () => {
     const [row] = await db.select().from(dictationLearnedFixes);
     if (row === undefined) {
-      return panic("The fixture row is missing");
+      panic("The fixture row is missing");
     }
     expect(await toLearnedFixesAccountExport(organizationId, row)).toEqual({
       generation: 1,

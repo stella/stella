@@ -15,8 +15,6 @@ import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declar
 import { changeLearnedFixes } from "@/api/lib/dictation/learned-fixes";
 import { noResourceSetUpdates } from "@/api/lib/resource-set-realtime";
 
-import { LEARNED_FIXES_MUTATION } from "./mutation";
-
 const config = {
   contract: "patch",
   permissions: { dictationLearnedFix: ["update"] },
@@ -50,6 +48,10 @@ const changeLearnedFixesHandler = createSafeRootHandler(
   },
 );
 
-declareAggregateMutation(changeLearnedFixesHandler, LEARNED_FIXES_MUTATION);
+declareAggregateMutation(changeLearnedFixesHandler, {
+  type: "independent",
+  reason:
+    "One row per member, replaced only at the revision it read; a write that lost a race reads again.",
+});
 
 export default changeLearnedFixesHandler;

@@ -160,11 +160,13 @@ const rewrite = async (
   change: (read: Row | null) => { generation: number; next: Stored } | null,
 ): Promise<DictationLearnedFixes> => {
   for (let attempt = 0; attempt < WRITE_ATTEMPTS; attempt += 1) {
+    // db-await-in-loop: a bounded retry that rereads only after a lost race
     const read = await readRow(tx, owner);
     const changed = change(read);
     if (changed === null) {
       return snapshot(read?.generation ?? 0, read?.stored ?? EMPTY);
     }
+    // db-await-in-loop: a bounded retry; one write per attempt, in order
     if (await writeRow(tx, owner, { read, ...changed })) {
       return snapshot(changed.generation, changed.next);
     }

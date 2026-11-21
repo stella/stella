@@ -24,8 +24,6 @@ import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { isFeatureEnabled } from "@/api/lib/feature-access/policy";
 import { hasMemberPermission } from "@/api/lib/permission-authorization";
 
-import { LEARNED_FIXES_MUTATION } from "./mutation";
-
 // Learned fixes belong with dictation on the desktop, on this computer or
 // with stella AI alike.
 const REQUIRED_FEATURE_ID = "desktop-dictation" satisfies DesktopFeatureId;
@@ -128,7 +126,11 @@ const createDesktopLearnedFixesChangeEndpoint = (
         );
       },
     ),
-    LEARNED_FIXES_MUTATION,
+    {
+      type: "independent",
+      reason:
+        "One row per member, replaced only at the revision it read; a write that lost a race reads again.",
+    },
   );
 
 /** Deletes everything learned, as `DELETE /v1/dictation/learned-fixes` does. */
@@ -159,7 +161,11 @@ const createDesktopLearnedFixesClearEndpoint = (
         );
       },
     ),
-    LEARNED_FIXES_MUTATION,
+    {
+      type: "independent",
+      reason:
+        "One row per member, replaced only at the revision it read; a write that lost a race reads again.",
+    },
   );
 
 export const listDesktopLearnedFixes = createDesktopLearnedFixesListEndpoint();

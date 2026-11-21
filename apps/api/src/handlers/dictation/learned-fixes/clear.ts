@@ -12,8 +12,6 @@ import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declar
 import { clearLearnedFixes } from "@/api/lib/dictation/learned-fixes";
 import { noResourceSetUpdates } from "@/api/lib/resource-set-realtime";
 
-import { LEARNED_FIXES_MUTATION } from "./mutation";
-
 const config = {
   contract: "patch",
   permissions: { dictationLearnedFix: ["delete"] },
@@ -42,6 +40,10 @@ const clearLearnedFixesHandler = createSafeRootHandler(
   },
 );
 
-declareAggregateMutation(clearLearnedFixesHandler, LEARNED_FIXES_MUTATION);
+declareAggregateMutation(clearLearnedFixesHandler, {
+  type: "independent",
+  reason:
+    "One row per member, replaced only at the revision it read; a write that lost a race reads again.",
+});
 
 export default clearLearnedFixesHandler;
