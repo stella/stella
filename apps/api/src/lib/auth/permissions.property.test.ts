@@ -243,7 +243,7 @@ describe("organization permissions properties", () => {
           const required = withBillingRead(
             workspaceActions.length > 0
               ? { workspace: workspaceActions }
-              : { invoice: ["read"] },
+              : { invoice: ["update"] },
           );
           expect(required.billing).toEqual(["read"]);
           expect(required.workspace).toContain("read");
