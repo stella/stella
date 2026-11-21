@@ -505,20 +505,24 @@ test("bounded reconciliation repairs drift once and then reaches a fixed point",
     .set({ title: "Nový občanský zákoník" })
     .where(eq(legislationDocuments.id, LEGISLATION_DOCUMENT_ID));
 
-  const repaired = await db.transaction(
-    async (tx) =>
-      await reconcileCorpusProjectionDesiredStateTx(
-        asTestRaw<Transaction>(tx),
-        subject,
-      ),
-  );
-  const fixedPoint = await db.transaction(
-    async (tx) =>
-      await reconcileCorpusProjectionDesiredStateTx(
-        asTestRaw<Transaction>(tx),
-        subject,
-      ),
-  );
+  const repaired = (
+    await db.transaction(
+      async (tx) =>
+        await reconcileCorpusProjectionDesiredStateTx(
+          asTestRaw<Transaction>(tx),
+          subject,
+        ),
+    )
+  ).unwrap();
+  const fixedPoint = (
+    await db.transaction(
+      async (tx) =>
+        await reconcileCorpusProjectionDesiredStateTx(
+          asTestRaw<Transaction>(tx),
+          subject,
+        ),
+    )
+  ).unwrap();
 
   expect(repaired).toEqual({
     epoch: 2n,
@@ -643,13 +647,15 @@ test("a court correction on a court-partitioned decision replaces its desired pr
   });
   const subject = { family: "case_law", entityId: usaDecisionId } as const;
   const reconcile = async () =>
-    await db.transaction(
-      async (tx) =>
-        await reconcileCorpusProjectionDesiredStateTx(
-          asTestRaw<Transaction>(tx),
-          subject,
-        ),
-    );
+    (
+      await db.transaction(
+        async (tx) =>
+          await reconcileCorpusProjectionDesiredStateTx(
+            asTestRaw<Transaction>(tx),
+            subject,
+          ),
+      )
+    ).unwrap();
   const desired = async () =>
     await db
       .select({
@@ -708,13 +714,15 @@ test("bounded reconciliation matches single-row repair and remains a fixed point
   await synchronize();
   expect(await db.select().from(corpusIndexProjectionStates)).toEqual(before);
   expect(
-    await db.transaction(
-      async (tx) =>
-        await reconcileCorpusProjectionDesiredStateTx(
-          asTestRaw<Transaction>(tx),
-          { family: "case_law", entityId: CASE_LAW_DECISION_ID },
-        ),
-    ),
+    (
+      await db.transaction(
+        async (tx) =>
+          await reconcileCorpusProjectionDesiredStateTx(
+            asTestRaw<Transaction>(tx),
+            { family: "case_law", entityId: CASE_LAW_DECISION_ID },
+          ),
+      )
+    ).unwrap(),
   ).toMatchObject({ changed: false, epoch: 1n });
   await db
     .update(caseLawDecisions)
@@ -722,13 +730,15 @@ test("bounded reconciliation matches single-row repair and remains a fixed point
     .where(eq(caseLawDecisions.id, CASE_LAW_DECISION_ID));
   await synchronize();
   expect(
-    await db.transaction(
-      async (tx) =>
-        await reconcileCorpusProjectionDesiredStateTx(
-          asTestRaw<Transaction>(tx),
-          { family: "case_law", entityId: CASE_LAW_DECISION_ID },
-        ),
-    ),
+    (
+      await db.transaction(
+        async (tx) =>
+          await reconcileCorpusProjectionDesiredStateTx(
+            asTestRaw<Transaction>(tx),
+            { family: "case_law", entityId: CASE_LAW_DECISION_ID },
+          ),
+      )
+    ).unwrap(),
   ).toMatchObject({ changed: false, epoch: 2n });
 });
 
