@@ -85,8 +85,12 @@
     "batchPosition": "Dokuments {position, number} no {count, number}",
     "bic": "BIC kods",
     "customer": "Pircējs",
-    "documentTitle": "{documentType, select, invoice {Rēķins} creditNote {Kredītrēķins} debitNote {Debetrēķins} advance {Avansa rēķins} other {Cits dokuments}}",
     "documentTitleNumbered": "{documentType, select, invoice {Rēķins {number}} creditNote {Kredītrēķins {number}} debitNote {Debetrēķins {number}} advance {Avansa rēķins {number}} other {Dokuments {number}}}",
+    "documentTypes": {
+      "advance": "Avansa rēķins",
+      "debitNote": "Debetrēķins",
+      "other": "Cits dokuments"
+    },
     "downloadAttachment": "Lejupielādēt {fileName}",
     "exemptionReason": "Atbrīvojuma iemesls",
     "formatVersion": "{format}, versija {version}",

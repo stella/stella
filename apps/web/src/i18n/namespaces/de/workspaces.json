@@ -85,8 +85,12 @@
     "batchPosition": "Beleg {position, number} von {count, number}",
     "bic": "BIC-Code",
     "customer": "Kunde",
-    "documentTitle": "{documentType, select, invoice {Rechnung} creditNote {Gutschrift} debitNote {Belastungsanzeige} advance {Anzahlungsrechnung} other {Sonstiger Beleg}}",
     "documentTitleNumbered": "{documentType, select, invoice {Rechnung {number}} creditNote {Gutschrift {number}} debitNote {Belastungsanzeige {number}} advance {Anzahlungsrechnung {number}} other {Beleg {number}}}",
+    "documentTypes": {
+      "advance": "Anzahlungsrechnung",
+      "debitNote": "Belastungsanzeige",
+      "other": "Sonstiger Beleg"
+    },
     "downloadAttachment": "{fileName} herunterladen",
     "exemptionReason": "Befreiungsgrund",
     "formatVersion": "{format}, Version {version}",

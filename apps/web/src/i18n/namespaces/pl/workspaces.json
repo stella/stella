@@ -85,8 +85,12 @@
     "batchPosition": "Dokument {position, number} z {count, number}",
     "bic": "Kod BIC",
     "customer": "Nabywca",
-    "documentTitle": "{documentType, select, invoice {Faktura} creditNote {Faktura korygująca} debitNote {Nota obciążeniowa} advance {Faktura zaliczkowa} other {Inny dokument}}",
     "documentTitleNumbered": "{documentType, select, invoice {Faktura {number}} creditNote {Faktura korygująca {number}} debitNote {Nota obciążeniowa {number}} advance {Faktura zaliczkowa {number}} other {Dokument {number}}}",
+    "documentTypes": {
+      "advance": "Faktura zaliczkowa",
+      "debitNote": "Nota obciążeniowa",
+      "other": "Inny dokument"
+    },
     "downloadAttachment": "Pobierz {fileName}",
     "exemptionReason": "Podstawa zwolnienia",
     "formatVersion": "{format}, wersja {version}",

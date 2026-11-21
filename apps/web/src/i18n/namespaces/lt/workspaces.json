@@ -85,8 +85,12 @@
     "batchPosition": "Dokumentas {position, number} iš {count, number}",
     "bic": "BIC kodas",
     "customer": "Pirkėjas",
-    "documentTitle": "{documentType, select, invoice {Sąskaita faktūra} creditNote {Kreditinė sąskaita faktūra} debitNote {Debetinė sąskaita faktūra} advance {Išankstinė sąskaita faktūra} other {Kitas dokumentas}}",
     "documentTitleNumbered": "{documentType, select, invoice {Sąskaita faktūra {number}} creditNote {Kreditinė sąskaita faktūra {number}} debitNote {Debetinė sąskaita faktūra {number}} advance {Išankstinė sąskaita faktūra {number}} other {Dokumentas {number}}}",
+    "documentTypes": {
+      "advance": "Išankstinė sąskaita faktūra",
+      "debitNote": "Debetinė sąskaita faktūra",
+      "other": "Kitas dokumentas"
+    },
     "downloadAttachment": "Atsisiųsti {fileName}",
     "exemptionReason": "Atleidimo priežastis",
     "formatVersion": "{format}, versija {version}",

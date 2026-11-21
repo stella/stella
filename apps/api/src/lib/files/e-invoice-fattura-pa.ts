@@ -8,6 +8,7 @@ import {
   childrenOf,
   joined,
   type ParsedEInvoice,
+  statedValues,
   textAt,
   textOf,
 } from "@/api/lib/files/e-invoice-nodes";
@@ -147,9 +148,7 @@ export const readFatturaPaInvoice = (root: DocumentXmlNode): ParsedEInvoice => {
         bankCode: null,
         reference: textAt(payment, "CodicePagamento"),
       })),
-      notes: childrenOf(general, "Causale").flatMap(
-        (reason) => textOf(reason) ?? [],
-      ),
+      notes: statedValues(childrenOf(general, "Causale").map(textOf)),
     };
   });
   return {

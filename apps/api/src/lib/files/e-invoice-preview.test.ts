@@ -1,11 +1,11 @@
 import { describe, expect, test } from "bun:test";
 
 import {
+  CADES_FILE_FORMAT,
   ISDOC_FILE_FORMAT,
   ISDOCX_FILE_FORMAT,
   XML_FILE_FORMAT,
-} from "@stll/api-contract/e-invoice-formats";
-import { CADES_FILE_FORMAT } from "@stll/api-contract/legal-file-formats";
+} from "@stll/api-contract/legal-file-formats";
 
 import { readCadesPreview } from "@/api/lib/files/cades-preview";
 import {

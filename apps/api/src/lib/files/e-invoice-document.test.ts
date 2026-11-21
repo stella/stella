@@ -3,7 +3,10 @@ import { describe, expect, test } from "bun:test";
 import { readEInvoiceFile } from "@/api/lib/files/e-invoice-document";
 import { E_INVOICE_PREVIEW_MAX_LINES } from "@/api/lib/files/e-invoice-nodes";
 import { eInvoiceDocumentText } from "@/api/lib/files/e-invoice-text";
-import { classifyXmlDocument } from "@/api/lib/files/xml-document-class";
+import {
+  classifyXmlDocument,
+  type XmlDocumentClass,
+} from "@/api/lib/files/xml-document-class";
 import { parseXmlDocument } from "@/api/lib/files/xml-document-package";
 import {
   ciiXml,
@@ -34,7 +37,7 @@ const attachmentText = (
   );
 
 describe("XML document routing", () => {
-  test.each([
+  test.each<[string, string, XmlDocumentClass | null]>([
     ["an XAdES signature", xadesSignatureXml(), "xmlSignature"],
     ["a FatturaPA invoice", fatturaPaXml(), "fatturaPA"],
     [

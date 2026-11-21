@@ -8,6 +8,7 @@ import {
   childrenOf,
   joined,
   type ParsedEInvoice,
+  statedValues,
   textAt,
   textOf,
 } from "@/api/lib/files/e-invoice-nodes";
@@ -139,7 +140,7 @@ export const readIsdocInvoice = (root: DocumentXmlNode): ParsedEInvoice => {
         reference: textAt(details, "VariableSymbol"),
       };
     }),
-    notes: childrenOf(root, "Note").flatMap((note) => textOf(note) ?? []),
+    notes: statedValues(childrenOf(root, "Note").map(textOf)),
   };
   return {
     version: attributeOf(root, "version"),

@@ -85,8 +85,12 @@
     "batchPosition": "Dokument {position, number}/{count, number}",
     "bic": "BIC-kood",
     "customer": "Ostja",
-    "documentTitle": "{documentType, select, invoice {Arve} creditNote {Kreeditarve} debitNote {Deebetarve} advance {Ettemaksuarve} other {Muu dokument}}",
     "documentTitleNumbered": "{documentType, select, invoice {Arve {number}} creditNote {Kreeditarve {number}} debitNote {Deebetarve {number}} advance {Ettemaksuarve {number}} other {Dokument {number}}}",
+    "documentTypes": {
+      "advance": "Ettemaksuarve",
+      "debitNote": "Deebetarve",
+      "other": "Muu dokument"
+    },
     "downloadAttachment": "Laadi alla {fileName}",
     "exemptionReason": "Maksuvabastuse põhjus",
     "formatVersion": "{format}, versioon {version}",

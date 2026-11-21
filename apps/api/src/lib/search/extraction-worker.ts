@@ -25,7 +25,6 @@ import { parseIntegerToken } from "@stll/agent-input/numeric-token";
 import type { cadesPreviewSchema } from "@stll/api-contract/cades";
 import { legalFileFormat } from "@stll/api-contract/document-format";
 import type { EInvoicePreview } from "@stll/api-contract/e-invoice";
-import { XML_FILE_FORMAT } from "@stll/api-contract/e-invoice-formats";
 import {
   EMAIL_MIME_TYPES,
   EML_MIME_TYPE,
@@ -34,6 +33,7 @@ import {
 import {
   LEGAL_FILE_FORMATS,
   type LegalFileFormatKind,
+  XML_FILE_FORMAT,
 } from "@stll/api-contract/legal-file-formats";
 import { sanitizeErrorForOutput, sanitizeQueryErrorText } from "@stll/errors";
 import { extractDocxText, FolioDocxReviewer } from "@stll/folio-core/server";
@@ -649,7 +649,10 @@ const extractEmbeddedPayloadText = async (
 };
 
 // Payloads whose signature identifies them as something other than XML.
-const NON_XML_PAYLOAD_MIME_TYPES = new Set([PDF_MIME_TYPE, RTF_MIME_TYPE]);
+const NON_XML_PAYLOAD_MIME_TYPES: ReadonlySet<string> = new Set([
+  PDF_MIME_TYPE,
+  RTF_MIME_TYPE,
+]);
 
 /**
  * A signed payload's content: a structured invoice when the payload is one,
@@ -674,7 +677,10 @@ const readCadesPayloadContent = async (
     }
   }
   const text = await extractEmbeddedPayloadText(file, maxChars);
-  return text.map((value) => ({ invoice: null, text: value ?? "" }));
+  if (text.isErr()) {
+    return Result.err(text.error);
+  }
+  return Result.ok({ invoice: null, text: text.value ?? "" });
 };
 
 type CadesWorkerOptions = {

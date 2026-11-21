@@ -13,16 +13,14 @@ import { eq, inArray, sql } from "drizzle-orm";
 
 import { PREVIEW_UNAVAILABLE_ERROR_CODE } from "@stll/api-contract";
 import { DATA_BOX_MESSAGE_MIME_TYPE } from "@stll/api-contract/data-box";
-import {
-  ISDOC_FILE_FORMAT,
-  ISDOCX_FILE_FORMAT,
-  XML_FILE_FORMAT,
-} from "@stll/api-contract/e-invoice-formats";
 import { EML_MIME_TYPE } from "@stll/api-contract/email-mime-types";
 import {
   ASIC_E_FILE_FORMAT,
   ASIC_S_FILE_FORMAT,
   CADES_FILE_FORMAT,
+  ISDOC_FILE_FORMAT,
+  ISDOCX_FILE_FORMAT,
+  XML_FILE_FORMAT,
 } from "@stll/api-contract/legal-file-formats";
 import { STRUCTURED_DOCUMENT_FORMATS } from "@stll/api-contract/structured-document-formats";
 import { ZipArchive } from "@stll/docx-core/zip";

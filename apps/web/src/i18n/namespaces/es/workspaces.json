@@ -85,8 +85,12 @@
     "batchPosition": "Documento {position, number} de {count, number}",
     "bic": "Código BIC",
     "customer": "Cliente",
-    "documentTitle": "{documentType, select, invoice {Factura} creditNote {Nota de crédito} debitNote {Nota de débito} advance {Factura de anticipo} other {Otro documento}}",
     "documentTitleNumbered": "{documentType, select, invoice {Factura {number}} creditNote {Nota de crédito {number}} debitNote {Nota de débito {number}} advance {Factura de anticipo {number}} other {Documento {number}}}",
+    "documentTypes": {
+      "advance": "Factura de anticipo",
+      "debitNote": "Nota de débito",
+      "other": "Otro documento"
+    },
     "downloadAttachment": "Descargar {fileName}",
     "exemptionReason": "Motivo de exención",
     "formatVersion": "{format}, versión {version}",

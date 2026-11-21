@@ -15,7 +15,9 @@ export const childrenOf = (
   node: DocumentXmlNode | undefined,
   name: string,
 ): DocumentXmlNode[] =>
-  node?.children.filter(({ localName }) => localName === name) ?? [];
+  node === undefined
+    ? []
+    : node.children.filter(({ localName }) => localName === name);
 
 export const at = (
   node: DocumentXmlNode | undefined,
@@ -55,6 +57,10 @@ export const joined = (
 
 export const addressLines = (...lines: (string | null)[]): string[] =>
   lines.filter((line) => line !== null);
+
+/** The stated values of a list, in order, without the empty ones. */
+export const statedValues = (values: (string | null)[]): string[] =>
+  values.filter((value) => value !== null);
 
 /** The first value of a list in which amounts may carry a currency each. */
 export const amountInCurrency = (

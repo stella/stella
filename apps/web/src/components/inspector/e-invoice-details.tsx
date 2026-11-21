@@ -61,7 +61,7 @@ const IDENTIFIER_KIND_LABELS = {
   TranslationKey
 >;
 
-// The select keys the document title's message branches on.
+// The select keys the numbered title's message branches on.
 const DOCUMENT_TYPES = {
   advance: "advance",
   creditNote: "creditNote",
@@ -71,6 +71,18 @@ const DOCUMENT_TYPES = {
 } as const satisfies {
   [Type in (typeof E_INVOICE_DOCUMENT_TYPES)[number]]: Type;
 };
+
+// An unnumbered document is titled by its type alone.
+const DOCUMENT_TYPE_LABELS = {
+  advance: "eInvoice.documentTypes.advance",
+  creditNote: "billing.numberSeries.creditNote",
+  debitNote: "eInvoice.documentTypes.debitNote",
+  invoice: "billing.numberSeries.invoice",
+  other: "eInvoice.documentTypes.other",
+} as const satisfies Record<
+  (typeof E_INVOICE_DOCUMENT_TYPES)[number],
+  TranslationKey
+>;
 
 type Attachment = EInvoicePreview["attachments"][number];
 type Party = EInvoice["seller"];
@@ -435,7 +447,7 @@ const InvoiceDetails = ({
         )}
         <h2 className="text-base font-medium wrap-break-word">
           {invoice.number === null
-            ? t("eInvoice.documentTitle", { documentType })
+            ? t(DOCUMENT_TYPE_LABELS[invoice.documentType])
             : t("eInvoice.documentTitleNumbered", {
                 documentType,
                 number: invoice.number,

@@ -1,11 +1,11 @@
 import { ASIC_FILE_FORMATS } from "@stll/api-contract/asic-file-formats";
-import { ISDOCX_FILE_FORMAT } from "@stll/api-contract/e-invoice-formats";
+import { E_INVOICE_FILE_FORMATS } from "@stll/api-contract/e-invoice-formats";
 import { STRUCTURED_DOCUMENT_FORMATS } from "@stll/api-contract/structured-document-formats";
 
 const DOCUMENT_ARCHIVE_FORMATS = [
   ...ASIC_FILE_FORMATS,
   ...STRUCTURED_DOCUMENT_FORMATS,
-  ISDOCX_FILE_FORMAT,
+  ...E_INVOICE_FILE_FORMATS.filter(({ container }) => container === "zip"),
 ];
 
 export const isDocumentArchiveMimeType = (mimeType: string): boolean =>

@@ -11,6 +11,7 @@ import {
   type EmbeddedInvoiceFile,
   joined,
   type ParsedEInvoice,
+  statedValues,
   textAt,
   textOf,
 } from "@/api/lib/files/e-invoice-nodes";
@@ -196,12 +197,12 @@ export const readCiiInvoice = (root: DocumentXmlNode): ParsedEInvoice => {
         reference: textAt(settlement, "PaymentReference"),
       };
     }),
-    notes: [
-      ...childrenOf(document, "IncludedNote").flatMap(
-        (note) => textAt(note, "Content") ?? [],
+    notes: statedValues([
+      ...childrenOf(document, "IncludedNote").map((note) =>
+        textAt(note, "Content"),
       ),
-      ...terms.flatMap((term) => textAt(term, "Description") ?? []),
-    ],
+      ...terms.map((term) => textAt(term, "Description")),
+    ]),
   };
   return {
     version: textAt(

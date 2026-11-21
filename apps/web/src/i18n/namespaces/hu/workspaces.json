@@ -85,8 +85,12 @@
     "batchPosition": "{position, number}. bizonylat ({count, number} közül)",
     "bic": "BIC-kód",
     "customer": "Vevő",
-    "documentTitle": "{documentType, select, invoice {Számla} creditNote {Jóváíró számla} debitNote {Terhelési értesítő} advance {Előlegszámla} other {Egyéb bizonylat}}",
     "documentTitleNumbered": "{documentType, select, invoice {Számla: {number}} creditNote {Jóváíró számla: {number}} debitNote {Terhelési értesítő: {number}} advance {Előlegszámla: {number}} other {Bizonylat: {number}}}",
+    "documentTypes": {
+      "advance": "Előlegszámla",
+      "debitNote": "Terhelési értesítő",
+      "other": "Egyéb bizonylat"
+    },
     "downloadAttachment": "{fileName} letöltése",
     "exemptionReason": "Mentesség oka",
     "formatVersion": "{format}, {version} verzió",

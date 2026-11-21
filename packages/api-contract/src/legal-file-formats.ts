@@ -8,6 +8,9 @@ export const STRUCTURED_DOCUMENT_KINDS = STRUCTURED_DOCUMENT_FORMATS.map(
 
 export const E_INVOICE_KINDS = E_INVOICE_FILE_FORMATS.map(({ kind }) => kind);
 
+export const [ISDOC_FILE_FORMAT, ISDOCX_FILE_FORMAT, XML_FILE_FORMAT] =
+  E_INVOICE_FILE_FORMATS;
+
 export const DATA_BOX_FILE_FORMAT = {
   kind: "dataBox",
   mimeAliases: [],

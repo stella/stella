@@ -11,6 +11,7 @@ import {
   type EmbeddedInvoiceFile,
   joined,
   type ParsedEInvoice,
+  statedValues,
   textAt,
   textOf,
 } from "@/api/lib/files/e-invoice-nodes";
@@ -167,12 +168,14 @@ export const readUblInvoice = (root: DocumentXmlNode): ParsedEInvoice => {
         reference: textAt(payment, "PaymentID"),
       };
     }),
-    notes: [
-      ...childrenOf(root, "Note"),
-      ...childrenOf(root, "PaymentTerms").flatMap((terms) =>
-        childrenOf(terms, "Note"),
-      ),
-    ].flatMap((note) => textOf(note) ?? []),
+    notes: statedValues(
+      [
+        ...childrenOf(root, "Note"),
+        ...childrenOf(root, "PaymentTerms").flatMap((terms) =>
+          childrenOf(terms, "Note"),
+        ),
+      ].map(textOf),
+    ),
   };
   return {
     version: textAt(root, "CustomizationID") ?? textAt(root, "UBLVersionID"),

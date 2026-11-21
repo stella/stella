@@ -85,8 +85,12 @@
     "batchPosition": "Doklad {position, number} z {count, number}",
     "bic": "Kód BIC",
     "customer": "Odberateľ",
-    "documentTitle": "{documentType, select, invoice {Faktúra} creditNote {Dobropis} debitNote {Ťarchopis} advance {Zálohová faktúra} other {Iný doklad}}",
     "documentTitleNumbered": "{documentType, select, invoice {Faktúra {number}} creditNote {Dobropis {number}} debitNote {Ťarchopis {number}} advance {Zálohová faktúra {number}} other {Doklad {number}}}",
+    "documentTypes": {
+      "advance": "Zálohová faktúra",
+      "debitNote": "Ťarchopis",
+      "other": "Iný doklad"
+    },
     "downloadAttachment": "Stiahnuť {fileName}",
     "exemptionReason": "Dôvod oslobodenia",
     "formatVersion": "{format}, verzia {version}",
