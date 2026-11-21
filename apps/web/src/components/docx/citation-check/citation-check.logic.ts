@@ -35,7 +35,7 @@ const CLOSING_PUNCTUATION = ".,;:!?)]}\"'»„“”";
  * than by an anchored pattern so a long run of marks costs one pass.
  */
 const stripSurroundingPunctuation = (candidate: string): string => {
-  const characters = [...candidate];
+  const characters = Array.from(candidate);
   let start = 0;
   let end = characters.length;
   while (

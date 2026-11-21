@@ -94,7 +94,7 @@ const renderCitationCheck = (status: "enabled" | "hidden" | "undeclared") => {
     useExternalSyncEffect(() => {
       latest.push(citationCheck);
     }, [citationCheck]);
-    return citationCheck.card;
+    return <div>{citationCheck.card}</div>;
   };
   render(
     <QueryClientProvider client={client}>
