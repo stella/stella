@@ -279,24 +279,18 @@ const PeekPdfViewerContent = ({
         fieldId={fieldId}
         pendingPdfPageScroll={pendingPdfPageScroll}
       />
-      <PDFViewport
-        buffer={file.buffer}
-        className="document-preview-surface h-full"
-        contentClassName="relative space-y-2 px-2 pt-2"
-        fileId={fieldId}
-        pageSource={pdfPageSource}
-        invertColors={resolvePDFInvertColors({
-          colorMode,
-          isImageOrigin,
-        })}
-        scaleOffset={scaleOffset}
+      <PeekPdfViewport
         activeSearchMatchIndex={activeSearchMatchIndex}
+        buffer={file.buffer}
+        colorMode={colorMode}
+        fileId={fieldId}
+        isImageOrigin={isImageOrigin}
         onSearchMatchSummaryChange={onSearchMatchSummaryChange}
         onWheelZoom={onWheelZoom}
+        pageSource={pdfPageSource}
+        renderPageOverlay={renderPageOverlay}
+        scaleOffset={scaleOffset}
         searchText={searchText}
-        renderPage={(props) => (
-          <PDFPage {...props} renderOverlay={renderPageOverlay} />
-        )}
       />
     </>
   );
@@ -324,6 +318,52 @@ const PeekPdfViewerContent = ({
     </FileViewerWithAI>
   );
 };
+
+type PeekPdfViewportProps = {
+  buffer: ArrayBuffer;
+  /** Names the parsed document; distinct per set of bytes on screen. */
+  fileId: string;
+  pageSource: PDFPageSource;
+  /** The zoom over the fit-to-width scale, as the zoom controls set it. */
+  scaleOffset: number;
+  colorMode: PDFColorMode;
+  isImageOrigin?: boolean | undefined;
+  onWheelZoom?: ((deltaY: number) => void) | undefined;
+  searchText?: SearchTextQuery | undefined;
+  activeSearchMatchIndex?: number | undefined;
+  onSearchMatchSummaryChange?:
+    ((summary: SearchMatchSummary) => void) | undefined;
+  renderPageOverlay?: ((pageId: string) => ReactNode) | undefined;
+};
+
+/**
+ * The inspector's PDF pages, whatever file the bytes come from: the file's
+ * own PDF, or one a signed container holds. Inside a measured PDF provider
+ * the pages fit the panel's width, follow the zoom controls and zoom with
+ * ctrl or cmd and the wheel, the same in every preview that draws a PDF.
+ */
+export const PeekPdfViewport = ({
+  buffer,
+  colorMode,
+  fileId,
+  isImageOrigin = false,
+  pageSource,
+  renderPageOverlay,
+  ...props
+}: PeekPdfViewportProps) => (
+  <PDFViewport
+    {...props}
+    buffer={buffer}
+    className="document-preview-surface h-full"
+    contentClassName="relative space-y-2 px-2 pt-2"
+    fileId={fileId}
+    invertColors={resolvePDFInvertColors({ colorMode, isImageOrigin })}
+    pageSource={pageSource}
+    renderPage={(pageProps) => (
+      <PDFPage {...pageProps} renderOverlay={renderPageOverlay} />
+    )}
+  />
+);
 
 const PeekPdfCitationNavigation = ({
   clearPendingPdfPageScroll,

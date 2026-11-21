@@ -33,6 +33,10 @@ import {
   LEGAL_FILE_FORMATS,
   type LegalFileFormatKind,
 } from "@stll/api-contract/legal-file-formats";
+import type {
+  PreviewText,
+  PreviewTextFormat,
+} from "@stll/api-contract/preview-text";
 import { sanitizeErrorForOutput, sanitizeQueryErrorText } from "@stll/errors";
 import { extractDocxText, FolioDocxReviewer } from "@stll/folio-core/server";
 import { load } from "@stll/html";
@@ -402,7 +406,9 @@ const extractCadesText = async ({
   if (content.isErr()) {
     return content;
   }
-  return Result.ok(cadesDocumentText({ layers, text: content.value ?? "" }));
+  return Result.ok(
+    cadesDocumentText({ layers, text: content.value?.text ?? "" }),
+  );
 };
 
 const extractAsicText = async ({
@@ -589,28 +595,49 @@ const readMaxCharsArgument = (value: string | undefined): number => {
   return parsed;
 };
 
+/**
+ * A contained document's text with its markup, named by the reader that
+ * produced it: the converters write Markdown, a text file is read as the
+ * text it holds. A preview renders each as what it is and never guesses.
+ */
+const readEmbeddedPayload = async (
+  bytes: Uint8Array,
+  mimeType: string,
+): Promise<{ text: string | null; format: PreviewTextFormat } | null> => {
+  if (mimeType === PDF_MIME_TYPE) {
+    return { text: await extractPdfMarkdown(bytes), format: "markdown" };
+  }
+  if (mimeType === DOCX_MIME_TYPE || isOfficeDocumentMimeType(mimeType)) {
+    return {
+      text: await extractOfficeDocumentMarkdown(bytes),
+      format: "markdown",
+    };
+  }
+  if (isDirectTextMimeType(mimeType)) {
+    return {
+      text: extractDirectText(bytes, mimeType),
+      format: mimeType === "text/markdown" ? "markdown" : "plain",
+    };
+  }
+  return null;
+};
+
 const extractEmbeddedPayloadText = async (
   file: ScannedFile,
   maxChars: number,
-) => {
+): Promise<Result<PreviewText | null, UnhandledException>> => {
   // Embedded data is dispatched only to leaf readers, even if an archive
   // member is itself a signed container or a message.
   const bytes = new Uint8Array(file.bytes);
   const mimeType = normalizeMimeType(file.mimeType);
-  const content = await Result.tryPromise(async () => {
-    if (mimeType === PDF_MIME_TYPE) {
-      return await extractPdfMarkdown(bytes);
-    }
-    if (mimeType === DOCX_MIME_TYPE || isOfficeDocumentMimeType(mimeType)) {
-      return await extractOfficeDocumentMarkdown(bytes);
-    }
-    if (isDirectTextMimeType(mimeType)) {
-      return extractDirectText(bytes, mimeType);
-    }
-    return null;
-  });
+  const content = await Result.tryPromise(
+    async () => await readEmbeddedPayload(bytes, mimeType),
+  );
   if (content.isOk()) {
-    return Result.ok(content.value?.slice(0, maxChars) || null);
+    const text = content.value?.text?.slice(0, maxChars);
+    return Result.ok(
+      content.value && text ? { text, format: content.value.format } : null,
+    );
   }
 
   const error = content.error.cause;
@@ -674,7 +701,8 @@ const writeCadesPreview = async ({
     fileName: sanitizeFilename(file.fileName),
     mimeType: file.mimeType,
     layers,
-    text: content.value ?? "",
+    text: content.value?.text ?? "",
+    textFormat: content.value?.format ?? "plain",
   } satisfies v.InferOutput<typeof cadesPreviewSchema>;
   await writeWorkerStdout(JSON.stringify(preview));
   return Result.ok(0);

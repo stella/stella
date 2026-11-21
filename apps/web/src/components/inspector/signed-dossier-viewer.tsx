@@ -12,20 +12,25 @@ import { cn } from "@stll/ui/utils";
 import { DOCKED_COMPOSER_CLEARANCE } from "@/components/ai-suggestions/composer-geometry";
 import { FileViewerWithAI } from "@/components/ai-suggestions/file-viewer-with-ai";
 import type { FileTab } from "@/components/inspector/file-tab";
-import { PeekSuspenseFallback } from "@/components/pdf/peek/peek-pdf-viewer";
+import type { LegalFilePdfView } from "@/components/inspector/legal-file-pdf-view";
+import { LegalFilePreviewText } from "@/components/inspector/legal-file-preview-text";
+import { MeasuredPdfProvider } from "@/components/inspector/measured-pdf-provider";
+import {
+  PeekPdfViewport,
+  PeekSuspenseFallback,
+} from "@/components/pdf/peek/peek-pdf-viewer";
 import {
   signedDossierPdfOptions,
   signedDossierPreviewOptions,
 } from "@/lib/files/legal-file-queries";
-import { PDFProvider } from "@/lib/pdf/pdf-context";
-import { PDFPage } from "@/lib/pdf/pdf-page";
-import { PDFViewport } from "@/lib/pdf/pdf-viewport";
 
 export const SignedDossierViewer = ({
   onDownload,
+  pdfView,
   tab,
 }: {
   onDownload: () => void;
+  pdfView: LegalFilePdfView;
   tab: FileTab;
 }) => {
   const { data } = useSuspenseQuery(
@@ -38,7 +43,7 @@ export const SignedDossierViewer = ({
   const firstPdf = data.documents.findIndex(({ pdf }) => pdf);
   const [selected, setSelected] = useState(firstPdf);
   const shownPdf = data.documents[selected]?.pdf === true ? selected : -1;
-  const hasPdf = shownPdf !== -1;
+  const shown = data.documents[shownPdf];
 
   return (
     <FileViewerWithAI
@@ -54,11 +59,11 @@ export const SignedDossierViewer = ({
         axis="vertical"
         className={cn(
           "min-h-0",
-          hasPdf ? "h-auto max-h-[45%] shrink-0" : "flex-1",
+          shown ? "h-auto max-h-[45%] shrink-0" : "flex-1",
         )}
       >
         <article
-          {...(hasPdf ? {} : DOCKED_COMPOSER_CLEARANCE)}
+          {...(shown ? {} : DOCKED_COMPOSER_CLEARANCE)}
           className="space-y-3 p-4"
         >
           <p className="text-muted-foreground text-sm">
@@ -95,7 +100,7 @@ export const SignedDossierViewer = ({
             <h2 className="font-medium">{t("common.documents")}</h2>
             <ul className="divide-y">
               {data.documents.map(
-                ({ id, fileName, pdf, status, text }, index) => (
+                ({ id, fileName, pdf, status, text, textFormat }, index) => (
                   <li className="space-y-2 py-3" key={id}>
                     <div className="flex items-center justify-between gap-2">
                       <h3 className="min-w-0 font-medium wrap-break-word">
@@ -116,12 +121,7 @@ export const SignedDossierViewer = ({
                       )}
                     </div>
                     {!pdf && status !== "unavailable" && text.trim() ? (
-                      <pre
-                        className="font-sans leading-relaxed wrap-break-word whitespace-pre-wrap"
-                        dir="auto"
-                      >
-                        {text}
-                      </pre>
+                      <LegalFilePreviewText format={textFormat} text={text} />
                     ) : null}
                     {!pdf && status === "truncated" && (
                       <p className="text-muted-foreground">
@@ -140,39 +140,44 @@ export const SignedDossierViewer = ({
           </section>
         </article>
       </ScrollArea>
-      {hasPdf && (
-        <div className="document-preview-surface min-h-0 flex-1 border-t">
-          <PDFProvider
+      {shown && (
+        // The chosen PDF is drawn by the inspector's PDF viewer, as a P7M's
+        // embedded PDF is: fit to the panel, zoom controls and wheel zoom.
+        <div className="relative flex min-h-0 min-w-0 flex-1 flex-col border-t">
+          <MeasuredPdfProvider
+            active
             fallback={{
               suspense: <PeekSuspenseFallback />,
-              error: () => (
+              error: (
                 <ScrollArea axis="vertical" className="h-full">
                   <div className="space-y-3 p-4" {...DOCKED_COMPOSER_CLEARANCE}>
                     <p className="text-muted-foreground text-sm">
                       {t("signedFile.pdfUnavailable")}
                     </p>
-                    <pre
-                      className="font-sans text-sm leading-relaxed wrap-break-word whitespace-pre-wrap"
-                      dir="auto"
-                    >
-                      {data.documents[shownPdf]?.text}
-                    </pre>
+                    {shown.text.trim() ? (
+                      <LegalFilePreviewText
+                        format={shown.textFormat}
+                        text={shown.text}
+                      />
+                    ) : null}
                   </div>
                 </ScrollArea>
               ),
             }}
-            fieldId={`signed-dossier:${tab.id}:${shownPdf}`}
-            key={shownPdf}
+            fieldId={`signed-dossier:${tab.id}:${shown.id}`}
+            initialScaleOffset={pdfView.scaleOffset}
+            key={shown.id}
             onDownload={onDownload}
-            startPage={1}
             surface="inspector-signed-dossier"
           >
             <SignedDossierPdf
               document={shownPdf}
               fieldId={tab.id}
+              pdfView={pdfView}
               workspaceId={tab.workspaceId}
             />
-          </PDFProvider>
+          </MeasuredPdfProvider>
+          {pdfView.controls}
         </div>
       )}
     </FileViewerWithAI>
@@ -182,23 +187,25 @@ export const SignedDossierViewer = ({
 const SignedDossierPdf = ({
   document,
   fieldId,
+  pdfView,
   workspaceId,
 }: {
   document: number;
   fieldId: string;
+  pdfView: LegalFilePdfView;
   workspaceId: string;
 }) => {
   const { data: buffer } = useSuspenseQuery(
     signedDossierPdfOptions({ document, fieldId, workspaceId }),
   );
   return (
-    <PDFViewport
+    <PeekPdfViewport
       buffer={buffer}
-      className="h-full"
-      contentClassName="relative mt-2 space-y-2 px-2"
+      colorMode={pdfView.colorMode}
       fileId={`signed-dossier:${fieldId}:${document}`}
+      onWheelZoom={pdfView.onWheelZoom}
       pageSource="document"
-      renderPage={(props) => <PDFPage {...props} />}
+      scaleOffset={pdfView.scaleOffset}
     />
   );
 };

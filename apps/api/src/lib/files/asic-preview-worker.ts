@@ -3,6 +3,7 @@ import type { InferOutput } from "valibot";
 
 import type { asicPreviewSchema } from "@stll/api-contract/asic";
 import { ASIC_FILE_FORMATS } from "@stll/api-contract/asic-file-formats";
+import type { PreviewText } from "@stll/api-contract/preview-text";
 
 import type {
   FileScanFailedError,
@@ -78,7 +79,7 @@ type AsicPreviewReadError = AsicParseError | MemberTextReadError;
 export type ReadMemberText = (
   file: ScannedFile,
   maxChars: number,
-) => Promise<Result<string | null, UnhandledException>>;
+) => Promise<Result<PreviewText | null, UnhandledException>>;
 
 /** A document inside a container. An opaque one is listed but never read. */
 export type ContainerMember = {
@@ -142,6 +143,7 @@ export const readContainerMemberTexts = async ({
         mimeType: OPAQUE_EMBEDDED_MIME_TYPE,
         status: "unavailable",
         text: "",
+        textFormat: "plain",
       });
       continue;
     }
@@ -150,7 +152,12 @@ export const readContainerMemberTexts = async ({
     if (scanned.isErr()) {
       return Result.err(scanned.error);
     }
-    const unread = { fileName: member.fileName, mimeType, text: "" };
+    const unread = {
+      fileName: member.fileName,
+      mimeType,
+      text: "",
+      textFormat: "plain",
+    } as const;
     if (mimeType === OPAQUE_EMBEDDED_MIME_TYPE) {
       texts.push({ ...unread, status: "unavailable" });
       continue;
@@ -163,14 +170,14 @@ export const readContainerMemberTexts = async ({
     if (content.isErr()) {
       return Result.err(content.error);
     }
-    const text = content.value;
-    if (!text) {
+    if (content.value === null) {
       texts.push({ ...unread, status: "unavailable" });
       continue;
     }
+    const { text, format: textFormat } = content.value;
     const status = text.length > remainingChars ? "truncated" : "readable";
     const visibleText = text.slice(0, remainingChars);
-    texts.push({ ...unread, status, text: visibleText });
+    texts.push({ ...unread, status, text: visibleText, textFormat });
     remainingChars -= visibleText.length;
   }
   return Result.ok(texts);
@@ -214,6 +221,7 @@ export const extractAsicPreview = async ({
         fileName,
         status: "truncated",
         text: "",
+        textFormat: "plain",
       })),
     }).length + parsed.value.members.length;
   const members = await readContainerMemberTexts({
@@ -225,10 +233,11 @@ export const extractAsicPreview = async ({
     return Result.err(members.error);
   }
   return Result.ok({
-    members: members.value.map(({ fileName, status, text }) => ({
+    members: members.value.map(({ fileName, status, text, textFormat }) => ({
       fileName,
       status,
       text,
+      textFormat,
     })),
   });
 };

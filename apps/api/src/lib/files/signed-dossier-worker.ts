@@ -81,6 +81,7 @@ export const extractSignedDossierPreview = async ({
         pdf: false,
         status: "truncated",
         text: "",
+        textFormat: "plain",
       })),
     }).length + documents.length;
   const texts = await readContainerMemberTexts({
@@ -94,11 +95,12 @@ export const extractSignedDossierPreview = async ({
   return Result.ok({
     signers,
     documents: texts.value.map(
-      ({ fileName, mimeType: type, status, text }, position) => ({
+      ({ fileName, mimeType: type, status, text, textFormat }, position) => ({
         id: documentId(position),
         fileName,
         status,
         text,
+        textFormat,
         pdf: type === PDF_MIME_TYPE,
       }),
     ),

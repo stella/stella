@@ -118,8 +118,8 @@ export const signedDossierPdfOptions = ({
   workspaceId,
 }: FileOptionsProps & { document: number }) =>
   resourceQueryOptions(
+    // Cached like the signed file's own PDF, for the same reason.
     queryOptions({
-      gcTime: 0,
       retry: false,
       queryKey: [
         ...legalFileKeys.signedDossier({ fieldId, workspaceId }),
@@ -228,10 +228,12 @@ export const cadesPreviewOptions = (props: FileOptionsProps) =>
   );
 
 /** An audited PDF the API derives from a signed file, read within the upload limit. */
+// Cached like a file's own bytes (`fileOptions`): reopening the tab reuses
+// them, and with them the parsed document, instead of extracting the PDF
+// from the signed container again behind a loading state.
 export const cadesPdfOptions = ({ fieldId, workspaceId }: FileOptionsProps) =>
   resourceQueryOptions(
     queryOptions({
-      gcTime: 0,
       retry: false,
       queryKey: [...legalFileKeys.cades({ fieldId, workspaceId }), "pdf"],
       queryFn: async ({ signal }) =>

@@ -72,6 +72,7 @@ test("previews an e-akta dossier uploaded under a generic type, and search reads
         fileName: "kérelem.txt",
         text: "Kérelem száma 47",
         status: "readable",
+        textFormat: "plain",
         pdf: false,
       },
       {
@@ -79,6 +80,7 @@ test("previews an e-akta dossier uploaded under a generic type, and search reads
         fileName: "végzés.pdf",
         text: expect.stringContaining(marker),
         status: "readable",
+        textFormat: "markdown",
         pdf: true,
       },
       {
@@ -86,6 +88,7 @@ test("previews an e-akta dossier uploaded under a generic type, and search reads
         fileName: "csomag.zip",
         text: "",
         status: "unavailable",
+        textFormat: "plain",
         pdf: false,
       },
     ],
@@ -140,6 +143,7 @@ test("previews a ZEPf container stored as a generic ZIP", async () => {
       fileName: "M20260105090000Z.txt",
       text: "Žiadosť",
       status: "readable",
+      textFormat: "plain",
       pdf: false,
     },
     {
@@ -147,6 +151,7 @@ test("previews a ZEPf container stored as a generic ZIP", async () => {
       fileName: "rozhodnutie.pdf",
       text: expect.stringContaining(marker),
       status: "readable",
+      textFormat: "markdown",
       pdf: true,
     },
   ]);

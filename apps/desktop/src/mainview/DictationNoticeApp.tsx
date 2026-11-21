@@ -115,7 +115,8 @@ const DictationNoticeApp = () => {
               {t(copy.action)}
             </Button>
           )}
-          {copy.action === "chooseMicrophone" ? null : (
+          {copy.action === "chooseMicrophone" ||
+          snapshot.kind === "modelWithdrawn" ? null : (
             <Button
               onClick={() => {
                 respond("chooseMicrophone");

@@ -1,5 +1,7 @@
 import * as v from "valibot";
 
+import { previewTextFormatSchema } from "./preview-text";
+
 /**
  * A national signed container's contents. Documents keep the container's
  * order; a document's position in the list addresses its PDF content. Signer
@@ -13,6 +15,7 @@ export const signedDossierPreviewSchema = v.object({
       id: v.string(),
       fileName: v.string(),
       text: v.string(),
+      textFormat: previewTextFormatSchema,
       status: v.picklist(["readable", "truncated", "unavailable"]),
       /** Whether the document is a PDF the content route can deliver. */
       pdf: v.boolean(),

@@ -300,11 +300,11 @@ export const emailAttachmentPreviewOptions = ({
   fieldId,
   workspaceId,
 }: FileOptionsProps & { attachmentId: string }) =>
+  // Cached like a file's own bytes, so going back to an attachment shows it
+  // at once instead of downloading it again.
   queryOptions({
     enabled: attachmentId.length > 0,
-    gcTime: 0,
     retry: false,
-    staleTime: 0,
     queryKey: [
       ...filesKeys.emailHtmlByFieldId({ fieldId, workspaceId }),
       "attachment-preview",
