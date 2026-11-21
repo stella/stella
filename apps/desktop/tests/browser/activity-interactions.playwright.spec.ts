@@ -534,6 +534,7 @@ const installNativeBoundary = async ({
                   entryId: entry.entryId,
                   narrative:
                     "steer" in request ? refinedNarrative : generatedNarrative,
+                  narrativeLanguage: "en",
                   classification: {
                     type: "ledes",
                     taskCode: "L120",
@@ -563,6 +564,7 @@ const installNativeBoundary = async ({
                 ],
               },
               earlierEntries: [earlierEntry],
+              codeNames: [],
             };
           }
           return {
@@ -572,10 +574,12 @@ const installNativeBoundary = async ({
                 entryId: entry.entryId,
                 narrative:
                   "steer" in request ? refinedNarrative : generatedNarrative,
+                narrativeLanguage: "en",
                 matchedEarlierEntryIds: [earlierEntry.id],
               })),
             },
             earlierEntries: [earlierEntry],
+            codeNames: [],
           };
         },
         activity_set_recording_status: (args) => {
@@ -2079,15 +2083,17 @@ test("accessibility hint opens system settings only after a user request", async
       detailsAccess: "accessibilityRequired",
     },
   });
-  await expect(
-    page.getByText(enMessages.activity.accessibilityRequired, { exact: true }),
-  ).toBeVisible();
+  // Settings show the Activity window's own strip under the titles row.
+  const strip = page.getByRole("region", {
+    name: enMessages.activity.titlesNotRecorded,
+  });
+  await expect(strip).toBeVisible();
   expect(await tauriInvocations(page)).not.toContainEqual(
     expect.objectContaining({
       command: "activity_open_accessibility_settings",
     }),
   );
-  await page
+  await strip
     .getByRole("button", {
       name: enMessages.activity.openAccessibilitySettings,
     })
@@ -2452,7 +2458,9 @@ for (const language of ["en", "ar"] as const) {
       language,
     });
     await expect(
-      page.getByText(messages.activity.welcomeDetails, { exact: true }),
+      page.getByText(messages.activity.disclosure.sent.aiDrafts, {
+        exact: true,
+      }),
     ).toBeHidden();
     await expect(page.locator("html")).toHaveAttribute(
       "dir",
@@ -2475,7 +2483,7 @@ for (const language of ["en", "ar"] as const) {
     await disclosure.press("Enter");
     await expect(disclosure).toBeFocused();
     await expect(disclosure).toHaveAttribute("aria-expanded", "true");
-    const details = page.getByText(messages.activity.welcomeDetails, {
+    const details = page.getByText(messages.activity.disclosure.sent.aiDrafts, {
       exact: true,
     });
     await expect(details).toBeVisible();
@@ -3013,7 +3021,7 @@ test("suggestions render as dashed blocks and the day is triaged from the keyboa
           entry: expect.objectContaining({
             matterId: "matter-1",
             durationMinutes: 30,
-            narrative: "Work on Lease draft.docx",
+            narrative: "Work on “Lease draft.docx”",
             billable: true,
           }),
           ranges: [
@@ -3763,6 +3771,7 @@ test("refining a draft proposes the change, accepting applies it and Undo restor
           {
             entryId: "entry_1",
             narrative: GENERATED_NARRATIVE,
+            narrativeLanguage: "en",
             matchedEarlierEntryIds: [EARLIER_ENTRY.id],
           },
         ],
@@ -3770,7 +3779,7 @@ test("refining a draft proposes the change, accepting applies it and Undo restor
     },
   });
   await proposal
-    .getByRole("button", { name: enMessages.activity.aiAccept })
+    .getByRole("button", { name: enMessages.activity.aiApplyChange })
     .click();
   await expect(narrative).toHaveValue(REFINED_NARRATIVE);
   await card.getByRole("button", { name: enMessages.activity.aiUndo }).click();
@@ -3805,7 +3814,7 @@ test("dismissing a proposal keeps the draft, and Use original brings back the te
   await card
     .getByRole("button", { name: enMessages.activity.aiUseOriginal })
     .click();
-  await expect(narrative).toHaveValue("Work on Lease draft.docx");
+  await expect(narrative).toHaveValue("Work on “Lease draft.docx”");
 });
 
 test("an instruction remembered while refining becomes the drafting preference", async ({
@@ -3891,7 +3900,7 @@ test("a failed draft keeps the template and offers to try again", async ({
   await expect(card.getByText(enMessages.activity.aiDraftFailed)).toBeVisible();
   await expect(
     card.getByRole("textbox", { name: enMessages.activity.entryNarrative }),
-  ).toHaveValue("Work on Lease draft.docx");
+  ).toHaveValue("Work on “Lease draft.docx”");
   await expect(
     card.getByRole("button", { name: enMessages.activity.aiDraftRetry }),
   ).toBeVisible();
@@ -3900,7 +3909,7 @@ test("a failed draft keeps the template and offers to try again", async ({
   ).toBeEnabled();
 });
 
-test("with drafting switched off for the firm, a card offers no stella AI and sends nothing", async ({
+test("with drafting switched off for the firm, a card says so quietly and sends nothing", async ({
   page,
 }) => {
   await installNativeBoundary({
@@ -3911,6 +3920,7 @@ test("with drafting switched off for the firm, a card offers no stella AI and se
   await openSuggestion(page, "Example matter");
   const card = suggestionCard(page, "Example matter");
   await expect(card).toBeFocused();
+  await expect(card.getByText(enMessages.activity.aiDraftOff)).toBeVisible();
   await expect(card.getByText(enMessages.activity.aiDraftConsent)).toHaveCount(
     0,
   );
@@ -3941,5 +3951,28 @@ test("Settings withdraws consent to stella AI drafts and sends nothing else", as
     command: "billing_draft_withdraw_consent",
     args: { scopeKey: '["org_fixture","user_fixture"]' },
   });
+  expect(await draftInvocations(page)).toEqual([]);
+});
+
+test("Settings allows stella AI drafts again with the consent a card asks for", async ({
+  page,
+}) => {
+  await installNativeBoundary({
+    page,
+    view: "settings",
+    drafting: { ...DRAFTING, consent: "revoked" },
+  });
+  await expect(page.getByText(enMessages.activity.aiDraftOffer)).toBeVisible();
+  await page
+    .getByRole("button", { name: enMessages.activity.aiDraftAllow })
+    .click();
+  await expect(
+    page.getByText(enMessages.activity.billingDraftsGranted),
+  ).toBeVisible();
+  await expect
+    .poll(async () =>
+      (await tauriInvocations(page)).map(({ command }) => command),
+    )
+    .toContain("billing_draft_grant_consent");
   expect(await draftInvocations(page)).toEqual([]);
 });

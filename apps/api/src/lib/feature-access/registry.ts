@@ -50,6 +50,8 @@ export const LEGAL_LISTS_FEATURE_ID = "legal-lists";
 
 export const CONFLICT_CHECK_FEATURE_ID = "conflict-check";
 
+export const CITATION_CHECK_FEATURE_ID = "citation-check";
+
 export const SELF_SERVE_FEATURE_IDS = ["time-billing", "local-agents"] as const;
 export const LIST_VERIFICATION_FEATURE_ID = "list-verification";
 export const GENERATED_VIEWS_FEATURE_ID = "generated-views";
@@ -119,6 +121,22 @@ export const FEATURE_REGISTRY = defineFeatureRegistry({
         "apps/api/src/lib/conflict-check/party-index.ts",
         "apps/api/src/lib/conflict-check/project.ts",
         "apps/api/src/lib/conflict-check/screen.ts",
+      ],
+    },
+  },
+  // The document editor's citation check: dark-launched behind the
+  // deployment flag, then opened per organization by an operator grant, since
+  // every checked sentence is one decision-model request.
+  [CITATION_CHECK_FEATURE_ID]: {
+    enrolment: "invitation",
+    grantScope: "organization",
+    deploymentFeature: "FEATURE_CITATION_CHECK",
+    ownership: {
+      handlerDirectories: [],
+      tableSchemaFiles: [],
+      coreModules: [
+        "apps/api/src/handlers/case-law/citations/check-decision.ts",
+        "apps/api/src/handlers/case-law/citations/check.logic.ts",
       ],
     },
   },

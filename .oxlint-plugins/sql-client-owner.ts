@@ -89,6 +89,15 @@ export default eslintCompatPlugin({
         };
         return {
           before() {
+            const text = context.sourceCode.text;
+            if (
+              !text.includes("drizzle-orm/bun-sql") &&
+              !text.includes("SQL") &&
+              !text.includes('"bun"') &&
+              !text.includes("'bun'")
+            ) {
+              return false;
+            }
             const filename = repoRelativeFilename(context);
             return canonicalModuleId(filename, filename) !== SQL_CLIENT_OWNER;
           },

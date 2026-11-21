@@ -1,6 +1,7 @@
 import AVFoundation
 import ExpoModulesCore
 import Network
+import UIKit
 
 /// What a dictation asks of the phone beyond the recorder
 /// (`src/native/dictation-device.ts`): which microphone it records from,
@@ -64,6 +65,13 @@ public class DictationDeviceModule: Module {
       try self.route(builtInMicrophone: builtInMicrophone)
     }
 
+    // A light tap the person feels as a dictation starts and stops.
+    Function("tap") {
+      DispatchQueue.main.async {
+        UIImpactFeedbackGenerator(style: .light).impactOccurred()
+      }
+    }
+
     Function("releaseRoute") {
       self.holdsBuiltInMicrophone = false
       try? AVAudioSession.sharedInstance().setPreferredInput(nil)
@@ -89,6 +97,8 @@ public class DictationDeviceModule: Module {
       #endif
     }
     try session.setCategory(.playAndRecord, mode: .default, options: options)
+    // Recording otherwise silences haptics, the stop tap among them.
+    try session.setAllowHapticsAndSystemSoundsDuringRecording(true)
     holdsBuiltInMicrophone = builtInMicrophone
     if builtInMicrophone {
       preferBuiltInMicrophone(session)

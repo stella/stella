@@ -9,6 +9,7 @@ import { Button } from "@stll/ui/button";
 import { Switch } from "@stll/ui/switch";
 import { Text } from "@stll/ui/text";
 
+import { DictationLearnedSetting } from "@/components/dictation-learned-setting";
 import type { AccessTokenSource, StoredSession } from "@/connection/session";
 import { CheckIcon } from "@/icons.gen";
 import { deviceAccountStore } from "@/native/account-store";
@@ -91,6 +92,7 @@ export const DictationSetting = ({
           stored={stored}
         />
       </Suspense>
+      <DictationLearnedSetting session={session} />
     </View>
   );
 };

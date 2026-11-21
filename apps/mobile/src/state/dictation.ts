@@ -238,21 +238,21 @@ type InsertDictationOptions = {
  * loses the capital the model gives every transcript, unless it is a name
  * or written in capitals, and a full stop before the sentence goes on is
  * dropped; at the start of a sentence the first letter is a capital. Also
- * where the cursor ends up: after the dictated text.
+ * where the dictated text starts, and where the cursor ends up: after it.
  */
 export const insertDictation = ({
   draft,
   selection,
   dictated,
   locale,
-}: InsertDictationOptions): { text: string; caret: number } => {
+}: InsertDictationOptions): { text: string; start: number; caret: number } => {
   const start = clampOffset(selection?.start ?? draft.length, draft);
   const end = Math.max(start, clampOffset(selection?.end ?? start, draft));
   const before = draft.slice(0, start);
   const after = draft.slice(end);
   let text = dictated.text.trim();
   if (text === "") {
-    return { text: draft, caret: end };
+    return { text: draft, start: end, caret: end };
   }
   if (startsSentence(before)) {
     text = capitalizeFirst(text);
@@ -272,9 +272,11 @@ export const insertDictation = ({
   }
   const lead = needsSpaceBefore(before, text) ? " " : "";
   const trail = needsSpaceAfter(text, after) ? " " : "";
+  const at = before.length + lead.length;
   return {
     text: `${before}${lead}${text}${trail}${after}`,
-    caret: before.length + lead.length + text.length,
+    start: at,
+    caret: at + text.length,
   };
 };
 

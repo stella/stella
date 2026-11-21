@@ -4,6 +4,7 @@ import { panic } from "better-result";
 import { randomUUID } from "expo-crypto";
 import { AppState } from "react-native";
 
+import { applyLearnedFixes } from "@stll/transcript/corrections";
 import { respell } from "@stll/transcript/spelling";
 
 import {
@@ -13,6 +14,7 @@ import {
 import { epochMilliseconds } from "@/connection/clock";
 import type { AccessTokenSource } from "@/connection/session";
 import { useSession } from "@/connection/session-provider";
+import { deviceAccountStore } from "@/native/account-store";
 import { watchNetwork } from "@/native/dictation-device";
 import {
   forgetKeptDictation,
@@ -30,6 +32,7 @@ import {
   transcribedTexts,
   withTranscribed,
 } from "@/state/dictation-kept";
+import { readLearnedFixes } from "@/state/dictation-learned";
 import { createKeptDictations } from "@/state/kept-dictations";
 import type {
   KeptDictations,
@@ -191,8 +194,17 @@ const retryKept = async (
     joined,
     locale: kept.locale,
   });
+  const session = source.session();
+  // Fixes the phone cannot read are not applied; the text stays as heard.
+  const learned =
+    session === undefined
+      ? []
+      : await readLearnedFixes(deviceAccountStore, session).catch(() => []);
   return {
     type: "transcribed",
-    dictated: { text: respell(text, vocabulary), names: vocabulary },
+    dictated: {
+      text: respell(applyLearnedFixes(text, learned), vocabulary),
+      names: vocabulary,
+    },
   };
 };

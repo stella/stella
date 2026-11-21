@@ -37,6 +37,7 @@ import {
   chatQueueReadScalingScenario,
 } from "./chat-queue";
 import { chatPinnedThreadsScalingScenario } from "./chat-threads";
+import { citationCheckApiScalingScenario } from "./citation-check";
 import { claimCommentScalingScenarios } from "./claim-comments";
 import { reviewHistoryScalingScenarios } from "./claim-review-history";
 import { clientInvoicePrefillScalingScenario } from "./client-invoice-prefill";
@@ -120,6 +121,7 @@ const measuredApiScenarios = [
   organizationCreateScalingScenario,
   matterVocabularyScalingScenario,
   verifyQuoteApiScalingScenario,
+  citationCheckApiScalingScenario,
   ...readScalingScenarios,
   ...writeScalingScenarios,
   memberBillingScalingScenario,

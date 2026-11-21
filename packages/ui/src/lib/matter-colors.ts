@@ -3,6 +3,8 @@ import type { CSSProperties } from "react";
 import { stableHash } from "./stable-hash";
 
 // Fallback swatches for older or imported workspaces without a stored color.
+// Red is left out: it marks failures and cancellations across the product, so
+// a matter that never picked a colour would read as an error.
 const DEFAULT_MATTER_SWATCH = "--option-blue";
 
 export const MATTER_SWATCHES = [
@@ -10,7 +12,6 @@ export const MATTER_SWATCHES = [
   "--option-emerald",
   "--option-amber",
   "--option-violet",
-  "--option-red",
   "--option-cyan",
   "--option-orange",
   "--option-teal",

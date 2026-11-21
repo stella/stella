@@ -358,7 +358,11 @@ describe("putting dictated text where the cursor is", () => {
   test("text goes in at the cursor, with a space on either side", () => {
     expect(
       insert("Pošli smlouvu klientovi.", "Podepsanou.", { at: 13 }),
-    ).toEqual({ text: "Pošli smlouvu podepsanou klientovi.", caret: 24 });
+    ).toEqual({
+      text: "Pošli smlouvu podepsanou klientovi.",
+      start: 14,
+      caret: 24,
+    });
   });
 
   test("a selection is replaced", () => {
